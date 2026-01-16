@@ -2,6 +2,18 @@
 
 A game-agnostic deterministic lockstep multiplayer engine with authentication, matchmaking, and command synchronization.
 
+> ⚠️ **NOT IN PRODUCTION** - This project is currently in active development and not yet published to npm. Please clone the repository to use it.
+
+## Installation
+
+**Clone the repository:**
+
+```bash
+git clone https://github.com/phaeton2040-AI/phalanx-engine.git
+cd phalanx-engine
+npm install
+```
+
 # Packages
 
 This repository contains two packages:
@@ -21,10 +33,15 @@ This repository contains two packages:
 
 ## Quick Start
 
+> **Note**: Since the packages are not yet published to npm, use the local packages from the cloned repository.
+
 ### Server
 
+From the cloned repository, navigate to the server package:
+
 ```bash
-npm install phalanx-server
+cd phalanx-server
+npm install
 ```
 
 ```typescript
@@ -43,8 +60,11 @@ server.start().then(() => {
 
 ### Client
 
+From the cloned repository, navigate to the client package:
+
 ```bash
-npm install phalanx-client
+cd phalanx-client
+npm install
 ```
 
 ```typescript
