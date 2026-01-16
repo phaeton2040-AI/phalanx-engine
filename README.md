@@ -1,0 +1,80 @@
+# Phalanx Engine
+
+A game-agnostic deterministic lockstep multiplayer engine with authentication, matchmaking, and command synchronization.
+
+# Packages
+
+This repository contains two packages:
+
+| Package | Description |
+|---------|-------------|
+| [phalanx-server](./phalanx-server) | Server library for hosting multiplayer games |
+| [phalanx-client](./phalanx-client) | Client library for connecting to Phalanx servers |
+
+## Features
+
+- **Deterministic Lockstep**: Synchronizes only player commands, game logic runs deterministically on each client
+- **Matchmaking**: Built-in support for various game modes (1v1, 2v2, 3v3, 4v4, FFA)
+- **Tick System**: Configurable tick rate with command batching
+- **Reconnection Support**: Players can rejoin matches after disconnection
+- **TypeScript**: Full TypeScript support with exported types
+
+## Quick Start
+
+### Server
+
+```bash
+npm install phalanx-server
+```
+
+```typescript
+import { Phalanx } from 'phalanx-server';
+
+const server = new Phalanx({
+  port: 3000,
+  tickRate: 20,
+  gameMode: '3v3',
+});
+
+server.start().then(() => {
+  console.log('Phalanx server running on port 3000');
+});
+```
+
+### Client
+
+```bash
+npm install phalanx-client
+```
+
+```typescript
+import { PhalanxClient } from 'phalanx-client';
+
+const client = new PhalanxClient({
+  serverUrl: 'http://localhost:3000',
+  playerId: 'player-123',
+  username: 'MyPlayer',
+});
+
+await client.connect();
+const match = await client.joinQueueAndWaitForMatch();
+await client.waitForGameStart();
+
+client.on('tick', (data) => {
+  console.log(`Tick ${data.tick}`);
+});
+```
+
+## Documentation
+
+- [Server Documentation](./phalanx-server/README.md)
+- [Client Documentation](./phalanx-client/README.md)
+
+## Requirements
+
+- Node.js 18+
+- Socket.IO compatible transport
+
+## License
+
+MIT

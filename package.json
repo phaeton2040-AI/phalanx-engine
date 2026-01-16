@@ -1,0 +1,33 @@
+{
+  "name": "phalanx-engine",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A game-agnostic deterministic lockstep multiplayer engine with authentication, matchmaking, and command synchronization",
+  "type": "module",
+  "workspaces": [
+    "phalanx-server",
+    "phalanx-client",
+    "game-test"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "clean": "npm run clean --workspaces",
+    "test": "npm run test --workspaces",
+    "test:server": "npm run test --workspace=phalanx-server",
+    "test:client": "npm run test --workspace=phalanx-client"
+  },
+  "keywords": [
+    "multiplayer",
+    "game-engine",
+    "lockstep",
+    "deterministic",
+    "netcode",
+    "socket.io",
+    "matchmaking"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

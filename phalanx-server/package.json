@@ -1,0 +1,45 @@
+{
+  "name": "phalanx-server",
+  "version": "0.1.0",
+  "description": "Phalanx Engine Server - A game-agnostic deterministic lockstep multiplayer server with authentication, matchmaking, and command synchronization",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rimraf dist",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "multiplayer",
+    "game-server",
+    "lockstep",
+    "deterministic",
+    "netcode",
+    "socket.io",
+    "matchmaking",
+    "phalanx"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "dependencies": {
+    "socket.io": "^4.7.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "rimraf": "^5.0.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.0.0",
+    "socket.io-client": "^4.7.0"
+  }
+}
