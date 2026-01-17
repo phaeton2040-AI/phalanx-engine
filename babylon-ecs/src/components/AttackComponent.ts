@@ -26,7 +26,7 @@ export class AttackComponent implements IComponent {
         this._range = config.range ?? 8;
         this._cooldown = config.cooldown ?? 1.0;
         this._damage = config.damage ?? 10;
-        this._projectileSpeed = config.projectileSpeed ?? 30;
+        this._projectileSpeed = config.projectileSpeed ?? 40; // 15% faster than original 30
         this._attackOriginOffset = Vector3.Zero();
     }
 
