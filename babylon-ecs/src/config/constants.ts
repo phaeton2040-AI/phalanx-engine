@@ -52,7 +52,7 @@ export const resourceConfig = {
     initialResources: 200,
 
     // Base resource generation rate (per second)
-    baseGenerationRate: 15,
+    baseGenerationRate: 5,
 
     // Aggression bonus multiplier when on enemy territory
     aggressionBonusMultiplier: 1.5,
@@ -69,20 +69,36 @@ export const unitConfig = {
         cost: 100,
         health: 50,
         attackDamage: 10,
-        attackRange: 8,
+        attackRange: 12,
         attackCooldown: 1.0,
         moveSpeed: 8,
         gridSize: 1, // 1x1
     },
     prisma: {
         cost: 350,
-        health: 150,
-        attackDamage: 25,
-        attackRange: 10,
-        attackCooldown: 1.5,
+        health: 200,
+        attackDamage: 35,
+        attackRange: 15,
+        attackCooldown: 1,
         moveSpeed: 8,
         gridSize: 2, // 2x2
     },
+};
+
+/**
+ * Wave system configuration
+ * Units are deployed in waves at regular intervals
+ */
+export const waveConfig = {
+    // Duration of each wave in seconds
+    waveDuration: 30,
+
+    // Wave 0 duration - initial preparation time before first deployment
+    // Set to same as waveDuration by default, but can be customized
+    initialWaveDuration: 30,
+
+    // Whether Wave 0 deploys units (false = preparation wave only)
+    deployOnWaveZero: false,
 };
 
 /**

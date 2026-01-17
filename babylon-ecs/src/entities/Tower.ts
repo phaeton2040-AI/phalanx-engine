@@ -56,8 +56,8 @@ export class Tower extends Entity {
         this.addComponent(new HealthComponent(config.health ?? 150));
 
         const attackComponent = new AttackComponent({
-            range: config.attackRange ?? 12,
-            cooldown: config.attackCooldown ?? 0.8,
+            range: config.attackRange ?? 18,
+            cooldown: config.attackCooldown ?? 0.2,
             damage: config.attackDamage ?? 15,
         });
         // Set attack origin offset to top of tower
@@ -73,9 +73,9 @@ export class Tower extends Entity {
         const mesh = MeshBuilder.CreateCylinder(
             `tower_${this.id}`,
             {
-                height: 3,
+                height: 6,
                 diameterTop: 0,
-                diameterBottom: 2,
+                diameterBottom: 4,
                 tessellation: 16,
             },
             this.scene

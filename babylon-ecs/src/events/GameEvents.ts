@@ -66,6 +66,11 @@ export const GameEvents = {
     FORMATION_UNIT_PLACED: 'formation:unitPlaced',
     FORMATION_UNIT_REMOVED: 'formation:unitRemoved',
     FORMATION_COMMITTED: 'formation:committed',
+
+    // Wave events
+    WAVE_STARTED: 'wave:started',
+    WAVE_COUNTDOWN: 'wave:countdown',
+    WAVE_DEPLOYMENT: 'wave:deployment',
 } as const;
 
 export type GameEventType = typeof GameEvents[keyof typeof GameEvents];

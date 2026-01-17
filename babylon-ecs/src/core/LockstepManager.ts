@@ -8,6 +8,7 @@ import type { ProjectileSystem } from "../systems/ProjectileSystem";
 import type { TerritorySystem } from "../systems/TerritorySystem";
 import type { ResourceSystem } from "../systems/ResourceSystem";
 import type { FormationGridSystem } from "../systems/FormationGridSystem";
+import type { WaveSystem } from "../systems/WaveSystem";
 import { TeamTag } from "../enums/TeamTag";
 import { networkConfig } from "../config/constants";
 import { GameEvents, createEvent } from "../events";
@@ -48,6 +49,7 @@ export interface LockstepSystems {
     territorySystem: TerritorySystem;
     resourceSystem: ResourceSystem;
     formationGridSystem: FormationGridSystem;
+    waveSystem: WaveSystem;
     eventBus: EventBus;
 }
 
@@ -160,6 +162,9 @@ export class LockstepManager {
 
             // Process resources deterministically based on tick
             this.systems.resourceSystem.processTick(tickToSimulate);
+
+            // Process wave system (handles wave timing and auto-deployment)
+            this.systems.waveSystem.processTick(tickToSimulate);
 
             // Capture positions AFTER simulation for interpolation
             this.callbacks.onAfterSimulationTick?.();

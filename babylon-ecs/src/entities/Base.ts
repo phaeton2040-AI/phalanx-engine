@@ -57,9 +57,9 @@ export class Base extends Entity {
         this.addComponent(new HealthComponent(config.health ?? 300));
 
         const attackComponent = new AttackComponent({
-            range: config.attackRange ?? 20, // 20% higher than original 15
-            cooldown: config.attackCooldown ?? 0.6,
-            damage: config.attackDamage ?? 20,
+            range: config.attackRange ?? 20,
+            cooldown: config.attackCooldown ?? 0.2,
+            damage: config.attackDamage ?? 30,
         });
         // Set attack origin offset to top of base
         attackComponent.setAttackOriginOffset(new Vector3(0, 2, 0));

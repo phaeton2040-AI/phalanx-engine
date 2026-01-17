@@ -36,6 +36,9 @@ interface FormationGrid {
     cellSize: number;   // Size of each cell in world units
     centerX: number;    // World X position of grid center
     centerZ: number;    // World Z position of grid center
+    // All units placed on the grid (persistent across waves)
+    placedUnits: { unitType: 'sphere' | 'prisma'; gridX: number; gridZ: number }[];
+    // Units that were placed but not yet synced (for backward compatibility)
     pendingUnits: { unitType: 'sphere' | 'prisma'; gridX: number; gridZ: number }[];
 }
 
@@ -81,6 +84,9 @@ export class FormationGridSystem {
     // Callback for moving units - set by Game.ts (for lockstep simulation)
     private moveUnitCallback: MoveUnitCallback | null = null;
 
+    // Callback for checking if player can afford a unit - set by Game.ts
+    private canAffordCallback: ((playerId: string, unitType: 'sphere' | 'prisma') => boolean) | null = null;
+
     constructor(scene: Scene, _entityManager: EntityManager, eventBus: EventBus) {
         this.scene = scene;
         this.eventBus = eventBus;
@@ -105,6 +111,14 @@ export class FormationGridSystem {
      */
     public setMoveUnitCallback(callback: MoveUnitCallback): void {
         this.moveUnitCallback = callback;
+    }
+
+    /**
+     * Set the callback for checking affordability
+     * This should be called by Game.ts after initialization
+     */
+    public setCanAffordCallback(callback: (playerId: string, unitType: 'sphere' | 'prisma') => boolean): void {
+        this.canAffordCallback = callback;
     }
 
     /**
@@ -198,6 +212,13 @@ export class FormationGridSystem {
         // Convert to grid coordinates
         const gridCoords = this.worldToGrid(playerId, hitPoint);
         if (!gridCoords) return;
+
+        // Check if player can afford this unit
+        if (this.canAffordCallback && !this.canAffordCallback(playerId, unitType)) {
+            // Can't afford - exit placement mode
+            this.exitPlacementMode(playerId);
+            return;
+        }
 
         // Check if placement is valid (but don't place yet - wait for network sync)
         if (this.canPlaceUnit(playerId, gridCoords.x, gridCoords.z, unitType)) {
@@ -308,6 +329,7 @@ export class FormationGridSystem {
             cellSize,
             centerX: teamConfig.formationGridCenter.x,
             centerZ: teamConfig.formationGridCenter.z,
+            placedUnits: [],
             pendingUnits: [],
         };
 
@@ -517,8 +539,10 @@ export class FormationGridSystem {
             }
         }
 
-        // Add to pending units
-        grid.pendingUnits.push({ unitType, gridX, gridZ });
+        // Add to placed units (persistent) and pending units (for backward compatibility)
+        const unitInfo = { unitType, gridX, gridZ };
+        grid.placedUnits.push(unitInfo);
+        grid.pendingUnits.push(unitInfo);
 
         // Create preview mesh
         this.createUnitPreview(playerId, gridX, gridZ, unitType, grid);
@@ -591,6 +615,14 @@ export class FormationGridSystem {
         );
         if (index !== -1) {
             grid.pendingUnits.splice(index, 1);
+        }
+
+        // Remove from placed units
+        const placedIndex = grid.placedUnits.findIndex(
+            u => u.gridX === originX && u.gridZ === originZ
+        );
+        if (placedIndex !== -1) {
+            grid.placedUnits.splice(placedIndex, 1);
         }
 
         this.eventBus.emit<FormationUnitRemovedEvent>(GameEvents.FORMATION_UNIT_REMOVED, {
@@ -692,16 +724,18 @@ export class FormationGridSystem {
         const halfGridWidth = (grid.gridWidth * grid.cellSize) / 2;
         const halfGridHeight = (grid.gridHeight * grid.cellSize) / 2;
 
-        for (const pending of grid.pendingUnits) {
-            // For Team2, we need to mirror the grid coordinates to achieve 180-degree rotation
-            // This makes the grid placement intuitive: what player places as "front" spawns as "front"
-            let effectiveGridX = pending.gridX;
-            let effectiveGridZ = pending.gridZ;
+        // Deploy ALL units on the grid (placedUnits), not just pending ones
+        // Units stay on the grid and are deployed every wave
+        for (const placed of grid.placedUnits) {
+            // For Team2, we need to mirror the X coordinate so "front" on grid = "front" towards enemy
+            // Z coordinate is NOT mirrored - top of grid = top of battlefield for both teams
+            let effectiveGridX = placed.gridX;
+            let effectiveGridZ = placed.gridZ;
             
             if (grid.team === TeamTag.Team2) {
-                // Mirror both X and Z coordinates within the grid
-                effectiveGridX = (grid.gridWidth - 1) - pending.gridX;
-                effectiveGridZ = (grid.gridHeight - 1) - pending.gridZ;
+                // Mirror only X coordinate (front/back relative to enemy)
+                // Z stays the same so top of grid = top of battlefield
+                effectiveGridX = (grid.gridWidth - 1) - placed.gridX;
             }
 
             // Calculate relative X offset from grid center (for formation depth)
@@ -711,14 +745,9 @@ export class FormationGridSystem {
             // Calculate relative Z from grid center (horizontal spread)
             let relativeZ = (effectiveGridZ + 0.5) * grid.cellSize - halfGridHeight;
             
-            // Offset for prisma (center of 2x2) - adjust based on team
-            if (pending.unitType === 'prisma') {
-                if (grid.team === TeamTag.Team1) {
-                    relativeZ += grid.cellSize / 2;
-                } else {
-                    // For Team2, the offset direction is reversed due to mirroring
-                    relativeZ -= grid.cellSize / 2;
-                }
+            // Offset for prisma (center of 2x2)
+            if (placed.unitType === 'prisma') {
+                relativeZ += grid.cellSize / 2;
             }
 
             // Spawn position: base X + relative X offset (adjusted for team direction)
@@ -731,22 +760,13 @@ export class FormationGridSystem {
                 continue;
             }
 
-            const unitInfo = this.createUnitCallback(pending.unitType, grid.team, spawnPos);
+            const unitInfo = this.createUnitCallback(placed.unitType, grid.team, spawnPos);
             spawnedUnits.push({ unitId: unitInfo.id, position: unitInfo.position, targetX: enemyBaseX });
             unitCount++;
         }
 
-        // Clear preview meshes
-        for (const row of grid.cells) {
-            for (const cell of row) {
-                if (cell.previewMesh) {
-                    cell.previewMesh.dispose();
-                    cell.previewMesh = null;
-                }
-                cell.occupied = false;
-                cell.unitType = null;
-            }
-        }
+        // Clear pending units (they've been synced) but keep placedUnits and preview meshes
+        // Units stay on the grid for future waves
         grid.pendingUnits = [];
 
         // Emit formation committed event with spawned units for move commands
@@ -780,10 +800,24 @@ export class FormationGridSystem {
     }
 
     /**
-     * Get the pending units for a player
+     * Get the pending units for a player (units placed but not yet synced)
      */
     public getPendingUnits(playerId: string): { unitType: 'sphere' | 'prisma'; gridX: number; gridZ: number }[] {
         return this.grids.get(playerId)?.pendingUnits ?? [];
+    }
+
+    /**
+     * Get all placed units for a player (persistent on grid, deployed each wave)
+     */
+    public getPlacedUnits(playerId: string): { unitType: 'sphere' | 'prisma'; gridX: number; gridZ: number }[] {
+        return this.grids.get(playerId)?.placedUnits ?? [];
+    }
+
+    /**
+     * Get the count of placed units for a player
+     */
+    public getPlacedUnitCount(playerId: string): number {
+        return this.grids.get(playerId)?.placedUnits.length ?? 0;
     }
 
     /**

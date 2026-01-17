@@ -8,7 +8,7 @@ import type { FormationGridSystem } from "../systems/FormationGridSystem";
  * - Notifications (show/hide)
  * - Resource display updates
  * - Unit button states
- * - Commit button state
+ * - Wave timer display
  * - Exit/beforeunload handling
  * - Territory indicator
  */
@@ -214,16 +214,59 @@ export class UIManager {
     }
 
     /**
-     * Update commit button state
+     * Update wave timer display
+     */
+    public updateWaveTimer(waveNumber: number, secondsRemaining: number, isPreparationWave: boolean): void {
+        const waveLabel = document.getElementById('wave-label');
+        const waveTimer = document.getElementById('wave-timer');
+        const waveContainer = document.getElementById('wave-container');
+
+        if (waveLabel) {
+            if (isPreparationWave) {
+                waveLabel.textContent = 'Preparation';
+            } else {
+                waveLabel.textContent = `Wave ${waveNumber}`;
+            }
+        }
+
+        if (waveTimer) {
+            waveTimer.textContent = `${secondsRemaining}s`;
+            
+            // Add warning class when time is low
+            if (secondsRemaining <= 5) {
+                waveTimer.classList.add('warning');
+            } else {
+                waveTimer.classList.remove('warning');
+            }
+        }
+
+        if (waveContainer) {
+            if (isPreparationWave) {
+                waveContainer.classList.add('preparation');
+            } else {
+                waveContainer.classList.remove('preparation');
+            }
+        }
+    }
+
+    /**
+     * Update formation info display (shows how many units will deploy)
+     */
+    public updateFormationInfo(): void {
+        const placedUnits = this.formationGridSystem.getPlacedUnitCount(this.localPlayerId);
+        const formationInfo = document.getElementById('formation-info');
+
+        if (formationInfo) {
+            formationInfo.textContent = `Units in formation: ${placedUnits}`;
+        }
+    }
+
+    /**
+     * Update commit button state (now just shows formation info, no button needed)
+     * @deprecated Use updateFormationInfo instead - waves are automatic now
      */
     public updateCommitButton(): void {
-        const commitBtn = document.getElementById('commit-btn') as HTMLButtonElement;
-        const pendingUnits = this.formationGridSystem.getPendingUnits(this.localPlayerId);
-
-        if (commitBtn) {
-            commitBtn.textContent = `Deploy Units (${pendingUnits.length})`;
-            commitBtn.disabled = pendingUnits.length === 0;
-        }
+        this.updateFormationInfo();
     }
 
     /**
@@ -247,19 +290,17 @@ export class UIManager {
 
     /**
      * Setup unit placement button handlers
+     * Note: Deployment is now automatic via wave system, no commit button needed
      */
     public setupUnitPlacementButtons(
         onSphereClick: () => void,
-        onPrismaClick: () => void,
-        onCommitClick: () => void
+        onPrismaClick: () => void
     ): void {
         const sphereBtn = document.getElementById('sphere-btn');
         const prismaBtn = document.getElementById('prisma-btn');
-        const commitBtn = document.getElementById('commit-btn');
 
         sphereBtn?.addEventListener('click', onSphereClick);
         prismaBtn?.addEventListener('click', onPrismaClick);
-        commitBtn?.addEventListener('click', onCommitClick);
     }
 
     /**

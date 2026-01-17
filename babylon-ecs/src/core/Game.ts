@@ -16,15 +16,16 @@ import { ResourceSystem } from "../systems/ResourceSystem";
 import { TerritorySystem } from "../systems/TerritorySystem";
 import { FormationGridSystem } from "../systems/FormationGridSystem";
 import { VictorySystem } from "../systems/VictorySystem";
+import { WaveSystem } from "../systems/WaveSystem";
 import { CameraController } from "../systems/CameraController";
 import { InterpolationSystem } from "../systems/InterpolationSystem";
 import { resetEntityIdCounter } from "../entities/Entity";
 import { TeamTag } from "../enums/TeamTag";
 import { arenaParams } from "../config/constants";
 import { GameEvents } from "../events";
-import type { MoveRequestedEvent, GameOverEvent, AggressionBonusActivatedEvent, AggressionBonusDeactivatedEvent } from "../events";
+import type { MoveRequestedEvent, GameOverEvent, AggressionBonusActivatedEvent, AggressionBonusDeactivatedEvent, WaveCountdownEvent, WaveStartedEvent, WaveDeploymentEvent } from "../events";
 import type { PhalanxClient, MatchFoundEvent } from "phalanx-client";
-import type { NetworkMoveCommand, NetworkPlaceUnitCommand, NetworkDeployUnitsCommand } from "./NetworkCommands";
+import type { NetworkMoveCommand, NetworkPlaceUnitCommand } from "./NetworkCommands";
 
 /**
  * Game - Main game class using component-based architecture
@@ -59,6 +60,7 @@ export class Game {
     private territorySystem: TerritorySystem;
     private formationGridSystem: FormationGridSystem;
     private victorySystem: VictorySystem;
+    private waveSystem: WaveSystem;
     private interpolationSystem: InterpolationSystem;
     private cameraController!: CameraController;
     // @ts-ignore - InputManager registers event listeners in constructor
@@ -115,6 +117,7 @@ export class Game {
         this.territorySystem = new TerritorySystem(this.entityManager, this.eventBus);
         this.formationGridSystem = new FormationGridSystem(this.scene, this.entityManager, this.eventBus);
         this.victorySystem = new VictorySystem(this.entityManager, this.eventBus);
+        this.waveSystem = new WaveSystem(this.eventBus);
         this.interpolationSystem = new InterpolationSystem(this.entityManager);
 
         this.inputManager = new InputManager(
@@ -150,12 +153,13 @@ export class Game {
                 territorySystem: this.territorySystem,
                 resourceSystem: this.resourceSystem,
                 formationGridSystem: this.formationGridSystem,
+                waveSystem: this.waveSystem,
                 eventBus: this.eventBus,
             },
             {
                 onCleanupNeeded: () => this.cleanupDestroyedEntities(),
                 onNotification: (msg, type) => this.uiManager.showNotification(msg, type),
-                onCommitButtonUpdate: () => this.uiManager.updateCommitButton(),
+                onCommitButtonUpdate: () => this.uiManager.updateFormationInfo(),
                 getLocalTeam: () => this.localTeam,
                 getLocalPlayerId: () => this.matchData.playerId,
                 // Interpolation callbacks for smooth visual movement
@@ -255,11 +259,34 @@ export class Game {
 
         // Formation changes (UI updates)
         this.eventBus.on(GameEvents.FORMATION_UNIT_PLACED, () => {
-            this.uiManager.updateCommitButton();
+            this.uiManager.updateFormationInfo();
         });
 
         this.eventBus.on(GameEvents.FORMATION_UNIT_REMOVED, () => {
-            this.uiManager.updateCommitButton();
+            this.uiManager.updateFormationInfo();
+        });
+
+        // Wave events (UI updates)
+        this.eventBus.on<WaveCountdownEvent>(GameEvents.WAVE_COUNTDOWN, (event) => {
+            this.uiManager.updateWaveTimer(
+                event.waveNumber,
+                event.secondsRemaining,
+                event.waveNumber === 0
+            );
+        });
+
+        this.eventBus.on<WaveStartedEvent>(GameEvents.WAVE_STARTED, (event) => {
+            if (event.isPreparationWave) {
+                this.uiManager.showNotification('Preparation phase - place your units!', 'info');
+            } else {
+                this.uiManager.showNotification(`Wave ${event.waveNumber} - Units deploying!`, 'info');
+            }
+        });
+
+        this.eventBus.on<WaveDeploymentEvent>(GameEvents.WAVE_DEPLOYMENT, (event) => {
+            if (event.totalUnitsDeployed > 0) {
+                console.log(`[Game] Wave ${event.waveNumber}: Deployed ${event.totalUnitsDeployed} total units`);
+            }
         });
     }
 
@@ -384,13 +411,31 @@ export class Game {
             this.movementSystem.moveEntityTo(entityId, target);
         });
 
+        // Set up affordability check callback
+        this.formationGridSystem.setCanAffordCallback((playerId, unitType) => {
+            return this.resourceSystem.canAfford(playerId, unitType);
+        });
+
         // Register players in victory system
         this.victorySystem.registerPlayer(team1PlayerId, TeamTag.Team1);
         this.victorySystem.registerPlayer(team2PlayerId, TeamTag.Team2);
 
+        // Initialize wave system
+        this.waveSystem.registerPlayer(team1PlayerId);
+        this.waveSystem.registerPlayer(team2PlayerId);
+        
+        // Set up wave deployment callback
+        this.waveSystem.setDeployUnitsCallback((playerId) => {
+            return this.formationGridSystem.commitFormation(playerId);
+        });
+
+        // Start the wave system (Wave 0 - preparation phase)
+        this.waveSystem.start(0);
+
         // Initial UI update
         setTimeout(() => {
             this.uiManager.updateResourceUI();
+            this.uiManager.updateFormationInfo();
         }, 100);
 
         console.log(`[Game] Gameplay systems initialized for players: ${team1PlayerId} (Team1), ${team2PlayerId} (Team2)`);
@@ -470,12 +515,12 @@ export class Game {
 
     /**
      * Setup unit placement UI
+     * Note: Deployment is now automatic via wave system
      */
     private setupUnitPlacementUI(): void {
         this.uiManager.setupUnitPlacementButtons(
             () => this.handleUnitButtonClick('sphere'),
-            () => this.handleUnitButtonClick('prisma'),
-            () => this.commitFormation()
+            () => this.handleUnitButtonClick('prisma')
         );
     }
 
@@ -490,22 +535,6 @@ export class Game {
 
         this.uiManager.setActiveUnitButton(unitType);
         this.formationGridSystem.enterPlacementMode(this.matchData.playerId, unitType);
-    }
-
-    /**
-     * Commit formation
-     */
-    private commitFormation(): void {
-        const pendingUnits = this.formationGridSystem.getPendingUnits(this.matchData.playerId);
-        if (pendingUnits.length === 0) return;
-
-        const command: NetworkDeployUnitsCommand = {
-            type: 'deployUnits',
-            data: {
-                playerId: this.matchData.playerId,
-            },
-        };
-        this.lockstepManager.queueCommand(command);
     }
 
     /**
@@ -577,6 +606,7 @@ export class Game {
         this.territorySystem.dispose();
         this.formationGridSystem.dispose();
         this.victorySystem.dispose();
+        this.waveSystem.dispose();
         this.interpolationSystem.dispose();
 
         // Clear managers and entity data

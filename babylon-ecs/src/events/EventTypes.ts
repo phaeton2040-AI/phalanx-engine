@@ -283,3 +283,23 @@ export interface FormationCommittedEvent extends GameEvent {
     unitCount: number;
 }
 
+// ============================================
+// Wave Events
+// ============================================
+
+export interface WaveStartedEvent extends GameEvent {
+    waveNumber: number;
+    isPreparationWave: boolean;
+}
+
+export interface WaveCountdownEvent extends GameEvent {
+    waveNumber: number;
+    secondsRemaining: number;
+    ticksRemaining: number;
+}
+
+export interface WaveDeploymentEvent extends GameEvent {
+    waveNumber: number;
+    totalUnitsDeployed: number;
+}
+

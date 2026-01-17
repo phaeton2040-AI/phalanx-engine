@@ -125,6 +125,12 @@
         border-radius: 8px;
         color: white;
         display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      #player-info .player-row {
+        display: flex;
         align-items: center;
         gap: 10px;
       }
@@ -191,10 +197,6 @@
 
       /* Resource Display */
       #resource-display {
-        background: rgba(0, 0, 0, 0.7);
-        padding: 10px 15px;
-        border-radius: 8px;
-        color: white;
         display: flex;
         align-items: center;
         gap: 8px;
@@ -316,6 +318,58 @@
         display: block;
         background: rgba(46, 204, 113, 0.8);
       }
+
+      /* Wave Timer Display */
+      #wave-container {
+        position: absolute;
+        top: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0, 0, 0, 0.85);
+        padding: 10px 20px;
+        border-radius: 10px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        min-width: 150px;
+      }
+
+      #wave-container.preparation {
+        background: rgba(52, 152, 219, 0.85);
+      }
+
+      #wave-label {
+        font-size: 0.85rem;
+        color: #ccc;
+        margin-bottom: 4px;
+      }
+
+      #wave-container.preparation #wave-label {
+        color: white;
+      }
+
+      #wave-timer {
+        font-size: 1.8rem;
+        font-weight: bold;
+        color: #4ecca3;
+      }
+
+      #wave-timer.warning {
+        color: #e74c3c;
+        animation: pulse 0.5s infinite alternate;
+      }
+
+      @keyframes pulse {
+        from { transform: scale(1); }
+        to { transform: scale(1.1); }
+      }
+
+      /* Formation Info */
+      #formation-info {
+        font-size: 0.9rem;
+        color: #4ecca3;
+        font-weight: bold;
+      }
     </style>
   </head>
   <body>
@@ -337,18 +391,25 @@
       <!-- Game UI Overlay -->
       <div id="game-ui">
         <div id="player-info">
-          <div id="player-color-indicator"></div>
-          <span id="player-name">Player</span>
-        </div>
-
-        <!-- Resource Display -->
-        <div id="resource-display">
-          <span id="resource-icon">💰</span>
-          <span id="resource-amount">200</span>
-          <span id="resource-rate">(+15/s)</span>
+          <div class="player-row">
+            <div id="player-color-indicator"></div>
+            <span id="player-name">Player</span>
+          </div>
+          <!-- Resource Display -->
+          <div id="resource-display">
+            <span id="resource-icon">💰</span>
+            <span id="resource-amount">200</span>
+            <span id="resource-rate">(+15/s)</span>
+          </div>
         </div>
 
         <button id="exit-btn">Exit Game</button>
+      </div>
+
+      <!-- Wave Timer -->
+      <div id="wave-container" class="preparation">
+        <span id="wave-label">Preparation</span>
+        <span id="wave-timer">30s</span>
       </div>
 
       <!-- Territory Indicator -->
@@ -366,7 +427,7 @@
           <span class="unit-name">Prisma</span>
           <span class="unit-cost">💰 350</span>
         </button>
-        <button id="commit-btn" disabled>Deploy Units (0)</button>
+        <span id="formation-info">Units in formation: 0</span>
       </div>
 
       <!-- Notification -->
@@ -374,7 +435,7 @@
 
       <!-- Controls Help -->
       <div id="controls-help">
-        <strong>Controls:</strong> Left Click - Select Unit | Place units on grid, then Deploy
+        <strong>Controls:</strong> Left Click - Select/Place Units | Units deploy automatically each wave
       </div>
     </div>
 

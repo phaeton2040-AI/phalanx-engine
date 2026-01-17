@@ -97,12 +97,47 @@ export class PrismaUnit extends Entity {
             prism.rotation.y = (index * Math.PI / 2);
         });
 
-        // Apply material to parent
+        // Create central crystal with team color
+        const crystal = this.createCentralCrystal();
+        crystal.parent = parentMesh;
+
+        // Apply material to parent (for prisms - gray/neutral color)
         const material = new StandardMaterial(`prismaMat_${this.id}`, this.scene);
-        material.diffuseColor = this._color;
+        material.diffuseColor = new Color3(0.4, 0.4, 0.45); // Neutral gray for outer prisms
         parentMesh.material = material;
 
         return parentMesh;
+    }
+
+    /**
+     * Create a central crystal with team color
+     */
+    private createCentralCrystal(): Mesh {
+        // Create a double-ended crystal (octahedron-like shape)
+        const crystal = MeshBuilder.CreatePolyhedron(
+            `crystal_${this.id}`,
+            {
+                type: 1, // Octahedron
+                size: 0.6,
+            },
+            this.scene
+        );
+
+        // Position slightly above center
+        crystal.position = new Vector3(0, 1.2, 0);
+        
+        // Stretch vertically for crystal look
+        crystal.scaling = new Vector3(0.8, 1.4, 0.8);
+
+        // Create glowing material with team color
+        const crystalMaterial = new StandardMaterial(`crystalMat_${this.id}`, this.scene);
+        crystalMaterial.diffuseColor = this._color;
+        crystalMaterial.emissiveColor = this._color.scale(0.5); // Glow effect
+        crystalMaterial.specularColor = new Color3(1, 1, 1);
+        crystalMaterial.specularPower = 64;
+        crystal.material = crystalMaterial;
+
+        return crystal;
     }
 
     /**

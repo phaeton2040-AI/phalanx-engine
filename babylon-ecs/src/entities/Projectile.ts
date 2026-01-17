@@ -42,7 +42,7 @@ export class Projectile {
     ) {
         this.scene = scene;
         this._direction = direction.normalize();
-        this._speed = config.speed ?? 30;
+        this._speed = config.speed ?? 55;
         this._damage = config.damage;
         this._lifetime = config.lifetime ?? 3;
         this._currentLifetime = this._lifetime;
