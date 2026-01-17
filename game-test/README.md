@@ -17,34 +17,188 @@ A simple multiplayer game to test the Phalanx Engine using Babylon.js.
 - Warning when trying to reload the page during a game
 - Notifications when other player disconnects/leaves
 
+## How Phalanx Engine is Used
+
+This test game demonstrates the **deterministic lockstep** multiplayer architecture provided by Phalanx Engine. Here's how it's integrated:
+
+### 1. **Client-Server Architecture**
+
+#### Server Setup (`src/server/main.ts`)
+The Phalanx server is configured for 1v1 matchmaking:
+- **Port**: 3000
+- **Game Mode**: '1v1'
+- **Tick Rate**: 20 ticks/second
+- **Countdown**: 5 seconds before game starts
+
+#### Client Connection (`LobbyScene.ts`)
+The `PhalanxClient` handles:
+- **Connection**: Connects to the server with unique player ID and username
+- **Matchmaking**: Joins the queue and waits for an opponent
+- **Match Events**: Listens for `match-found` and `countdown` events
+
+### 2. **Deterministic Lockstep Synchronization**
+
+The game uses Phalanx Engine's lockstep system to ensure all clients see the same game state:
+
+#### Command Submission (`GameScene.ts`)
+When a player clicks on the ground:
+1. A `MoveCommand` is created with target coordinates
+2. Command is submitted to the server via `client.submitCommand()`
+3. Command is queued locally in `pendingLocalCommands`
+
+#### Command Batch Processing
+Every tick, the server broadcasts a `commands-batch` event containing:
+- Commands from ALL players for that tick
+- Tick number for synchronization
+
+#### Deterministic Simulation (`GameSimulation.ts`)
+- Receives commands from `commands-batch` event
+- Applies commands in a deterministic order (sorted by player ID)
+- Updates game state identically on all clients
+- No physics randomness - pure deterministic logic
+
+### 3. **Fixed Timestep Game Loop**
+
+The `GameLoop.ts` implements the **accumulator algorithm**:
+
+```
+Frame Time Accumulation:
+  accumulator += deltaTime
+  
+Fixed Updates (50ms per tick):
+  while (accumulator >= FIXED_TIMESTEP)
+    - Apply network commands
+    - Update simulation
+    - accumulator -= FIXED_TIMESTEP
+
+Rendering with Interpolation:
+  alpha = accumulator / FIXED_TIMESTEP
+  Interpolate between previous and current positions
+```
+
+This ensures:
+- ✅ Simulation runs at consistent 20 ticks/sec regardless of FPS
+- ✅ Smooth visual rendering even if frame rate varies
+- ✅ Network and simulation stay in sync
+
+### 4. **Network Event Flow**
+
+```
+Player Action (Click) 
+  ↓
+Submit Command to Server
+  ↓
+Server Queues Command for Next Tick
+  ↓
+Server Broadcasts commands-batch at tick N
+  ↓
+All Clients Receive Same Commands
+  ↓
+All Clients Apply Commands Deterministically
+  ↓
+Game State Synchronized Across All Clients
+```
+
+### 5. **Event Handling**
+
+The client listens to Phalanx Engine events:
+
+| Event | Handler | Purpose |
+|-------|---------|---------|
+| `match-found` | LobbyScene | Match details and player list |
+| `countdown` | LobbyScene | Countdown before game starts |
+| `game-start` | LobbyScene → GameScene | Transition to game |
+| `commands-batch` | GameScene | Tick commands from all players |
+| `player-disconnected` | GameScene | Handle opponent leaving |
+
+### 6. **Key Integration Points**
+
+#### Connection Flow
+```typescript
+const client = new PhalanxClient({
+  serverUrl: SERVER_URL,
+  playerId: uniqueId,
+  username: playerName
+});
+
+await client.connect();
+const match = await client.joinQueueAndWaitForMatch();
+```
+
+#### Command Submission
+```typescript
+client.submitCommand({
+  type: 'move',
+  targetX: x,
+  targetZ: z
+});
+```
+
+#### Receiving Synchronized Commands
+```typescript
+client.on('commands-batch', (data: CommandsBatchEvent) => {
+  // All players' commands for this tick
+  simulation.applyCommands(data.commands);
+});
+```
+
+### 7. **Why This Architecture Works**
+
+**Traditional Approach (Server Authority):**
+- Client sends input → Server simulates → Server sends positions
+- High latency, server bottleneck, bandwidth intensive
+
+**Phalanx Lockstep Approach:**
+- Client sends input → Server broadcasts input → All clients simulate
+- Low latency, minimal bandwidth, scalable
+- Perfect for RTS, turn-based, and strategy games
+
+**Trade-offs:**
+- ✅ Minimal network traffic (only commands, not game state)
+- ✅ No server-side simulation needed
+- ✅ Clients can predict and rollback if needed
+- ⚠️ Requires deterministic game logic
+- ⚠️ All clients must wait for slowest client's commands
+
 ## Setup
 
 1. Build the Phalanx packages first:
    ```bash
    # From the root phalanx-engine folder
-   npm install
-   npm run build
+   pnpm install
+   pnpm build
    ```
 
 2. Install game dependencies:
    ```bash
    cd game-test
-   npm install
+   pnpm install
    ```
 
 ## Running
 
 Start the server:
 ```bash
-npm run server
+pnpm run server
 ```
 
 In a separate terminal, start the client:
 ```bash
-npm run dev
+pnpm run dev
 ```
 
 Open two browser windows at `http://localhost:3001` to test multiplayer.
+
+**Or use the root commands:**
+```bash
+# From the root phalanx-engine folder
+pnpm dev:game    # Starts the Vite dev server
+```
+
+Then run the server separately:
+```bash
+pnpm --filter game-test server
+```
 
 ## Controls
 
