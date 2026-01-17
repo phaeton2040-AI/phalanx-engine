@@ -11,6 +11,15 @@
 // Main client class
 export { PhalanxClient } from './PhalanxClient.js';
 
+// Tick simulation for lockstep synchronization
+export { TickSimulation } from './TickSimulation.js';
+export type {
+  TickSimulationConfig,
+  SimulationTickCallback,
+  BeforeTickCallback,
+  AfterTickCallback,
+} from './TickSimulation.js';
+
 // All types
 export type {
   // Configuration

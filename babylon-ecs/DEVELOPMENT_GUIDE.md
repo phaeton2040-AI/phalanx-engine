@@ -69,7 +69,7 @@ This project uses a **component-based Entity-Component-System (ECS)** architectu
 
 ## Multiplayer Integration
 
-The game supports **1v1 multiplayer** via the Phalanx Engine. The integration follows a client-prediction model with server authority.
+The game supports **1v1 multiplayer** via the Phalanx Engine using **deterministic lockstep synchronization**. This ensures all clients simulate the exact same game state.
 
 ### Architecture
 
@@ -79,13 +79,227 @@ The game supports **1v1 multiplayer** via the Phalanx Engine. The integration fo
 │   (Client 1)    │         │   (Client 2)    │
 └────────┬────────┘         └────────┬────────┘
          │                           │
+         │    Commands + Ticks       │
          └─────────┬─────────────────┘
                    │
                    ▼
          ┌─────────────────┐
          │  Phalanx Server │
-         │   (Authority)   │
+         │  (Tick Authority)│
          └─────────────────┘
+```
+
+### Lockstep Synchronization
+
+The game uses **lockstep** synchronization where:
+
+1. **Server** runs a tick clock (20 ticks/sec)
+2. **Clients** send commands to server
+3. **Server** broadcasts all commands to all clients at each tick
+4. **Clients** execute commands and simulate deterministically
+
+This ensures all clients see the exact same game state at all times.
+
+### Key Components
+
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| `PhalanxClient` | phalanx-client | Network connection, matchmaking, events |
+| `TickSimulation` | phalanx-client | Tick timing, interpolation, command queue |
+| `LockstepManager` | babylon-ecs | Game-specific command execution, simulation |
+| `InterpolationSystem` | babylon-ecs | Smooth visual movement between ticks |
+
+### TickSimulation (from phalanx-client)
+
+The `TickSimulation` class handles network-level synchronization:
+
+```typescript
+import { PhalanxClient, TickSimulation } from 'phalanx-client';
+
+// Create tick simulation
+const simulation = new TickSimulation(client, { tickRate: 20 });
+
+// Register simulation callback - called for each tick
+simulation.onSimulationTick((tick, commands) => {
+  executeCommands(commands);
+  runGameSimulation();
+});
+
+// Interpolation hooks for smooth visuals
+simulation.onBeforeTick(() => interpolationSystem.snapshotPositions());
+simulation.onAfterTick(() => interpolationSystem.captureCurrentPositions());
+
+// In render loop
+const alpha = simulation.getInterpolationAlpha();
+interpolationSystem.interpolate(alpha);
+simulation.flushCommands();
+```
+
+### LockstepManager
+
+The `LockstepManager` wraps `TickSimulation` and handles game-specific logic:
+
+```typescript
+// LockstepManager uses TickSimulation internally
+constructor(client: PhalanxClient, systems: LockstepSystems, callbacks: LockstepCallbacks) {
+    this.tickSimulation = new TickSimulation(client, { tickRate: networkConfig.tickRate });
+    
+    this.tickSimulation.onSimulationTick((tick, commands) => {
+        this.executeTickCommands(commands);  // Execute move, placeUnit, etc.
+        this.simulateTick();                  // Physics, combat, projectiles
+        this.systems.resourceSystem.processTick(tick);
+        this.systems.waveSystem.processTick(tick);
+    });
+}
+```
+
+### Visual Interpolation
+
+To achieve smooth visuals at 60 FPS while simulating at 20 ticks/sec:
+
+```
+Simulation: |---Tick 0---|---Tick 1---|---Tick 2---|
+                 50ms        50ms        50ms
+                 
+Rendering:  |.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|
+             16ms each (60 FPS)
+             
+Interpolation: Blends between tick positions based on alpha (0-1)
+```
+
+**Entity Position Architecture:**
+- `entity.position` - Authoritative simulation position (deterministic)
+- `entity.mesh.position` - Visual position (interpolated for smooth rendering)
+
+```typescript
+// Entity.ts
+public set position(value: Vector3) {
+    this._simulationPosition.copyFrom(value);
+    if (this.mesh) {
+        this.mesh.position.copyFrom(value);  // Default: sync visual
+    }
+}
+
+public setVisualPosition(value: Vector3): void {
+    if (this.mesh) {
+        this.mesh.position.copyFrom(value);  // Override visual only
+    }
+}
+```
+
+### Command Flow
+
+**Movement Commands (Networked):**
+```
+Player Right-Click → InputManager → EventBus (MOVE_REQUESTED)
+                                          ↓
+                                    Game intercepts
+                                          ↓
+                              LockstepManager.queueCommand()
+                                          ↓
+                              TickSimulation.flushCommands()
+                                          ↓
+                              Server receives, broadcasts
+                                          ↓
+                              TickSimulation.onSimulationTick()
+                                          ↓
+                              LockstepManager.executeTickCommands()
+                                          ↓
+                              MovementSystem.moveEntityTo()
+```
+
+**Unit Placement Commands (Networked):**
+```
+Player clicks unit button → FormationGridSystem
+                                    ↓
+                            EventBus (FORMATION_PLACEMENT_REQUESTED)
+                                    ↓
+                            LockstepManager.queueCommand()
+                                    ↓
+                            ... same network flow ...
+                                    ↓
+                            FormationGridSystem.placeUnit()
+```
+
+**Combat (Local, Deterministic):**
+```
+CombatSystem.simulateTick()
+        ↓
+    Query enemies in range
+        ↓
+    Attack if cooldown ready
+        ↓
+    Spawn projectile
+        ↓
+ProjectileSystem.simulateTick()
+        ↓
+    Move projectiles
+        ↓
+    Apply damage on hit
+```
+
+### Network Commands
+
+Network commands are defined in `src/core/NetworkCommands.ts`:
+
+```typescript
+// Move command
+interface NetworkMoveCommand extends PlayerCommand {
+    type: 'move';
+    data: { entityId: number; targetX: number; targetY: number; targetZ: number };
+}
+
+// Place unit command
+interface NetworkPlaceUnitCommand extends PlayerCommand {
+    type: 'placeUnit';
+    data: { unitType: 'sphere' | 'prisma'; gridX: number; gridZ: number };
+}
+
+// Deploy units command
+interface NetworkDeployUnitsCommand extends PlayerCommand {
+    type: 'deployUnits';
+    data: { playerId: string };
+}
+```
+
+### Adding New Network Commands
+
+1. **Define the command type** in `NetworkCommands.ts`:
+
+```typescript
+export interface AttackCommandData {
+    attackerId: number;
+    targetId: number;
+}
+
+export interface NetworkAttackCommand extends PlayerCommand {
+    type: 'attack';
+    data: AttackCommandData;
+}
+
+// Add to union type
+export type NetworkCommand = NetworkMoveCommand | NetworkPlaceUnitCommand | NetworkAttackCommand;
+```
+
+2. **Handle in LockstepManager.executeTickCommands()**:
+
+```typescript
+if (cmd.type === 'attack') {
+    const attackCmd = cmd as NetworkAttackCommand;
+    this.systems.combatSystem.executeAttack(
+        attackCmd.data.attackerId,
+        attackCmd.data.targetId
+    );
+}
+```
+
+3. **Queue command from game code**:
+
+```typescript
+this.lockstepManager.queueCommand({
+    type: 'attack',
+    data: { attackerId: unit.id, targetId: enemy.id }
+});
 ```
 
 ### Game Flow
@@ -98,46 +312,28 @@ The game supports **1v1 multiplayer** via the Phalanx Engine. The integration fo
    - Countdown before game starts
 
 2. **Game Scene** (`src/core/Game.ts`)
-   - Creates 1 tower + 3 units per player
+   - Creates bases, towers, and units per player
    - Teams are hostile to each other
-   - Movement commands are sent via network
-   - Attack commands are automatic (when enemies enter range)
-
-### Command Flow
-
-**Movement Commands:**
-```
-Player Input → InputManager → EventBus (MOVE_REQUESTED)
-                                    ↓
-                              Game intercepts
-                                    ↓
-                              Send to Server
-                                    ↓
-                              Server broadcasts
-                                    ↓
-                              All clients receive
-                                    ↓
-                              MovementSystem executes
-```
-
-**Attack Commands:**
-- Handled locally by CombatSystem
-- Automatically triggered when hostile entities enter attack range
-- No network synchronization needed (deterministic based on positions)
+   - All game commands go through network
+   - Deterministic simulation ensures sync
 
 ### Key Files
 
 | File | Purpose |
 |------|---------|
 | `src/scenes/LobbyScene.ts` | Matchmaking UI and server connection |
-| `src/config/constants.ts` | Server URL and spawn positions |
+| `src/config/constants.ts` | Server URL, tick rate, spawn positions |
 | `src/core/Game.ts` | Network command handling and entity ownership |
+| `src/core/LockstepManager.ts` | Lockstep synchronization and command execution |
+| `src/core/NetworkCommands.ts` | Network command type definitions |
+| `src/systems/InterpolationSystem.ts` | Smooth visual interpolation |
 
 ### Configuration
 
 Edit `src/config/constants.ts` to change:
 - `SERVER_URL` - Phalanx server address
-- `TEAM1_SPAWN` / `TEAM2_SPAWN` - Starting positions for each team
+- `networkConfig.tickRate` - Simulation tick rate (must match server)
+- `arenaParams` - Starting positions for bases and towers
 
 ---
 
@@ -220,11 +416,26 @@ Systems contain game logic and operate on entities with specific component combi
 | System | Responsibility | Required Components |
 |--------|---------------|---------------------|
 | `CombatSystem` | Target detection, attack logic | Attack, Team, Health |
-| `MovementSystem` | Entity movement | Movement |
+| `MovementSystem` | Entity movement commands | Movement |
 | `HealthSystem` | Damage processing, entity destruction | Health |
+| `PhysicsSystem` | Deterministic physics, collision | - |
 | `ProjectileSystem` | Projectile movement and collision | - |
 | `SelectionSystem` | Entity selection management | - |
 | `InputManager` | User input handling | - |
+| `InterpolationSystem` | Smooth visual movement between ticks | - |
+| `ResourceSystem` | Resource generation and spending | - |
+| `TerritorySystem` | Territory control and aggression bonus | Team |
+| `FormationGridSystem` | Unit placement grid | - |
+| `WaveSystem` | Wave-based unit deployment | - |
+| `VictorySystem` | Win/lose conditions | - |
+
+**Core Managers**:
+
+| Manager | Responsibility |
+|---------|----------------|
+| `LockstepManager` | Deterministic lockstep sync via TickSimulation |
+| `EntityFactory` | Entity creation with ownership tracking |
+| `UIManager` | UI updates and notifications |
 
 ---
 
@@ -523,6 +734,28 @@ this.eventBus.on<ResourceCollectedEvent>(GameEvents.RESOURCE_COLLECTED, (event) 
 
 ## Best Practices
 
+### Multiplayer / Lockstep Design
+
+- ✅ All gameplay-affecting logic must be **deterministic**
+- ✅ Use `simulateTick()` methods instead of frame-based `update(deltaTime)`
+- ✅ Send commands through `LockstepManager.queueCommand()`
+- ✅ Execute commands only in `onSimulationTick()` callback
+- ✅ Sort entity queries by ID for deterministic iteration order
+- ✅ Use fixed-point math or careful floating-point handling
+- ❌ Never use `Math.random()` - use seeded PRNG if needed
+- ❌ Never use `Date.now()` or real time in simulation logic
+- ❌ Never execute commands immediately on input - queue them
+
+### Interpolation Design
+
+- ✅ Separate `simulationPosition` (authoritative) from `visualPosition` (interpolated)
+- ✅ Call `snapshotPositions()` BEFORE simulation tick
+- ✅ Call `captureCurrentPositions()` AFTER simulation tick
+- ✅ Use `getInterpolationAlpha()` each render frame
+- ✅ Register entities with `InterpolationSystem` on creation
+- ✅ Unregister entities on destruction
+- ❌ Never modify `entity.position` outside simulation tick
+
 ### Component Design
 
 - ✅ Keep components as **pure data containers**
@@ -568,19 +801,31 @@ this.eventBus.on<ResourceCollectedEvent>(GameEvents.RESOURCE_COLLECTED, (event) 
 
 ```
 src/
-├── main.ts                  # Entry point - bootstraps Game
+├── main.ts                  # Entry point - bootstraps LobbyScene or Game
 ├── style.css                # Global styles
+│
+├── config/
+│   └── constants.ts         # Server URL, tick rate, arena params, unit costs
 │
 ├── core/
 │   ├── Game.ts              # Main game orchestrator
 │   ├── EntityManager.ts     # Entity registry + queries
+│   ├── EntityFactory.ts     # Entity creation with ownership
 │   ├── EventBus.ts          # Pub/sub event system
-│   └── SceneManager.ts      # Babylon.js scene setup
+│   ├── SceneManager.ts      # Babylon.js scene setup
+│   ├── LockstepManager.ts   # Deterministic lockstep synchronization
+│   ├── NetworkCommands.ts   # Network command type definitions
+│   └── UIManager.ts         # UI updates and notifications
+│
+├── scenes/
+│   └── LobbyScene.ts        # Matchmaking UI and connection
 │
 ├── entities/
-│   ├── Entity.ts            # Base entity class
+│   ├── Entity.ts            # Base entity class (simulation + visual position)
 │   ├── Unit.ts              # Movable combat unit
+│   ├── PrismaUnit.ts        # Heavy combat unit (2x2 grid)
 │   ├── Tower.ts             # Stationary defense
+│   ├── Base.ts              # Player base (win condition)
 │   └── Projectile.ts        # Attack projectile
 │
 ├── components/
@@ -589,15 +834,25 @@ src/
 │   ├── HealthComponent.ts   # Health management
 │   ├── AttackComponent.ts   # Attack capabilities
 │   ├── MovementComponent.ts # Movement capabilities
+│   ├── ResourceComponent.ts # Resource generation
+│   ├── UnitTypeComponent.ts # Unit type identifier
 │   └── index.ts             # Re-exports
 │
 ├── systems/
-│   ├── CombatSystem.ts      # Attack logic
-│   ├── MovementSystem.ts    # Movement logic
+│   ├── CombatSystem.ts      # Attack logic (deterministic)
+│   ├── MovementSystem.ts    # Movement commands
+│   ├── PhysicsSystem.ts     # Deterministic physics simulation
 │   ├── HealthSystem.ts      # Damage processing
 │   ├── ProjectileSystem.ts  # Projectile management
 │   ├── SelectionSystem.ts   # Selection management
-│   └── InputManager.ts      # User input handling
+│   ├── InputManager.ts      # User input handling
+│   ├── InterpolationSystem.ts # Smooth visual interpolation
+│   ├── ResourceSystem.ts    # Resource generation/spending
+│   ├── TerritorySystem.ts   # Territory control
+│   ├── FormationGridSystem.ts # Unit placement grid
+│   ├── WaveSystem.ts        # Wave-based deployment
+│   ├── VictorySystem.ts     # Win/lose conditions
+│   └── CameraController.ts  # RTS camera controls
 │
 ├── events/
 │   ├── GameEvents.ts        # Event type constants

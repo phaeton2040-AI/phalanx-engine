@@ -1,5 +1,6 @@
 import { Vector3 } from "@babylonjs/core";
-import type { PhalanxClient, CommandsBatchEvent, PlayerCommand } from "phalanx-client";
+import type { PhalanxClient, PlayerCommand } from "phalanx-client";
+import { TickSimulation } from "phalanx-client";
 import type { EventBus } from "./EventBus";
 import type { MovementSystem } from "../systems/MovementSystem";
 import type { PhysicsSystem } from "../systems/PhysicsSystem";
@@ -57,65 +58,68 @@ export interface LockstepSystems {
  * LockstepManager - Handles deterministic lockstep synchronization
  * 
  * Responsible for:
- * - Receiving commands from the network
+ * - Receiving commands from the network (via TickSimulation)
  * - Executing commands at the correct tick
  * - Running deterministic simulation ticks
  * - Sending local commands to the server
  * - Providing interpolation timing for smooth visuals
+ *
+ * Network synchronization is delegated to TickSimulation from phalanx-client.
  */
 export class LockstepManager {
-    private client: PhalanxClient;
     private systems: LockstepSystems;
     private callbacks: LockstepCallbacks;
 
-    // Pending commands to be sent to server
-    private pendingCommands: NetworkCommand[] = [];
-
-    // Lockstep synchronization state
-    private lastSimulatedTick: number = -1;
-    private pendingTickCommands: Map<number, PlayerCommand[]> = new Map();
-
-    // Interpolation timing
-    private lastTickTime: number = 0;
-    private tickDuration: number = networkConfig.tickTimestep * 1000; // in ms
+    // Tick simulation from phalanx-client (handles network timing)
+    private tickSimulation: TickSimulation;
 
     constructor(
         client: PhalanxClient,
         systems: LockstepSystems,
         callbacks: LockstepCallbacks
     ) {
-        this.client = client;
         this.systems = systems;
         this.callbacks = callbacks;
 
-        this.setupNetworkHandlers();
+        // Initialize TickSimulation from phalanx-client
+        this.tickSimulation = new TickSimulation(client, {
+            tickRate: networkConfig.tickRate,
+            debug: true,
+        });
+
+        this.setupSimulationCallbacks();
     }
 
     /**
-     * Setup network event handlers for LOCKSTEP SYNCHRONIZATION
-     * 
-     * Key principle: Commands are NOT executed immediately.
-     * They are queued and executed when the server broadcasts them at a specific tick.
-     * This ensures all clients execute the same commands at the same simulation tick.
+     * Setup simulation callbacks for TickSimulation
      */
-    private setupNetworkHandlers(): void {
-        // Handle incoming commands from server - this triggers simulation
-        // We use the commands event (not tick event) because the server emits:
-        // 1. tick-sync, 2. commands-batch - so commands arrive AFTER tick
-        // By triggering simulation here, we ensure commands are stored before simulating
-        this.client.on('commands', (event: CommandsBatchEvent) => {
-            console.log(`[Lockstep] Received ${event.commands.length} commands for tick ${event.tick}:`, JSON.stringify(event.commands));
-            // Store commands for this tick
-            this.pendingTickCommands.set(event.tick, event.commands);
-            // Now simulate up to this tick (commands are guaranteed to be stored)
-            this.simulateToTick(event.tick);
+    private setupSimulationCallbacks(): void {
+        // Before each tick: snapshot positions for interpolation
+        this.tickSimulation.onBeforeTick(() => {
+            this.callbacks.onBeforeSimulationTick?.();
         });
 
-        // Handle network ticks - just update current tick, don't simulate
-        // Simulation is triggered by commands event above
-        this.client.on('tick', () => {
-            // Keep track of server tick for command submission timing
-            // But don't simulate here - wait for commands event
+        // Main simulation tick: execute commands and run game logic
+        this.tickSimulation.onSimulationTick((tick, commands) => {
+            // Execute all commands for this tick
+            this.executeTickCommands(commands);
+
+            // Run one tick of deterministic simulation
+            this.simulateTick();
+
+            // Process resources deterministically based on tick
+            this.systems.resourceSystem.processTick(tick);
+
+            // Process wave system (handles wave timing and auto-deployment)
+            this.systems.waveSystem.processTick(tick);
+
+            // Cleanup destroyed entities
+            this.callbacks.onCleanupNeeded();
+        });
+
+        // After each tick: capture positions for interpolation
+        this.tickSimulation.onAfterTick(() => {
+            this.callbacks.onAfterSimulationTick?.();
         });
     }
 
@@ -123,7 +127,7 @@ export class LockstepManager {
      * Queue a command to be sent to the server
      */
     public queueCommand(command: NetworkCommand): void {
-        this.pendingCommands.push(command);
+        this.tickSimulation.queueCommand(command);
     }
 
     /**
@@ -131,53 +135,7 @@ export class LockstepManager {
      * Called each frame from the render loop
      */
     public sendPendingCommands(): void {
-        if (this.pendingCommands.length > 0) {
-            const tick = this.client.getCurrentTick();
-            console.log(`[Lockstep] Sending ${this.pendingCommands.length} commands at tick ${tick}:`, JSON.stringify(this.pendingCommands));
-            this.client.submitCommandsAsync(tick, this.pendingCommands);
-            this.pendingCommands = [];
-        }
-    }
-
-    /**
-     * Simulate all game ticks up to and including the target tick
-     * This is the core of the LOCKSTEP synchronization
-     */
-    private simulateToTick(targetTick: number): void {
-        // Process all ticks we haven't simulated yet
-        while (this.lastSimulatedTick < targetTick) {
-            const tickToSimulate = this.lastSimulatedTick + 1;
-
-            // Get commands for this tick (if any)
-            const commands = this.pendingTickCommands.get(tickToSimulate) || [];
-
-            // Execute all commands for this tick (from ALL players)
-            this.executeTickCommands(commands);
-
-            // Snapshot positions BEFORE simulation for interpolation
-            this.callbacks.onBeforeSimulationTick?.();
-
-            // Run one tick of deterministic simulation
-            this.simulateTick();
-
-            // Process resources deterministically based on tick
-            this.systems.resourceSystem.processTick(tickToSimulate);
-
-            // Process wave system (handles wave timing and auto-deployment)
-            this.systems.waveSystem.processTick(tickToSimulate);
-
-            // Capture positions AFTER simulation for interpolation
-            this.callbacks.onAfterSimulationTick?.();
-
-            // Update last simulated tick
-            this.lastSimulatedTick = tickToSimulate;
-
-            // Clean up processed commands
-            this.pendingTickCommands.delete(tickToSimulate);
-
-            // Update tick time for interpolation
-            this.lastTickTime = performance.now();
-        }
+        this.tickSimulation.flushCommands();
     }
 
     /**
@@ -186,9 +144,7 @@ export class LockstepManager {
      * 0 = at last tick position, 1 = at current tick position (ready for next)
      */
     public getInterpolationAlpha(): number {
-        const elapsed = performance.now() - this.lastTickTime;
-        const alpha = elapsed / this.tickDuration;
-        return Math.min(1, Math.max(0, alpha));
+        return this.tickSimulation.getInterpolationAlpha();
     }
 
     /**
