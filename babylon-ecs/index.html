@@ -4,10 +4,226 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>babylon-rts-demo</title>
+    <title>Babylon RTS Demo - 1v1</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      html, body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        font-family: Arial, sans-serif;
+      }
+
+      /* Lobby Styles */
+      #lobby {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        color: white;
+      }
+
+      #lobby h1 {
+        font-size: 2.5rem;
+        margin-bottom: 0.5rem;
+        color: #4ecca3;
+      }
+
+      #lobby h2 {
+        font-size: 1.2rem;
+        margin-bottom: 2rem;
+        color: #888;
+      }
+
+      #lobby .form-group {
+        margin-bottom: 1rem;
+      }
+
+      #lobby input {
+        padding: 0.75rem 1rem;
+        font-size: 1rem;
+        border: 2px solid #4ecca3;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.1);
+        color: white;
+        width: 300px;
+        outline: none;
+      }
+
+      #lobby input::placeholder {
+        color: rgba(255, 255, 255, 0.5);
+      }
+
+      #lobby button {
+        padding: 0.75rem 2rem;
+        font-size: 1rem;
+        background: #4ecca3;
+        border: none;
+        border-radius: 8px;
+        color: #1a1a2e;
+        cursor: pointer;
+        font-weight: bold;
+        transition: background 0.3s;
+      }
+
+      #lobby button:hover {
+        background: #3ba882;
+      }
+
+      #lobby button:disabled {
+        background: #555;
+        cursor: not-allowed;
+      }
+
+      #status {
+        margin-top: 1.5rem;
+        font-size: 1.1rem;
+        color: #ccc;
+      }
+
+      /* Game Container Styles */
+      #game-container {
+        display: none;
+        width: 100%;
+        height: 100%;
+        position: relative;
+      }
+
+      #app {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+
+      /* Game UI Overlay */
+      #game-ui {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        right: 10px;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        pointer-events: none;
+      }
+
+      #game-ui > * {
+        pointer-events: auto;
+      }
+
+      #player-info {
+        background: rgba(0, 0, 0, 0.7);
+        padding: 10px 15px;
+        border-radius: 8px;
+        color: white;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      #player-color-indicator {
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        border: 2px solid white;
+      }
+
+      #exit-btn {
+        background: #e74c3c;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: bold;
+        transition: background 0.3s;
+      }
+
+      #exit-btn:hover {
+        background: #c0392b;
+      }
+
+      #notification {
+        position: absolute;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 15px 30px;
+        border-radius: 8px;
+        font-size: 1.1rem;
+        opacity: 0;
+        transition: opacity 0.3s;
+        pointer-events: none;
+      }
+
+      #notification.show {
+        opacity: 1;
+      }
+
+      #notification.warning {
+        background: rgba(231, 76, 60, 0.9);
+      }
+
+      #notification.info {
+        background: rgba(52, 152, 219, 0.9);
+      }
+
+      #controls-help {
+        position: absolute;
+        bottom: 10px;
+        left: 10px;
+        background: rgba(0, 0, 0, 0.7);
+        padding: 10px 15px;
+        border-radius: 8px;
+        color: #ccc;
+        font-size: 0.9rem;
+      }
+    </style>
   </head>
   <body>
+    <!-- Lobby Screen -->
+    <div id="lobby">
+      <h1>Babylon RTS Demo</h1>
+      <h2>1v1 Multiplayer Battle</h2>
+      <div class="form-group">
+        <input type="text" id="username" placeholder="Enter your username" maxlength="20" />
+      </div>
+      <button id="connect-btn">Find Match</button>
+      <div id="status"></div>
+    </div>
+
+    <!-- Game Container -->
+    <div id="game-container">
+      <canvas id="app"></canvas>
+
+      <!-- Game UI Overlay -->
+      <div id="game-ui">
+        <div id="player-info">
+          <div id="player-color-indicator"></div>
+          <span id="player-name">Player</span>
+        </div>
+        <button id="exit-btn">Exit Game</button>
+      </div>
+
+      <!-- Notification -->
+      <div id="notification"></div>
+
+      <!-- Controls Help -->
+      <div id="controls-help">
+        <strong>Controls:</strong> Left Click - Select | Right Click - Move
+      </div>
+    </div>
+
     <script type="module" src="/src/main.ts"></script>
-    <canvas id="app"></canvas>
   </body>
 </html>

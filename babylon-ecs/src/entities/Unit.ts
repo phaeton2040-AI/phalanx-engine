@@ -124,9 +124,6 @@ export class Unit extends Entity {
     }
 
     public select(): void {
-        const team = this.getComponent<TeamComponent>(ComponentType.Team);
-        if (!team?.isPlayerTeam()) return;
-
         this._isSelected = true;
         this.selectionIndicator.isVisible = true;
     }
@@ -137,8 +134,9 @@ export class Unit extends Entity {
     }
 
     public canBeSelected(): boolean {
-        const team = this.getComponent<TeamComponent>(ComponentType.Team);
-        return team?.isPlayerTeam() ?? false;
+        // In multiplayer, ownership filtering is handled by Game.ts
+        // Units are always selectable from a technical standpoint
+        return true;
     }
 
     // Debug methods

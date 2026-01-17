@@ -63,10 +63,8 @@ export class SceneManager {
             this.scene
         );
         this.camera.setTarget(Vector3.Zero());
-        const canvas = this.scene.getEngine().getRenderingCanvas();
-        if (canvas) {
-            this.camera.attachControl(canvas, true);
-        }
+        // Camera is fixed - no controls attached
+        // Players view the game from a fixed top-down angle
         return this.camera;
     }
     public setupLighting(): void {

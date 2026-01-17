@@ -131,9 +131,6 @@ export class Tower extends Entity {
     }
 
     public select(): void {
-        const team = this.getComponent<TeamComponent>(ComponentType.Team);
-        if (!team?.isPlayerTeam()) return;
-
         this._isSelected = true;
         this.selectionIndicator.isVisible = true;
     }
@@ -144,8 +141,9 @@ export class Tower extends Entity {
     }
 
     public canBeSelected(): boolean {
-        const team = this.getComponent<TeamComponent>(ComponentType.Team);
-        return team?.isPlayerTeam() ?? false;
+        // In multiplayer, ownership filtering is handled by Game.ts
+        // Towers are always selectable from a technical standpoint
+        return true;
     }
 
     // Debug methods

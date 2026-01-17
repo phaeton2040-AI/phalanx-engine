@@ -1,18 +1,49 @@
+import { LobbyScene } from "./scenes/LobbyScene";
 import { Game } from "./core/Game";
+import type { PhalanxClient, MatchFoundEvent } from "phalanx-client";
 import "./style.css";
 
 /**
  * Application Entry Point
- * Simple and clean - just bootstraps the game
+ * Manages lobby and game scene transitions for 1v1 multiplayer
  */
-const canvas = document.getElementById("app") as HTMLCanvasElement;
 
-if (!canvas) {
-    throw new Error("Canvas element with id 'app' not found");
+// Current game instance
+let game: Game | null = null;
+
+// Initialize lobby scene
+const lobbyScene = new LobbyScene();
+
+/**
+ * Handle returning to lobby from game
+ */
+function returnToLobby(): void {
+    if (game) {
+        game.dispose();
+        game = null;
+    }
+    lobbyScene.show();
 }
 
-const game = new Game(canvas);
+// Handle game start
+lobbyScene.setOnGameStart((client: PhalanxClient, matchData: MatchFoundEvent) => {
+    console.log('Game starting!', matchData);
 
-game.initialize().then(() => {
-    game.start();
+    const canvas = document.getElementById("app") as HTMLCanvasElement;
+
+    if (!canvas) {
+        throw new Error("Canvas element with id 'app' not found");
+    }
+
+    // Create and start game with network client
+    game = new Game(canvas, client, matchData);
+    game.setOnExit(returnToLobby);
+
+    game.initialize().then(() => {
+        game?.start();
+    });
 });
+
+// Log startup
+console.log('Babylon RTS Demo initialized');
+

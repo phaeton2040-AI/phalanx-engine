@@ -5,6 +5,7 @@ This guide explains the architectural approach used in the Babylon RTS Demo and 
 ## Table of Contents
 
 - [Architecture Overview](#architecture-overview)
+- [Multiplayer Integration](#multiplayer-integration)
 - [Core Concepts](#core-concepts)
   - [Entities](#entities)
   - [Components](#components)
@@ -22,7 +23,7 @@ This guide explains the architectural approach used in the Babylon RTS Demo and 
 
 ## Architecture Overview
 
-This project uses a **component-based Entity-Component-System (ECS)** architecture with an **event-driven communication pattern**.
+This project uses a **component-based Entity-Component-System (ECS)** architecture with an **event-driven communication pattern**. It also supports **1v1 multiplayer** via the Phalanx Engine.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -63,6 +64,80 @@ This project uses a **component-based Entity-Component-System (ECS)** architectu
 2. **Decoupled Systems**: Systems communicate via EventBus, not direct references
 3. **Single Responsibility**: Each system handles one aspect of game logic
 4. **Data-Driven**: Components are primarily data containers; logic lives in systems
+
+---
+
+## Multiplayer Integration
+
+The game supports **1v1 multiplayer** via the Phalanx Engine. The integration follows a client-prediction model with server authority.
+
+### Architecture
+
+```
+┌─────────────────┐         ┌─────────────────┐
+│    Player 1     │         │    Player 2     │
+│   (Client 1)    │         │   (Client 2)    │
+└────────┬────────┘         └────────┬────────┘
+         │                           │
+         └─────────┬─────────────────┘
+                   │
+                   ▼
+         ┌─────────────────┐
+         │  Phalanx Server │
+         │   (Authority)   │
+         └─────────────────┘
+```
+
+### Game Flow
+
+1. **Lobby Scene** (`src/scenes/LobbyScene.ts`)
+   - Player enters username
+   - Connects to Phalanx server
+   - Joins matchmaking queue
+   - Waits for opponent
+   - Countdown before game starts
+
+2. **Game Scene** (`src/core/Game.ts`)
+   - Creates 1 tower + 3 units per player
+   - Teams are hostile to each other
+   - Movement commands are sent via network
+   - Attack commands are automatic (when enemies enter range)
+
+### Command Flow
+
+**Movement Commands:**
+```
+Player Input → InputManager → EventBus (MOVE_REQUESTED)
+                                    ↓
+                              Game intercepts
+                                    ↓
+                              Send to Server
+                                    ↓
+                              Server broadcasts
+                                    ↓
+                              All clients receive
+                                    ↓
+                              MovementSystem executes
+```
+
+**Attack Commands:**
+- Handled locally by CombatSystem
+- Automatically triggered when hostile entities enter attack range
+- No network synchronization needed (deterministic based on positions)
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `src/scenes/LobbyScene.ts` | Matchmaking UI and server connection |
+| `src/config/constants.ts` | Server URL and spawn positions |
+| `src/core/Game.ts` | Network command handling and entity ownership |
+
+### Configuration
+
+Edit `src/config/constants.ts` to change:
+- `SERVER_URL` - Phalanx server address
+- `TEAM1_SPAWN` / `TEAM2_SPAWN` - Starting positions for each team
 
 ---
 

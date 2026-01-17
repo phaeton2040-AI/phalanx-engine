@@ -12,7 +12,7 @@ async function main() {
   const phalanx = new Phalanx({
     port: PORT,
     cors: {
-      origin: ['http://localhost:3001', 'http://127.0.0.1:3001'],
+      origin: ['http://localhost:3001', 'http://localhost:5173'],
       credentials: true,
     },
     tickRate: 20, // 20 ticks per second

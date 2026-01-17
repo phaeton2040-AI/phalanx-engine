@@ -4,6 +4,14 @@ import type { IComponent } from "../components/Component";
 let entityIdCounter = 0;
 
 /**
+ * Reset the entity ID counter - used when starting a new game
+ * to ensure deterministic IDs across all clients
+ */
+export function resetEntityIdCounter(): void {
+    entityIdCounter = 0;
+}
+
+/**
  * Base Entity class - Container for components
  * Uses composition over inheritance
  */
