@@ -13,6 +13,8 @@ import {
 } from "@babylonjs/core";
 import { Unit } from "../entities/Unit";
 import type { UnitConfig } from "../entities/Unit";
+import { PrismaUnit } from "../entities/PrismaUnit";
+import type { PrismaUnitConfig } from "../entities/PrismaUnit";
 import { Tower } from "../entities/Tower";
 import type { TowerConfig } from "../entities/Tower";
 import { Base } from "../entities/Base";
@@ -250,6 +252,14 @@ export class SceneManager {
     }
     public createUnit(config: UnitConfig = {}, position?: Vector3): Unit {
         const unit = new Unit(this.scene, config, position);
+        const unitMesh = unit.getMesh();
+        if (this.shadowGenerator && unitMesh) {
+            this.shadowGenerator.addShadowCaster(unitMesh);
+        }
+        return unit;
+    }
+    public createPrismaUnit(config: PrismaUnitConfig = {}, position?: Vector3): PrismaUnit {
+        const unit = new PrismaUnit(this.scene, config, position);
         const unitMesh = unit.getMesh();
         if (this.shadowGenerator && unitMesh) {
             this.shadowGenerator.addShadowCaster(unitMesh);

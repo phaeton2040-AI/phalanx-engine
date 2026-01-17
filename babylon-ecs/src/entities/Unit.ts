@@ -13,6 +13,8 @@ import {
     HealthComponent,
     AttackComponent,
     MovementComponent,
+    UnitTypeComponent,
+    UnitType,
 } from "../components";
 import { TeamTag } from "../enums/TeamTag";
 
@@ -58,6 +60,7 @@ export class Unit extends Entity {
             damage: config.attackDamage ?? 10,
         }));
         this.addComponent(new MovementComponent(config.moveSpeed ?? 10));
+        this.addComponent(new UnitTypeComponent(UnitType.Sphere));
 
         if (this._debug) {
             this.createRangeIndicator();

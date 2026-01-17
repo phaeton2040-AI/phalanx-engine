@@ -188,6 +188,134 @@
         color: #ccc;
         font-size: 0.9rem;
       }
+
+      /* Resource Display */
+      #resource-display {
+        background: rgba(0, 0, 0, 0.7);
+        padding: 10px 15px;
+        border-radius: 8px;
+        color: white;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      #resource-icon {
+        font-size: 1.2rem;
+      }
+
+      #resource-amount {
+        font-size: 1.1rem;
+        font-weight: bold;
+        color: #f1c40f;
+      }
+
+      #resource-rate {
+        font-size: 0.85rem;
+        color: #888;
+      }
+
+      #resource-rate.bonus {
+        color: #2ecc71;
+      }
+
+      /* Unit Placement Panel */
+      #unit-panel {
+        position: absolute;
+        bottom: 60px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0, 0, 0, 0.85);
+        padding: 15px 20px;
+        border-radius: 12px;
+        display: flex;
+        gap: 15px;
+        align-items: center;
+      }
+
+      .unit-btn {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        background: rgba(255, 255, 255, 0.1);
+        border: 2px solid transparent;
+        border-radius: 8px;
+        padding: 10px 15px;
+        cursor: pointer;
+        transition: all 0.2s;
+        color: white;
+        min-width: 90px;
+      }
+
+      .unit-btn:hover {
+        background: rgba(255, 255, 255, 0.2);
+        border-color: #4ecca3;
+      }
+
+      .unit-btn.active {
+        background: rgba(78, 204, 163, 0.3);
+        border-color: #4ecca3;
+      }
+
+      .unit-btn.disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .unit-btn .unit-icon {
+        font-size: 2rem;
+        margin-bottom: 5px;
+      }
+
+      .unit-btn .unit-name {
+        font-size: 0.9rem;
+        font-weight: bold;
+      }
+
+      .unit-btn .unit-cost {
+        font-size: 0.8rem;
+        color: #f1c40f;
+      }
+
+      #commit-btn {
+        background: #4ecca3;
+        color: #1a1a2e;
+        border: none;
+        padding: 12px 25px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: bold;
+        font-size: 1rem;
+        transition: background 0.3s;
+      }
+
+      #commit-btn:hover {
+        background: #3ba882;
+      }
+
+      #commit-btn:disabled {
+        background: #555;
+        cursor: not-allowed;
+      }
+
+      /* Territory Indicator */
+      #territory-indicator {
+        position: absolute;
+        top: 60px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0, 0, 0, 0.7);
+        padding: 5px 15px;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        color: white;
+        display: none;
+      }
+
+      #territory-indicator.active {
+        display: block;
+        background: rgba(46, 204, 113, 0.8);
+      }
     </style>
   </head>
   <body>
@@ -212,7 +340,33 @@
           <div id="player-color-indicator"></div>
           <span id="player-name">Player</span>
         </div>
+
+        <!-- Resource Display -->
+        <div id="resource-display">
+          <span id="resource-icon">💰</span>
+          <span id="resource-amount">200</span>
+          <span id="resource-rate">(+15/s)</span>
+        </div>
+
         <button id="exit-btn">Exit Game</button>
+      </div>
+
+      <!-- Territory Indicator -->
+      <div id="territory-indicator">⚔️ Aggression Bonus Active!</div>
+
+      <!-- Unit Placement Panel -->
+      <div id="unit-panel">
+        <button class="unit-btn" id="sphere-btn">
+          <span class="unit-icon">⚫</span>
+          <span class="unit-name">Sphere</span>
+          <span class="unit-cost">💰 100</span>
+        </button>
+        <button class="unit-btn" id="prisma-btn">
+          <span class="unit-icon">🔷</span>
+          <span class="unit-name">Prisma</span>
+          <span class="unit-cost">💰 350</span>
+        </button>
+        <button id="commit-btn" disabled>Deploy Units (0)</button>
       </div>
 
       <!-- Notification -->
@@ -220,7 +374,7 @@
 
       <!-- Controls Help -->
       <div id="controls-help">
-        <strong>Controls:</strong> Left Click - Select | Right Click - Move
+        <strong>Controls:</strong> Left Click - Select Unit | Place units on grid, then Deploy
       </div>
     </div>
 

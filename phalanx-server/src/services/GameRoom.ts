@@ -211,8 +211,16 @@ export class GameRoom {
 
     const commands = this.pendingCommands.get(this.currentTick) || [];
 
-    // Sort by playerId for deterministic order across all clients
-    commands.sort((a, b) => a.playerId.localeCompare(b.playerId));
+    // Sort for deterministic order across all clients:
+    // 1. Primary: by playerId (alphabetical)
+    // 2. Secondary: by command type (alphabetical) for stable ordering
+    // This ensures all clients process commands in exactly the same order
+    commands.sort((a, b) => {
+      const playerCompare = a.playerId.localeCompare(b.playerId);
+      if (playerCompare !== 0) return playerCompare;
+      // Same player - sort by command type for stability
+      return a.type.localeCompare(b.type);
+    });
 
     // Store command history for reconnection (NET-2)
     this.storeCommandHistory(this.currentTick, commands);

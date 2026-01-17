@@ -9,14 +9,19 @@ import { PhysicsSystem } from "../systems/PhysicsSystem";
 import { HealthSystem } from "../systems/HealthSystem";
 import { ProjectileSystem } from "../systems/ProjectileSystem";
 import { CombatSystem } from "../systems/CombatSystem";
+import { ResourceSystem } from "../systems/ResourceSystem";
+import { TerritorySystem } from "../systems/TerritorySystem";
+import { FormationGridSystem } from "../systems/FormationGridSystem";
+import { VictorySystem } from "../systems/VictorySystem";
+import { CameraController } from "../systems/CameraController";
 import type { Unit } from "../entities/Unit";
 import type { Tower } from "../entities/Tower";
 import type { Base } from "../entities/Base";
 import { resetEntityIdCounter } from "../entities/Entity";
 import { TeamTag } from "../enums/TeamTag";
-import { TEAM1_SPAWN, TEAM2_SPAWN, arenaParams } from "../config/constants";
-import { GameEvents } from "../events";
-import type { MoveRequestedEvent } from "../events";
+import { arenaParams, unitConfig, networkConfig } from "../config/constants";
+import { GameEvents, createEvent } from "../events";
+import type { MoveRequestedEvent, GameOverEvent, AggressionBonusActivatedEvent, AggressionBonusDeactivatedEvent } from "../events";
 import type { PhalanxClient, MatchFoundEvent, CommandsBatchEvent, PlayerCommand } from "phalanx-client";
 
 /**
@@ -35,8 +40,42 @@ interface NetworkMoveCommand extends PlayerCommand {
 }
 
 /**
+ * Network command types for unit placement
+ */
+interface PlaceUnitCommandData {
+    unitType: 'sphere' | 'prisma';
+    gridX: number;
+    gridZ: number;
+}
+
+interface NetworkPlaceUnitCommand extends PlayerCommand {
+    type: 'placeUnit';
+    data: PlaceUnitCommandData;
+}
+
+/**
+ * Network command types for deployment
+ */
+interface DeployUnitsCommandData {
+    playerId: string;
+}
+
+interface NetworkDeployUnitsCommand extends PlayerCommand {
+    type: 'deployUnits';
+    data: DeployUnitsCommandData;
+}
+
+type NetworkCommand = NetworkMoveCommand | NetworkPlaceUnitCommand | NetworkDeployUnitsCommand;
+
+/**
  * Game - Main game class using component-based architecture
  * Supports networked 1v1 multiplayer via Phalanx Engine
+ * 
+ * Uses LOCKSTEP SYNCHRONIZATION for deterministic gameplay:
+ * - All game commands are sent to the server
+ * - Server broadcasts commands to all clients at specific ticks
+ * - All clients execute commands and simulate at the same tick
+ * - This ensures identical game state on all clients
  */
 export class Game {
     private engine: Engine;
@@ -58,11 +97,20 @@ export class Game {
     private healthSystem: HealthSystem;
     private projectileSystem: ProjectileSystem;
     private combatSystem: CombatSystem;
+    private resourceSystem: ResourceSystem;
+    private territorySystem: TerritorySystem;
+    private formationGridSystem: FormationGridSystem;
+    private victorySystem: VictorySystem;
+    private cameraController!: CameraController;
     // @ts-ignore - InputManager registers event listeners in constructor
     private inputManager: InputManager;
 
-    // Pending commands to be sent
-    private pendingCommands: NetworkMoveCommand[] = [];
+    // Pending commands to be sent to server
+    private pendingCommands: NetworkCommand[] = [];
+
+    // Lockstep synchronization state
+    private lastSimulatedTick: number = -1;
+    private pendingTickCommands: Map<number, PlayerCommand[]> = new Map();
 
     // Callbacks
     private onExit: (() => void) | null = null;
@@ -104,6 +152,17 @@ export class Game {
         this.projectileSystem = new ProjectileSystem(this.scene, this.engine, this.entityManager, this.eventBus);
         this.combatSystem = new CombatSystem(this.engine, this.entityManager, this.eventBus);
 
+        // Set up combat system move callback for lockstep synchronization
+        this.combatSystem.setMoveUnitCallback((entityId, target) => {
+            this.movementSystem.moveEntityTo(entityId, target);
+        });
+
+        // Initialize gameplay systems
+        this.resourceSystem = new ResourceSystem(this.engine, this.entityManager, this.eventBus);
+        this.territorySystem = new TerritorySystem(this.entityManager, this.eventBus);
+        this.formationGridSystem = new FormationGridSystem(this.scene, this.entityManager, this.eventBus);
+        this.victorySystem = new VictorySystem(this.entityManager, this.eventBus);
+
         this.inputManager = new InputManager(
             this.scene,
             this.eventBus,
@@ -117,6 +176,25 @@ export class Game {
         this.setupSelectionFilter();
         this.setupBeforeUnloadWarning();
         this.setupExitButton();
+        this.setupGameOverHandler();
+    }
+
+    /**
+     * Setup game over event handler
+     */
+    private setupGameOverHandler(): void {
+        this.eventBus.on<GameOverEvent>(GameEvents.GAME_OVER, (event) => {
+            const isWinner = event.winnerTeam === this.localTeam;
+            const message = isWinner ? '🎉 Victory!' : '💀 Defeat!';
+            this.showNotification(message, isWinner ? 'info' : 'warning');
+
+            console.log(`[Game] Game Over! Winner: Team ${event.winnerTeam}, Reason: ${event.reason}`);
+
+            // Exit after a delay
+            setTimeout(() => {
+                this.handleExit();
+            }, 5000);
+        });
     }
 
     /**
@@ -127,13 +205,30 @@ export class Game {
     }
 
     /**
-     * Setup network event handlers
+     * Setup network event handlers for LOCKSTEP SYNCHRONIZATION
+     * 
+     * Key principle: Commands are NOT executed immediately.
+     * They are queued and executed when the server broadcasts them at a specific tick.
+     * This ensures all clients execute the same commands at the same simulation tick.
      */
     private setupNetworkHandlers(): void {
-        // Handle incoming commands from server
+        // Handle incoming commands from server - this triggers simulation
+        // We use the commands event (not tick event) because the server emits:
+        // 1. tick-sync, 2. commands-batch - so commands arrive AFTER tick
+        // By triggering simulation here, we ensure commands are stored before simulating
         this.client.on('commands', (event: CommandsBatchEvent) => {
-            console.log(`[Network] Received ${event.commands.length} commands at tick ${event.tick}`, event.commands);
-            this.processNetworkCommands(event.commands);
+            console.log(`[Lockstep] Received ${event.commands.length} commands for tick ${event.tick}:`, JSON.stringify(event.commands));
+            // Store commands for this tick
+            this.pendingTickCommands.set(event.tick, event.commands);
+            // Now simulate up to this tick (commands are guaranteed to be stored)
+            this.simulateToTick(event.tick);
+        });
+
+        // Handle network ticks - just update current tick, don't simulate
+        // Simulation is triggered by commands event above
+        this.client.on('tick', () => {
+            // Keep track of server tick for command submission timing
+            // But don't simulate here - wait for commands event
         });
 
         // Handle player disconnect
@@ -162,18 +257,144 @@ export class Game {
     }
 
     /**
+     * Simulate all game ticks up to and including the target tick
+     * This is the core of the LOCKSTEP synchronization
+     */
+    private simulateToTick(targetTick: number): void {
+        // Process all ticks we haven't simulated yet
+        while (this.lastSimulatedTick < targetTick) {
+            const tickToSimulate = this.lastSimulatedTick + 1;
+
+            // Get commands for this tick (if any)
+            const commands = this.pendingTickCommands.get(tickToSimulate) || [];
+
+            // Execute all commands for this tick (from ALL players)
+            this.executeTickCommands(commands);
+
+            // Run one tick of deterministic simulation
+            this.simulateTick();
+
+            // Process resources deterministically based on tick
+            this.resourceSystem.processTick(tickToSimulate);
+
+            // Update last simulated tick
+            this.lastSimulatedTick = tickToSimulate;
+
+            // Clean up processed commands
+            this.pendingTickCommands.delete(tickToSimulate);
+        }
+    }
+
+    /**
+     * Execute all commands for a single tick
+     * Commands from ALL players are executed - no skipping of "own" commands
+     */
+    private executeTickCommands(commands: PlayerCommand[]): void {
+        for (const cmd of commands) {
+            if (cmd.type === 'move') {
+                const moveCmd = cmd as NetworkMoveCommand;
+                const data = moveCmd.data;
+
+                console.log(`[Lockstep] Executing move for entity ${data.entityId} to (${data.targetX}, ${data.targetY}, ${data.targetZ})`);
+
+                // Execute move command for ANY entity (not just opponent's)
+                this.movementSystem.moveEntityTo(
+                    data.entityId,
+                    new Vector3(data.targetX, data.targetY, data.targetZ)
+                );
+            } else if (cmd.type === 'placeUnit') {
+                const placeCmd = cmd as NetworkPlaceUnitCommand;
+                const data = placeCmd.data;
+                const commandPlayerId = (cmd as any).playerId as string | undefined;
+
+                if (!commandPlayerId) {
+                    console.warn(`[Lockstep] placeUnit command missing playerId:`, JSON.stringify(cmd));
+                    continue;
+                }
+
+                console.log(`[Lockstep] Executing placeUnit for player ${commandPlayerId}: ${data.unitType} at (${data.gridX}, ${data.gridZ})`);
+
+                // Place unit on the player's grid
+                if (this.formationGridSystem.placeUnit(commandPlayerId, data.gridX, data.gridZ, data.unitType)) {
+                    // Determine team based on player
+                    const team = commandPlayerId === this.matchData.playerId ? this.localTeam :
+                        (this.localTeam === TeamTag.Team1 ? TeamTag.Team2 : TeamTag.Team1);
+
+                    // Deduct resources
+                    this.eventBus.emit(GameEvents.UNIT_PURCHASE_REQUESTED, {
+                        ...createEvent(),
+                        playerId: commandPlayerId,
+                        team: team,
+                        unitType: data.unitType,
+                        gridPosition: { x: data.gridX, z: data.gridZ },
+                    });
+                }
+            } else if (cmd.type === 'deployUnits') {
+                const commandPlayerId = (cmd as any).playerId as string | undefined;
+
+                if (!commandPlayerId) {
+                    console.warn(`[Lockstep] deployUnits command missing playerId:`, JSON.stringify(cmd));
+                    continue;
+                }
+
+                console.log(`[Lockstep] Executing deployUnits for player ${commandPlayerId}`);
+
+                // Commit the player's formation
+                const unitCount = this.formationGridSystem.commitFormation(commandPlayerId);
+                
+                // Show notification for local player
+                if (commandPlayerId === this.matchData.playerId) {
+                    if (unitCount > 0) {
+                        this.showNotification(`Deployed ${unitCount} units!`, 'info');
+                    }
+                    this.updateCommitButton();
+                }
+            }
+        }
+    }
+
+    /**
+     * Run one tick of deterministic game simulation
+     * All systems update based on the fixed tick timestep
+     */
+    private simulateTick(): void {
+        // Update physics (runs multiple substeps internally for accuracy)
+        this.physicsSystem.simulateTick();
+
+        // Update movement system (check for completed movements)
+        this.movementSystem.update();
+
+        // Update combat (target selection, attack cooldowns)
+        this.combatSystem.simulateTick();
+
+        // Update projectiles (movement, hit detection)
+        this.projectileSystem.simulateTick();
+
+        // Update territory system (for visual feedback)
+        this.territorySystem.update(networkConfig.tickTimestep);
+
+        // Cleanup destroyed entities
+        this.cleanupDestroyedEntities();
+    }
+
+    /**
      * Setup interceptor for local move commands to send over network
      * In networked mode, we intercept local commands and send them to server
-     * The server will broadcast them back and we'll execute from processNetworkCommands
+     * The server will broadcast them back and we'll execute from lockstep simulation
+     * 
+     * IMPORTANT: We do NOT execute locally. Execution only happens when commands
+     * come back from the server in executeTickCommands().
      */
     private setupMoveCommandInterceptor(): void {
-        // Track which commands we've already executed locally to avoid duplicates
-        // This uses a simple approach: only send to server, don't execute locally
-        // All execution happens when commands come back from server
-
-        // We need to intercept BEFORE MovementSystem processes the command
-        // Since EventBus doesn't support priorities, we'll use a flag system
+        // Intercept MOVE_REQUESTED events to queue for network sending
+        // NOTE: MovementSystem also listens to this event, but we prevent local
+        // execution by not having the event trigger actual movement.
+        // Movement is only triggered from executeTickCommands().
         this.eventBus.on<MoveRequestedEvent>(GameEvents.MOVE_REQUESTED, (event) => {
+            // Check if this is a network-triggered event (from executeTickCommands)
+            // by checking a flag we set. If so, don't re-queue it.
+            if ((event as any)._fromNetwork) return;
+
             const entity = this.entityManager.getEntity(event.entityId);
             if (!entity) return;
 
@@ -196,55 +417,21 @@ export class Game {
     }
 
     /**
-     * Setup selection filter to only allow selecting own units
+     * Setup selection filter
+     * In Direct Strike mode, players can select any unit to view info
+     * but cannot issue commands (movement is automatic)
      */
     private setupSelectionFilter(): void {
-        // Override the SelectionSystem's selectEntity to filter by ownership
+        // In Direct Strike mode, allow selection of any unit for viewing info
+        // No command filtering needed since player cannot issue movement commands
         const originalSelectEntity = this.selectionSystem.selectEntity.bind(this.selectionSystem);
 
         this.selectionSystem.selectEntity = (entity: import("../systems/SelectionSystem").ISelectableEntity) => {
-            // Only allow selection of entities owned by the local player
-            const ownerId = this.entityOwnership.get(entity.id);
-            console.log(`[Selection] Trying to select entity ${entity.id}, owner: ${ownerId}, localPlayer: ${this.matchData.playerId}, match: ${ownerId === this.matchData.playerId}`);
+            console.log(`[Selection] Selecting entity ${entity.id} for info view`);
             console.log(`[Selection] Entity canBeSelected: ${entity.canBeSelected()}, isSelected: ${entity.isSelected}`);
-
-            if (ownerId !== this.matchData.playerId) {
-                console.log(`[Selection] BLOCKED - entity ${entity.id} belongs to opponent`);
-                return; // Don't select enemy units
-            }
-            console.log(`[Selection] ALLOWED - calling originalSelectEntity for entity ${entity.id}`);
             originalSelectEntity(entity);
-            console.log(`[Selection] After originalSelectEntity - entity.isSelected: ${entity.isSelected}`);
+            console.log(`[Selection] After selection - entity.isSelected: ${entity.isSelected}`);
         };
-    }
-
-    /**
-     * Process commands received from the server
-     */
-    private processNetworkCommands(commands: PlayerCommand[]): void {
-        for (const cmd of commands) {
-            if (cmd.type === 'move') {
-                const moveCmd = cmd as NetworkMoveCommand;
-                const data = moveCmd.data;
-
-                // Check entity ownership - only process commands for opponent's entities
-                // Local player's commands are already executed via InputManager -> MovementSystem
-                const ownerId = this.entityOwnership.get(data.entityId);
-                console.log(`[Network] Move command for entity ${data.entityId}, owner: ${ownerId}, localPlayer: ${this.matchData.playerId}`);
-
-                if (ownerId !== this.matchData.playerId) {
-                    console.log(`[Network] Executing move command for opponent's entity ${data.entityId} to (${data.targetX}, ${data.targetY}, ${data.targetZ})`);
-                    // Execute the move command for opponent's units
-                    const success = this.movementSystem.moveEntityTo(
-                        data.entityId,
-                        new Vector3(data.targetX, data.targetY, data.targetZ)
-                    );
-                    console.log(`[Network] Move command result: ${success}`);
-                } else {
-                    console.log(`[Network] Skipping move command for own entity ${data.entityId} (already executed locally)`);
-                }
-            }
-        }
     }
 
     /**
@@ -254,15 +441,88 @@ export class Game {
         // Reset entity ID counter to ensure deterministic IDs across all clients
         resetEntityIdCounter();
 
-        this.sceneManager.setupCamera();
+        // Initialize RTS-style camera controller for the local player
+        this.cameraController = new CameraController(this.scene, this.localTeam);
+
         this.sceneManager.setupLighting();
         this.sceneManager.createGround();
 
         // Update UI with player info
         this.updatePlayerInfoUI();
 
+        // Reset territory indicator to hidden state
+        this.resetTerritoryIndicator();
+
         // Create entities for both players
         this.createPlayerEntities();
+
+        // Initialize gameplay systems for both players
+        this.initializeGameplaySystems();
+
+        // Setup unit placement UI
+        this.setupUnitPlacementUI();
+    }
+
+    /**
+     * Reset territory indicator to hidden state
+     */
+    private resetTerritoryIndicator(): void {
+        const indicator = document.getElementById('territory-indicator');
+        if (indicator) {
+            indicator.classList.remove('active');
+        }
+    }
+
+    /**
+     * Initialize gameplay systems (resources, formation grids, etc.)
+     */
+    private initializeGameplaySystems(): void {
+        // Get opponent player ID
+        const opponentId = this.matchData.opponents[0]?.playerId
+            ?? this.matchData.teammates[0]?.playerId
+            ?? 'unknown-opponent';
+
+        // Determine player IDs for each team
+        let team1PlayerId: string;
+        let team2PlayerId: string;
+
+        if (this.localTeam === TeamTag.Team1) {
+            team1PlayerId = this.matchData.playerId;
+            team2PlayerId = opponentId;
+        } else {
+            team1PlayerId = opponentId;
+            team2PlayerId = this.matchData.playerId;
+        }
+
+        // Initialize resource system for both players
+        this.resourceSystem.initializePlayer(team1PlayerId, TeamTag.Team1);
+        this.resourceSystem.initializePlayer(team2PlayerId, TeamTag.Team2);
+
+        // Initialize formation grids for both players
+        this.formationGridSystem.initializeGrid(team1PlayerId, TeamTag.Team1);
+        this.formationGridSystem.initializeGrid(team2PlayerId, TeamTag.Team2);
+
+        // Set up unit creation callback for FormationGridSystem
+        this.formationGridSystem.setCreateUnitCallback((unitType, team, position) => {
+            return this.createUnitForFormation(unitType, team, position);
+        });
+
+        // Set up move unit callback for FormationGridSystem (lockstep simulation)
+        // This bypasses EventBus to avoid commands being re-routed through the network
+        this.formationGridSystem.setMoveUnitCallback((entityId, target) => {
+            this.movementSystem.moveEntityTo(entityId, target);
+        });
+
+        // Register players in victory system
+        this.victorySystem.registerPlayer(team1PlayerId, TeamTag.Team1);
+        this.victorySystem.registerPlayer(team2PlayerId, TeamTag.Team2);
+
+        // Initial UI update to show starting resources
+        setTimeout(() => {
+            this.updateResourceUI();
+        }, 100);
+
+        console.log(`[Game] Gameplay systems initialized for players: ${team1PlayerId} (Team1), ${team2PlayerId} (Team2)`);
     }
 
     /**
@@ -337,6 +597,7 @@ export class Game {
             debug: false,
         }, new Vector3(arenaParams.teamA.base.x, 0, arenaParams.teamA.base.z));
         this.entityOwnership.set(team1Base.id, team1OwnerId);
+        this.victorySystem.registerBase(team1Base.id, TeamTag.Team1);
         console.log(`[Setup] Created Team 1 Base with ID ${team1Base.id}, owner: ${team1OwnerId}`);
 
         // Create Team 1 towers (IDs will be 2, 3)
@@ -347,19 +608,11 @@ export class Game {
                 debug: false,
             }, new Vector3(towerPos.x, 0, towerPos.z));
             this.entityOwnership.set(tower.id, team1OwnerId);
+            this.victorySystem.registerTower(tower.id, TeamTag.Team1);
             console.log(`[Setup] Created Team 1 Tower with ID ${tower.id}, owner: ${team1OwnerId}`);
         }
 
-        // Create Team 1 units (IDs will be 4, 5, 6) - spawn on formation grid
-        for (const unitPos of TEAM1_SPAWN.units) {
-            const unit = this.createUnit({
-                color: team1Color,
-                team: TeamTag.Team1,
-                debug: false,
-            }, new Vector3(unitPos.x, 1, unitPos.z));
-            this.entityOwnership.set(unit.id, team1OwnerId);
-            console.log(`[Setup] Created Team 1 Unit with ID ${unit.id}, owner: ${team1OwnerId}`);
-        }
+        // No default units - players must purchase and deploy units using resources
 
         // Create Team 2 base (ID will be 7)
         const team2Base = this.createBase({
@@ -368,6 +621,7 @@ export class Game {
             debug: false,
         }, new Vector3(arenaParams.teamB.base.x, 0, arenaParams.teamB.base.z));
         this.entityOwnership.set(team2Base.id, team2OwnerId);
+        this.victorySystem.registerBase(team2Base.id, TeamTag.Team2);
         console.log(`[Setup] Created Team 2 Base with ID ${team2Base.id}, owner: ${team2OwnerId}`);
 
         // Create Team 2 towers (IDs will be 8, 9)
@@ -378,19 +632,11 @@ export class Game {
                 debug: false,
             }, new Vector3(towerPos.x, 0, towerPos.z));
             this.entityOwnership.set(tower.id, team2OwnerId);
+            this.victorySystem.registerTower(tower.id, TeamTag.Team2);
             console.log(`[Setup] Created Team 2 Tower with ID ${tower.id}, owner: ${team2OwnerId}`);
         }
 
-        // Create Team 2 units (IDs will be 10, 11, 12) - spawn on formation grid
-        for (const unitPos of TEAM2_SPAWN.units) {
-            const unit = this.createUnit({
-                color: team2Color,
-                team: TeamTag.Team2,
-                debug: false,
-            }, new Vector3(unitPos.x, 1, unitPos.z));
-            this.entityOwnership.set(unit.id, team2OwnerId);
-            console.log(`[Setup] Created Team 2 Unit with ID ${unit.id}, owner: ${team2OwnerId}`);
-        }
+        // No default units - players must purchase and deploy units using resources
 
         // Log final ownership map
         console.log(`[Setup] Entity ownership map:`);
@@ -400,7 +646,11 @@ export class Game {
         });
     }
 
-    private createUnit(config: import("../entities/Unit").UnitConfig, position: Vector3): Unit {
+    /**
+     * Create a unit and register it with all necessary systems
+     * Used by FormationGridSystem when deploying units
+     */
+    public createUnit(config: import("../entities/Unit").UnitConfig, position: Vector3): Unit {
         const unit = this.sceneManager.createUnit(config, position);
 
         // Register with EntityManager
@@ -417,6 +667,82 @@ export class Game {
         });
 
         return unit;
+    }
+
+    /**
+     * Create a PrismaUnit and register it with all necessary systems
+     * Used by FormationGridSystem when deploying units
+     */
+    public createPrismaUnit(config: import("../entities/PrismaUnit").PrismaUnitConfig, position: Vector3): import("../entities/PrismaUnit").PrismaUnit {
+        const unit = this.sceneManager.createPrismaUnit(config, position);
+
+        // Register with EntityManager
+        this.entityManager.addEntity(unit);
+
+        // Register with SelectionSystem for mesh picking
+        this.selectionSystem.registerSelectable(unit);
+
+        // Register with PhysicsSystem - prisma units are larger dynamic bodies
+        this.physicsSystem.registerBody(unit.id, {
+            radius: 1.8, // Larger radius for 2x2 unit
+            mass: 2.0,   // Heavier unit
+            isStatic: false,
+        });
+
+        return unit;
+    }
+
+    /**
+     * Create a unit for the formation system
+     * Returns the unit info needed for move commands
+     */
+    private createUnitForFormation(
+        unitType: 'sphere' | 'prisma',
+        team: TeamTag,
+        position: Vector3
+    ): { id: number; position: Vector3 } {
+        const color = team === TeamTag.Team1
+            ? new Color3(arenaParams.colors.teamA.r, arenaParams.colors.teamA.g, arenaParams.colors.teamA.b)
+            : new Color3(arenaParams.colors.teamB.r, arenaParams.colors.teamB.g, arenaParams.colors.teamB.b);
+
+        let unit: Unit | import("../entities/PrismaUnit").PrismaUnit;
+
+        if (unitType === 'sphere') {
+            unit = this.createUnit({
+                color,
+                team,
+                health: unitConfig.sphere.health,
+                attackDamage: unitConfig.sphere.attackDamage,
+                attackRange: unitConfig.sphere.attackRange,
+                attackCooldown: unitConfig.sphere.attackCooldown,
+                moveSpeed: unitConfig.sphere.moveSpeed,
+            }, position);
+        } else {
+            unit = this.createPrismaUnit({
+                color,
+                team,
+                health: unitConfig.prisma.health,
+                attackDamage: unitConfig.prisma.attackDamage,
+                attackRange: unitConfig.prisma.attackRange,
+                attackCooldown: unitConfig.prisma.attackCooldown,
+                moveSpeed: unitConfig.prisma.moveSpeed,
+            }, position);
+        }
+
+        // Track ownership
+        const playerId = team === this.localTeam ? this.matchData.playerId : this.getOpponentId();
+        this.entityOwnership.set(unit.id, playerId);
+
+        return { id: unit.id, position: unit.position.clone() };
+    }
+
+    /**
+     * Get opponent player ID
+     */
+    private getOpponentId(): string {
+        return this.matchData.opponents[0]?.playerId
+            ?? this.matchData.teammates[0]?.playerId
+            ?? 'unknown-opponent';
     }
 
     private createTower(config: import("../entities/Tower").TowerConfig, position: Vector3): Tower {
@@ -459,39 +785,35 @@ export class Game {
 
     /**
      * Start the game loop
+     * 
+     * LOCKSTEP ARCHITECTURE:
+     * - Rendering happens every frame (smooth visuals)
+     * - Simulation happens only on network ticks (deterministic)
+     * - Commands are sent to server each frame if pending
      */
     public start(): void {
         this.engine.runRenderLoop(() => {
-            this.update();
+            this.renderUpdate();
             this.scene.render();
         });
     }
 
     /**
-     * Main update loop - called every frame
+     * Render update loop - called every frame
+     * Handles input, command sending, and UI updates
+     * NOTE: Game simulation is NOT done here - it's done in simulateTick()
      */
-    private update(): void {
+    private renderUpdate(): void {
         // Send pending commands to server
         if (this.pendingCommands.length > 0) {
             const tick = this.client.getCurrentTick();
-            console.log(`[Network] Sending ${this.pendingCommands.length} commands at tick ${tick}:`, JSON.stringify(this.pendingCommands));
+            console.log(`[Lockstep] Sending ${this.pendingCommands.length} commands at tick ${tick}:`, JSON.stringify(this.pendingCommands));
             this.client.submitCommandsAsync(tick, this.pendingCommands);
             this.pendingCommands = [];
         }
 
-        // Get delta time for physics
-        const deltaTime = this.engine.getDeltaTime() / 1000;
-
-        // Update physics (deterministic fixed timestep internally)
-        this.physicsSystem.update(deltaTime);
-
-        // Update all systems
-        this.movementSystem.update();
-        this.combatSystem.update();
-        this.projectileSystem.update();
-
-        // Cleanup destroyed entities
-        this.cleanupDestroyedEntities();
+        // Update UI systems that need frame-rate updates (not simulation)
+        this.resourceSystem.update(0); // Just UI updates, resource gen is tick-based
     }
 
     /**
@@ -603,12 +925,205 @@ export class Game {
     }
 
     /**
+     * Setup UI for unit placement buttons
+     */
+    private setupUnitPlacementUI(): void {
+        const sphereBtn = document.getElementById('sphere-btn');
+        const prismaBtn = document.getElementById('prisma-btn');
+        const commitBtn = document.getElementById('commit-btn');
+
+        sphereBtn?.addEventListener('click', () => {
+            this.handleUnitButtonClick('sphere');
+        });
+
+        prismaBtn?.addEventListener('click', () => {
+            this.handleUnitButtonClick('prisma');
+        });
+
+        commitBtn?.addEventListener('click', () => {
+            this.commitFormation();
+        });
+
+        // Subscribe to resource changes to update UI
+        this.eventBus.on(GameEvents.RESOURCES_GENERATED, () => {
+            this.updateResourceUI();
+        });
+
+        this.eventBus.on(GameEvents.RESOURCES_CHANGED, () => {
+            this.updateResourceUI();
+        });
+
+        // Subscribe to territory changes - only show for local player's team
+        this.eventBus.on<AggressionBonusActivatedEvent>(GameEvents.AGGRESSION_BONUS_ACTIVATED, (event) => {
+            // Only show indicator if the local player's team has the bonus
+            if (event.team !== this.localTeam) return;
+            
+            const indicator = document.getElementById('territory-indicator');
+            if (indicator) {
+                indicator.classList.add('active');
+            }
+        });
+
+        this.eventBus.on<AggressionBonusDeactivatedEvent>(GameEvents.AGGRESSION_BONUS_DEACTIVATED, (event) => {
+            // Only hide indicator if the local player's team lost the bonus
+            if (event.team !== this.localTeam) return;
+            
+            const indicator = document.getElementById('territory-indicator');
+            if (indicator) {
+                indicator.classList.remove('active');
+            }
+        });
+
+        // Subscribe to formation placement requests (queue network commands)
+        this.eventBus.on(GameEvents.FORMATION_PLACEMENT_REQUESTED, (event: any) => {
+            // Send network command - placement will happen through lockstep
+            if (event.playerId === this.matchData.playerId) {
+                const command: NetworkPlaceUnitCommand = {
+                    type: 'placeUnit',
+                    data: {
+                        unitType: event.unitType,
+                        gridX: event.gridX,
+                        gridZ: event.gridZ,
+                    },
+                };
+                this.pendingCommands.push(command);
+            }
+        });
+
+        // Subscribe to formation changes (for UI updates after network sync)
+        this.eventBus.on(GameEvents.FORMATION_UNIT_PLACED, () => {
+            this.updateCommitButton();
+        });
+
+        this.eventBus.on(GameEvents.FORMATION_UNIT_REMOVED, () => {
+            this.updateCommitButton();
+        });
+    }
+
+    /**
+     * Handle unit button click
+     */
+    private handleUnitButtonClick(unitType: 'sphere' | 'prisma'): void {
+        // Check if player can afford the unit
+        if (!this.resourceSystem.canAfford(this.matchData.playerId, unitType)) {
+            this.showNotification('Not enough resources!', 'warning');
+            return;
+        }
+
+        // Toggle placement mode
+        const sphereBtn = document.getElementById('sphere-btn');
+        const prismaBtn = document.getElementById('prisma-btn');
+
+        // Remove active class from both buttons
+        sphereBtn?.classList.remove('active');
+        prismaBtn?.classList.remove('active');
+
+        // Add active class to clicked button
+        if (unitType === 'sphere') {
+            sphereBtn?.classList.add('active');
+        } else {
+            prismaBtn?.classList.add('active');
+        }
+
+        this.formationGridSystem.enterPlacementMode(this.matchData.playerId, unitType);
+    }
+
+    /**
+     * Commit formation - deploy all pending units
+     * Only queues the network command - actual deployment happens through lockstep
+     */
+    private commitFormation(): void {
+        const pendingUnits = this.formationGridSystem.getPendingUnits(this.matchData.playerId);
+        if (pendingUnits.length === 0) return;
+
+        // Send network command for deployment - actual execution happens in executeTickCommands
+        const command: NetworkDeployUnitsCommand = {
+            type: 'deployUnits',
+            data: {
+                playerId: this.matchData.playerId,
+            },
+        };
+        this.pendingCommands.push(command);
+        
+        // Note: Notification and button update will happen after network sync
+        // when executeTickCommands processes the deployUnits command
+    }
+
+    /**
+     * Update resource UI display
+     */
+    private updateResourceUI(): void {
+        const resources = this.resourceSystem.getPlayerResources(this.matchData.playerId);
+        if (!resources) return;
+
+        const amountEl = document.getElementById('resource-amount');
+        const rateEl = document.getElementById('resource-rate');
+
+        if (amountEl) {
+            amountEl.textContent = Math.floor(resources.currentResources).toString();
+        }
+
+        if (rateEl) {
+            rateEl.textContent = `(+${resources.currentGenerationRate.toFixed(1)}/s)`;
+            if (resources.hasAggressionBonus) {
+                rateEl.classList.add('bonus');
+            } else {
+                rateEl.classList.remove('bonus');
+            }
+        }
+
+        // Update button states based on affordability
+        this.updateUnitButtonStates();
+    }
+
+    /**
+     * Update unit button states based on resources
+     */
+    private updateUnitButtonStates(): void {
+        const sphereBtn = document.getElementById('sphere-btn');
+        const prismaBtn = document.getElementById('prisma-btn');
+
+        const canAffordSphere = this.resourceSystem.canAfford(this.matchData.playerId, 'sphere');
+        const canAffordPrisma = this.resourceSystem.canAfford(this.matchData.playerId, 'prisma');
+
+        if (sphereBtn) {
+            if (canAffordSphere) {
+                sphereBtn.classList.remove('disabled');
+            } else {
+                sphereBtn.classList.add('disabled');
+            }
+        }
+
+        if (prismaBtn) {
+            if (canAffordPrisma) {
+                prismaBtn.classList.remove('disabled');
+            } else {
+                prismaBtn.classList.add('disabled');
+            }
+        }
+    }
+
+    /**
+     * Update commit button state
+     */
+    private updateCommitButton(): void {
+        const commitBtn = document.getElementById('commit-btn') as HTMLButtonElement;
+        const pendingUnits = this.formationGridSystem.getPendingUnits(this.matchData.playerId);
+
+        if (commitBtn) {
+            commitBtn.textContent = `Deploy Units (${pendingUnits.length})`;
+            commitBtn.disabled = pendingUnits.length === 0;
+        }
+    }
+
+    /**
      * Cleanup resources
      */
     public dispose(): void {
         this.removeBeforeUnloadWarning();
 
         // Dispose all systems (unsubscribe from events)
+        this.cameraController.dispose();
         this.inputManager.dispose();
         this.projectileSystem.dispose();
         this.combatSystem.dispose();
@@ -617,6 +1132,10 @@ export class Game {
         this.movementSystem.dispose();
         this.selectionSystem.dispose();
         this.sceneManager.dispose();
+        this.resourceSystem.dispose();
+        this.territorySystem.dispose();
+        this.formationGridSystem.dispose();
+        this.victorySystem.dispose();
 
         // Clear event bus and entity manager
         this.eventBus.clearAll();

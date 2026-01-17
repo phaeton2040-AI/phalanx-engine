@@ -49,10 +49,15 @@ export interface PhalanxClientConfig {
 
 /**
  * A command sent from or to players
+ * When received from server, includes playerId and tick added by server
  */
 export interface PlayerCommand {
   type: string;
   data: unknown;
+  /** Added by server when broadcasting - identifies the player who sent the command */
+  playerId?: string;
+  /** Added by server when broadcasting - the tick this command was submitted for */
+  tick?: number;
 }
 
 /**

@@ -5,19 +5,95 @@
 // Server settings
 export const SERVER_URL = 'http://localhost:3000';
 
+/**
+ * Network tick configuration for deterministic lockstep simulation
+ * All clients simulate the game in lockstep using these settings
+ */
+export const networkConfig = {
+    // Tick rate (ticks per second) - must match server's tickRate
+    tickRate: 20,
+
+    // Fixed timestep for simulation (seconds per tick)
+    // This is 1/tickRate = 1/20 = 0.05 seconds = 50ms per tick
+    tickTimestep: 1 / 20,
+
+    // Number of physics sub-steps per network tick
+    // Higher = more accurate physics, but more CPU
+    // 3 substeps at 20 ticks/sec = 60 physics updates/sec
+    physicsSubsteps: 3,
+};
+
+/**
+ * Camera configuration for RTS-style top-down camera
+ */
+export const cameraConfig = {
+    // Camera height above ground (not too far, good for RTS view)
+    height: 60,
+
+    // How far ahead of camera position to look (creates the angled view)
+    lookAheadOffset: 25,
+
+    // Camera movement speed (units per second)
+    moveSpeed: 40,
+
+    // Padding from arena edges (prevents camera going too far out)
+    boundsPadding: 10,
+};
+
 // Game settings
 export const UNITS_PER_PLAYER = 3;
 export const TOWERS_PER_PLAYER = 1;
 
 /**
+ * Resource system configuration
+ */
+export const resourceConfig = {
+    // Starting resources for each player
+    initialResources: 200,
+
+    // Base resource generation rate (per second)
+    baseGenerationRate: 15,
+
+    // Aggression bonus multiplier when on enemy territory
+    aggressionBonusMultiplier: 1.5,
+
+    // Resource bonus for destroying enemy tower
+    towerDestructionBonus: 100,
+};
+
+/**
+ * Unit costs and stats
+ */
+export const unitConfig = {
+    sphere: {
+        cost: 100,
+        health: 50,
+        attackDamage: 10,
+        attackRange: 8,
+        attackCooldown: 1.0,
+        moveSpeed: 8,
+        gridSize: 1, // 1x1
+    },
+    prisma: {
+        cost: 350,
+        health: 150,
+        attackDamage: 25,
+        attackRange: 10,
+        attackCooldown: 1.5,
+        moveSpeed: 8,
+        gridSize: 2, // 2x2
+    },
+};
+
+/**
  * Arena parameters for the game map
- * Ground: 120w x 72h units (20% larger than original 100x60)
+ * Ground: 168w x 72h units (40% larger in length than 120)
  * Split vertically at x=0
  */
 export const arenaParams = {
-    // Ground dimensions (20% larger)
+    // Ground dimensions (40% longer)
     ground: {
-        width: 120,
+        width: 168,
         height: 72,
     },
 
@@ -30,24 +106,28 @@ export const arenaParams = {
     },
 
     // Team A (Left side, x < 0)
-    // Grid center at x=-50, width 20, so grid spans x=-60 to x=-40
+    // Grid center at x=-74, width 20, so grid spans x=-84 to x=-64
     teamA: {
-        formationGridCenter: { x: -50, z: 0 },  // Grid spans -60 to -40
-        base: { x: -37, z: 0 },                  // Right next to grid (grid inner edge is at -40)
+        formationGridCenter: { x: -74, z: 0 },  // Grid spans -84 to -64
+        base: { x: -61, z: 0 },                  // Right next to grid (grid inner edge is at -64)
+        // Spawn area is in front of the base (towards enemy)
+        spawnArea: { x: -54, z: 0 },             // Units spawn here and move towards x=0
         towers: [
-            { x: -25, z: 0 },   // First tower - evenly distributed along X
-            { x: -12, z: 0 },   // Second tower - evenly distributed along X
+            { x: -36, z: 0 },   // First tower - evenly distributed along X
+            { x: -18, z: 0 },   // Second tower - evenly distributed along X
         ],
     },
 
     // Team B (Right side, x > 0) - Mirror of Team A
-    // Grid center at x=50, width 20, so grid spans x=40 to x=60
+    // Grid center at x=74, width 20, so grid spans x=64 to x=84
     teamB: {
-        formationGridCenter: { x: 50, z: 0 },   // Grid spans 40 to 60
-        base: { x: 37, z: 0 },                   // Right next to grid (grid inner edge is at 40)
+        formationGridCenter: { x: 74, z: 0 },   // Grid spans 64 to 84
+        base: { x: 61, z: 0 },                   // Right next to grid (grid inner edge is at 64)
+        // Spawn area is in front of the base (towards enemy)
+        spawnArea: { x: 54, z: 0 },              // Units spawn here and move towards x=0
         towers: [
-            { x: 25, z: 0 },    // First tower - evenly distributed along X
-            { x: 12, z: 0 },    // Second tower - evenly distributed along X
+            { x: 36, z: 0 },    // First tower - evenly distributed along X
+            { x: 18, z: 0 },    // Second tower - evenly distributed along X
         ],
     },
 

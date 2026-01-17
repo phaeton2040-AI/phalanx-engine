@@ -14,6 +14,7 @@ export interface ProjectileConfig {
     speed?: number;
     lifetime?: number;
     team: TeamTag;
+    sourceId: number; // ID of the entity that fired the projectile
 }
 
 /**
@@ -29,6 +30,7 @@ export class Projectile {
     private _lifetime: number;
     private _currentLifetime: number;
     private _team: TeamTag;
+    private _sourceId: number;
     private _isDestroyed: boolean = false;
 
     constructor(
@@ -45,6 +47,7 @@ export class Projectile {
         this._lifetime = config.lifetime ?? 3;
         this._currentLifetime = this._lifetime;
         this._team = config.team;
+        this._sourceId = config.sourceId;
 
         this.mesh = this.createMesh();
         this.mesh.position = origin.clone();
@@ -136,6 +139,10 @@ export class Projectile {
 
     public get team(): TeamTag {
         return this._team;
+    }
+
+    public get sourceId(): number {
+        return this._sourceId;
     }
 
     public get damage(): number {

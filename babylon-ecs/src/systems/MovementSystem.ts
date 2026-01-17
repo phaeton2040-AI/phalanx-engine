@@ -3,7 +3,7 @@ import { EntityManager } from "../core/EntityManager";
 import { EventBus } from "../core/EventBus";
 import { ComponentType, MovementComponent } from "../components";
 import { GameEvents, createEvent } from "../events";
-import type { MoveRequestedEvent, MoveStartedEvent, MoveCompletedEvent, StopRequestedEvent } from "../events";
+import type { MoveStartedEvent, MoveCompletedEvent, StopRequestedEvent } from "../events";
 
 /**
  * MovementSystem - Handles entity movement commands
@@ -12,6 +12,11 @@ import type { MoveRequestedEvent, MoveStartedEvent, MoveCompletedEvent, StopRequ
  * 
  * Note: Actual physics movement is handled by PhysicsSystem.
  * This system manages movement intent (targets) and emits events.
+ * 
+ * LOCKSTEP SYNCHRONIZATION:
+ * Movement commands are executed via direct moveEntityTo() calls only.
+ * The EventBus MOVE_REQUESTED event is used for network routing,
+ * not for direct execution (to ensure lockstep synchronization).
  */
 export class MovementSystem {
     // @ts-ignore
@@ -29,12 +34,9 @@ export class MovementSystem {
     }
 
     private setupEventListeners(): void {
-        // Listen for move requests
-        this.unsubscribers.push(
-            this.eventBus.on<MoveRequestedEvent>(GameEvents.MOVE_REQUESTED, (event) => {
-                this.moveEntityTo(event.entityId, event.target);
-            })
-        );
+        // NOTE: We do NOT listen to MOVE_REQUESTED here for lockstep synchronization.
+        // Move commands must go through the network and be executed via direct
+        // moveEntityTo() calls from Game.ts executeTickCommands().
 
         // Listen for stop requests
         this.unsubscribers.push(

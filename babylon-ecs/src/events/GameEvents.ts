@@ -40,6 +40,32 @@ export const GameEvents = {
     // UI events
     SHOW_DESTINATION_MARKER: 'ui:showDestinationMarker',
     HIDE_DESTINATION_MARKER: 'ui:hideDestinationMarker',
+
+    // Resource events
+    RESOURCES_CHANGED: 'resource:changed',
+    RESOURCES_GENERATED: 'resource:generated',
+    UNIT_PURCHASE_REQUESTED: 'resource:purchaseRequested',
+    UNIT_PURCHASE_COMPLETED: 'resource:purchaseCompleted',
+    UNIT_PURCHASE_FAILED: 'resource:purchaseFailed',
+
+    // Territory events
+    TERRITORY_CHANGED: 'territory:changed',
+    AGGRESSION_BONUS_ACTIVATED: 'territory:aggressionBonus',
+    AGGRESSION_BONUS_DEACTIVATED: 'territory:aggressionBonusLost',
+
+    // Game state events
+    GAME_STARTED: 'game:started',
+    GAME_OVER: 'game:over',
+    BASE_DESTROYED: 'game:baseDestroyed',
+    TOWER_DESTROYED: 'game:towerDestroyed',
+
+    // Formation events
+    FORMATION_MODE_ENTERED: 'formation:entered',
+    FORMATION_MODE_EXITED: 'formation:exited',
+    FORMATION_PLACEMENT_REQUESTED: 'formation:placementRequested',
+    FORMATION_UNIT_PLACED: 'formation:unitPlaced',
+    FORMATION_UNIT_REMOVED: 'formation:unitRemoved',
+    FORMATION_COMMITTED: 'formation:committed',
 } as const;
 
 export type GameEventType = typeof GameEvents[keyof typeof GameEvents];

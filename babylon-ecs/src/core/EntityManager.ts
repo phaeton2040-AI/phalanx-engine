@@ -54,14 +54,21 @@ export class EntityManager {
 
     /**
      * Get all entities
+     * 
+     * IMPORTANT: Results are sorted by entity ID for deterministic ordering
+     * across all clients in networked games.
      */
     public getAllEntities(): Entity[] {
-        return Array.from(this.entities.values());
+        return Array.from(this.entities.values()).sort((a, b) => a.id - b.id);
     }
 
     /**
      * Query entities that have ALL specified components
      * This is the primary method systems use to get relevant entities
+     * 
+     * IMPORTANT: Results are sorted by entity ID for deterministic ordering
+     * across all clients in networked games. This ensures that iteration
+     * order is consistent, which is critical for deterministic combat.
      */
     public queryEntities(...componentTypes: symbol[]): Entity[] {
         if (componentTypes.length === 0) {
@@ -89,11 +96,17 @@ export class EntityManager {
             }
         }
 
+        // Sort by entity ID for deterministic ordering across all clients
+        result.sort((a, b) => a.id - b.id);
+
         return result;
     }
 
     /**
      * Query entities that have at least ONE of the specified components
+     * 
+     * IMPORTANT: Results are sorted by entity ID for deterministic ordering
+     * across all clients in networked games.
      */
     public queryEntitiesAny(...componentTypes: symbol[]): Entity[] {
         const entityIds = new Set<number>();
@@ -107,7 +120,9 @@ export class EntityManager {
             }
         }
 
+        // Sort by entity ID for deterministic ordering across all clients
         return Array.from(entityIds)
+            .sort((a, b) => a - b)
             .map(id => this.entities.get(id))
             .filter((e): e is Entity => e !== undefined && !e.isDestroyed);
     }

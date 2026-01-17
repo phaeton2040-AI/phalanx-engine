@@ -26,7 +26,7 @@ export class HealthSystem {
         // Listen for damage requests from other systems
         this.unsubscribers.push(
             this.eventBus.on<DamageRequestedEvent>(GameEvents.DAMAGE_REQUESTED, (event) => {
-                this.applyDamageById(event.entityId, event.amount);
+                this.applyDamageById(event.entityId, event.amount, event.sourceId);
             })
         );
 
@@ -45,7 +45,7 @@ export class HealthSystem {
      * Apply damage to an entity
      * @returns true if entity was destroyed by this damage
      */
-    public applyDamage(entity: Entity, amount: number): boolean {
+    public applyDamage(entity: Entity, amount: number, sourceId?: number): boolean {
         const health = entity.getComponent<HealthComponent>(ComponentType.Health);
         if (!health) return false;
 
@@ -58,6 +58,7 @@ export class HealthSystem {
             amount,
             newHealth: health.health,
             maxHealth: health.maxHealth,
+            sourceId,
         });
 
         if (wasDestroyed) {
@@ -78,11 +79,11 @@ export class HealthSystem {
      * Apply damage to an entity by ID
      * @returns true if entity was destroyed by this damage
      */
-    public applyDamageById(entityId: number, amount: number): boolean {
+    public applyDamageById(entityId: number, amount: number, sourceId?: number): boolean {
         const entity = this.entityManager.getEntity(entityId);
         if (!entity) return false;
 
-        return this.applyDamage(entity, amount);
+        return this.applyDamage(entity, amount, sourceId);
     }
 
     /**

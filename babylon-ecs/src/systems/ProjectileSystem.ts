@@ -8,32 +8,54 @@ import { ComponentType, TeamComponent } from "../components";
 import { GameEvents, createEvent } from "../events";
 import type { ProjectileSpawnedEvent, DamageRequestedEvent, ProjectileHitEvent } from "../events";
 import type { TeamTag } from "../enums/TeamTag";
+import { networkConfig } from "../config/constants";
 
 export interface ProjectileSpawnConfig {
     damage: number;
     speed?: number;
     lifetime?: number;
     team: TeamTag;
+    sourceId: number; // ID of the entity that fired the projectile
 }
+
+/**
+ * Projectile system configuration for deterministic simulation
+ */
+export interface ProjectileConfig {
+    fixedTimestep: number; // Fixed delta time for deterministic updates (e.g., 1/60)
+}
+
+const DEFAULT_PROJECTILE_CONFIG: ProjectileConfig = {
+    // Projectiles update once per network tick for deterministic lockstep
+    fixedTimestep: networkConfig.tickTimestep,
+};
 
 /**
  * ProjectileSystem - Manages all projectiles in the game
  * Uses EntityManager for target queries
  * Uses EventBus for decoupled damage dealing
+ * 
+ * IMPORTANT: Uses fixed timestep for deterministic projectile movement.
+ * This ensures projectile hit detection is identical across all clients.
  */
 export class ProjectileSystem {
     private scene: Scene;
     private engine: Engine;
     private entityManager: EntityManager;
     private eventBus: EventBus;
+    private config: ProjectileConfig;
     private projectiles: Projectile[] = [];
     private unsubscribers: (() => void)[] = [];
+    
+    // Fixed timestep accumulator for deterministic updates
+    private accumulator: number = 0;
 
-    constructor(scene: Scene, engine: Engine, entityManager: EntityManager, eventBus: EventBus) {
+    constructor(scene: Scene, engine: Engine, entityManager: EntityManager, eventBus: EventBus, config?: Partial<ProjectileConfig>) {
         this.scene = scene;
         this.engine = engine;
         this.entityManager = entityManager;
         this.eventBus = eventBus;
+        this.config = { ...DEFAULT_PROJECTILE_CONFIG, ...config };
 
         this.setupEventListeners();
     }
@@ -46,6 +68,7 @@ export class ProjectileSystem {
                     damage: event.damage,
                     speed: event.speed,
                     team: event.team,
+                    sourceId: event.sourceId,
                 });
             })
         );
@@ -64,19 +87,43 @@ export class ProjectileSystem {
             speed: config.speed,
             lifetime: config.lifetime,
             team: config.team,
+            sourceId: config.sourceId,
         });
         this.projectiles.push(projectile);
         return projectile;
     }
 
     /**
-     * Update all projectiles
+     * Update all projectiles - uses fixed timestep for determinism (legacy)
+     * @deprecated Use simulateTick() for deterministic network synchronization
      */
     public update(): void {
         const deltaTime = this.engine.getDeltaTime() / 1000;
+        this.accumulator += deltaTime;
+
+        // Run fixed timestep updates for deterministic projectile movement
+        while (this.accumulator >= this.config.fixedTimestep) {
+            this.fixedUpdate(this.config.fixedTimestep);
+            this.accumulator -= this.config.fixedTimestep;
+        }
+    }
+
+    /**
+     * Simulate one network tick worth of projectile updates
+     * Called exactly once per network tick for deterministic lockstep simulation
+     */
+    public simulateTick(): void {
+        this.fixedUpdate(this.config.fixedTimestep);
+    }
+
+    /**
+     * Fixed timestep projectile update - deterministic
+     */
+    private fixedUpdate(deltaTime: number): void {
         const projectilesToRemove: Projectile[] = [];
 
         // Get all potential targets (entities with Health and Team components)
+        // queryEntities already returns entities sorted by ID for determinism
         const potentialTargets = this.entityManager.queryEntities(
             ComponentType.Health,
             ComponentType.Team
@@ -94,7 +141,7 @@ export class ProjectileSystem {
                     return team.team !== projectile.team;
                 });
 
-            // Update projectile and check collisions
+            // Update projectile and check collisions with fixed timestep
             const shouldDestroy = this.updateProjectile(projectile, deltaTime, targets);
 
             if (shouldDestroy) {
@@ -138,6 +185,7 @@ export class ProjectileSystem {
                     ...createEvent(),
                     entityId: target.id,
                     amount: projectile.damage,
+                    sourceId: projectile.sourceId,
                 });
 
                 // Emit projectile hit event for effects/sounds
@@ -147,6 +195,7 @@ export class ProjectileSystem {
                     damage: projectile.damage,
                     position: projectile.position.clone(),
                     team: projectile.team,
+                    sourceId: projectile.sourceId,
                 });
 
                 projectile.destroy();

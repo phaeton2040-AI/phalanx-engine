@@ -2,11 +2,8 @@ import { Scene, PointerEventTypes } from "@babylonjs/core";
 import { EventBus } from "../core/EventBus";
 import type { SelectionSystem } from "./SelectionSystem";
 import type { SceneManager } from "../core/SceneManager";
-import { ComponentType } from "../components";
 import { GameEvents, createEvent } from "../events";
 import type {
-    MoveRequestedEvent,
-    ShowDestinationMarkerEvent,
     MoveCompletedEvent,
     HideDestinationMarkerEvent
 } from "../events";
@@ -101,13 +98,19 @@ export class InputManager {
         }
     }
 
-    private handleRightClick(pickResult: any): void {
+    private handleRightClick(_pickResult: any): void {
+        // Movement commands are disabled for Direct Strike mode
+        // Units automatically move towards enemy base after spawning
+        // Player cannot manually control unit movement
+        return;
+
+        /* Original movement command code - disabled
         const ground = this.sceneManager.getGround();
 
         if (!this.selectionSystem.hasSelection()) return;
-        if (pickResult.pickedMesh !== ground) return;
+        if (_pickResult.pickedMesh !== ground) return;
 
-        const targetPosition = pickResult.pickedPoint!.clone();
+        const targetPosition = _pickResult.pickedPoint!.clone();
 
         // Show destination marker via event (SceneManager listens for this)
         this.eventBus.emit<ShowDestinationMarkerEvent>(GameEvents.SHOW_DESTINATION_MARKER, {
@@ -134,6 +137,7 @@ export class InputManager {
                 });
             }
         }
+        */
     }
 
     /**

@@ -1,6 +1,7 @@
 import { Vector3 } from "@babylonjs/core";
 import { EntityManager } from "../core/EntityManager";
-import { ComponentType, MovementComponent } from "../components";
+import { ComponentType, MovementComponent, TeamComponent } from "../components";
+import { networkConfig } from "../config/constants";
 
 /**
  * Physics configuration for deterministic simulation
@@ -15,7 +16,7 @@ export interface PhysicsConfig {
 }
 
 const DEFAULT_PHYSICS_CONFIG: PhysicsConfig = {
-    fixedTimestep: 1 / 60,      // 60 updates per second
+    fixedTimestep: networkConfig.tickTimestep / networkConfig.physicsSubsteps, // Physics substeps per tick
     unitRadius: 1.0,             // Units have radius of 1 (diameter 2 matches sphere mesh)
     pushStrength: 15.0,          // Push force multiplier
     maxVelocity: 15.0,           // Max speed
@@ -77,6 +78,9 @@ class SpatialGrid {
 
     /**
      * Get all entity IDs that might collide with a circle at (x, z) with given radius
+     * 
+     * IMPORTANT: Returns entity IDs in sorted order for deterministic collision
+     * processing across all clients.
      */
     public getPotentialCollisions(x: number, z: number, radius: number): number[] {
         const result: number[] = [];
@@ -101,6 +105,9 @@ class SpatialGrid {
                 }
             }
         }
+
+        // Sort by entity ID for deterministic ordering across all clients
+        result.sort((a, b) => a - b);
 
         return result;
     }
@@ -182,8 +189,9 @@ export class PhysicsSystem {
     }
 
     /**
-     * Update physics simulation with fixed timestep
+     * Update physics simulation with fixed timestep (legacy frame-based update)
      * @param deltaTime Real delta time in seconds
+     * @deprecated Use simulateTick() for deterministic network synchronization
      */
     public update(deltaTime: number): void {
         this.accumulator += deltaTime;
@@ -192,6 +200,20 @@ export class PhysicsSystem {
         while (this.accumulator >= this.config.fixedTimestep) {
             this.fixedUpdate(this.config.fixedTimestep);
             this.accumulator -= this.config.fixedTimestep;
+        }
+    }
+
+    /**
+     * Simulate one network tick worth of physics
+     * Called exactly once per network tick for deterministic lockstep simulation
+     * Runs multiple physics substeps per tick for accuracy
+     */
+    public simulateTick(): void {
+        const substepDt = this.config.fixedTimestep;
+        const substeps = networkConfig.physicsSubsteps;
+
+        for (let i = 0; i < substeps; i++) {
+            this.fixedUpdate(substepDt);
         }
     }
 
@@ -220,6 +242,7 @@ export class PhysicsSystem {
      * Uses inline math to avoid Vector3 allocations
      */
     private updateMovementVelocities(): void {
+        // Use sorted entity list for deterministic ordering
         const movableEntities = this.entityManager.queryEntities(ComponentType.Movement);
 
         for (const entity of movableEntities) {
@@ -250,6 +273,11 @@ export class PhysicsSystem {
                     body.velocity.x = (dx / dist) * speed;
                     body.velocity.z = (dz / dist) * speed;
                 }
+            } else {
+                // Unit is not moving - stop any residual velocity
+                // This handles cases where combat system stopped the unit
+                body.velocity.x = 0;
+                body.velocity.z = 0;
             }
         }
     }
@@ -257,11 +285,17 @@ export class PhysicsSystem {
     /**
      * Rebuild spatial grid each physics tick
      * Caches entity positions for collision detection
+     * 
+     * IMPORTANT: Processes bodies in deterministic order (sorted by entity ID)
+     * for network synchronization.
      */
     private rebuildSpatialGrid(): void {
         this.spatialGrid.clear();
 
-        for (const body of this.bodies.values()) {
+        // Sort bodies by entity ID for deterministic iteration order
+        const sortedBodies = Array.from(this.bodies.values()).sort((a, b) => a.entityId - b.entityId);
+
+        for (const body of sortedBodies) {
             const entity = this.entityManager.getEntity(body.entityId);
             if (!entity) continue;
 
@@ -275,11 +309,17 @@ export class PhysicsSystem {
     /**
      * Resolve collisions using spatial hashing
      * Average case O(n) instead of O(n²)
+     * 
+     * IMPORTANT: Processes bodies in deterministic order (sorted by entity ID)
+     * for network synchronization.
      */
     private resolveCollisions(): void {
         this.checkedPairs.clear();
 
-        for (const bodyA of this.bodies.values()) {
+        // Sort bodies by entity ID for deterministic iteration order
+        const sortedBodies = Array.from(this.bodies.values()).sort((a, b) => a.entityId - b.entityId);
+
+        for (const bodyA of sortedBodies) {
             const entityA = this.entityManager.getEntity(bodyA.entityId);
             if (!entityA) continue;
 
@@ -305,6 +345,12 @@ export class PhysicsSystem {
 
                 const entityB = this.entityManager.getEntity(bodyB.entityId);
                 if (!entityB) continue;
+
+                // Skip collision between units and friendly buildings (bases/towers)
+                // Units should pass through their own team's structures
+                if (this.shouldSkipCollision(entityA, entityB, bodyA, bodyB)) {
+                    continue;
+                }
 
                 const posBx = bodyB.lastX;
                 const posBz = bodyB.lastZ;
@@ -369,9 +415,15 @@ export class PhysicsSystem {
 
     /**
      * Apply velocities to entity positions
+     * 
+     * IMPORTANT: Processes bodies in deterministic order (sorted by entity ID)
+     * for network synchronization.
      */
     private applyVelocities(dt: number): void {
-        for (const body of this.bodies.values()) {
+        // Sort bodies by entity ID for deterministic iteration order
+        const sortedBodies = Array.from(this.bodies.values()).sort((a, b) => a.entityId - b.entityId);
+
+        for (const body of sortedBodies) {
             if (body.isStatic) continue;
 
             const entity = this.entityManager.getEntity(body.entityId);
@@ -398,9 +450,15 @@ export class PhysicsSystem {
 
     /**
      * Apply friction to slow down units
+     * 
+     * IMPORTANT: Processes bodies in deterministic order (sorted by entity ID)
+     * for network synchronization.
      */
     private applyFriction(): void {
-        for (const body of this.bodies.values()) {
+        // Sort bodies by entity ID for deterministic iteration order
+        const sortedBodies = Array.from(this.bodies.values()).sort((a, b) => a.entityId - b.entityId);
+
+        for (const body of sortedBodies) {
             if (body.isStatic) continue;
 
             // Check if entity is actively moving to a target
@@ -420,6 +478,39 @@ export class PhysicsSystem {
                 if (Math.abs(body.velocity.z) < 0.01) body.velocity.z = 0;
             }
         }
+    }
+
+    /**
+     * Check if collision should be skipped between two entities
+     * Units don't collide with friendly buildings (bases, towers)
+     */
+    private shouldSkipCollision(
+        entityA: import("../entities/Entity").Entity,
+        entityB: import("../entities/Entity").Entity,
+        bodyA: PhysicsBody,
+        bodyB: PhysicsBody
+    ): boolean {
+        // If neither is static, they should collide (unit vs unit)
+        if (!bodyA.isStatic && !bodyB.isStatic) {
+            return false;
+        }
+
+        // Get team components
+        const teamA = entityA.getComponent<TeamComponent>(ComponentType.Team);
+        const teamB = entityB.getComponent<TeamComponent>(ComponentType.Team);
+
+        // If either doesn't have a team, let them collide
+        if (!teamA || !teamB) {
+            return false;
+        }
+
+        // If they're on the same team and one is static (building),
+        // skip the collision so units can pass through friendly buildings
+        if (teamA.team === teamB.team && (bodyA.isStatic || bodyB.isStatic)) {
+            return true;
+        }
+
+        return false;
     }
 
     /**

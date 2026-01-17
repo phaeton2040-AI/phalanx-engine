@@ -34,6 +34,7 @@ export interface ProjectileSpawnedEvent extends GameEvent {
     damage: number;
     speed: number;
     team: TeamTag;
+    sourceId: number; // ID of the entity that fired the projectile
 }
 
 export interface ProjectileHitEvent extends GameEvent {
@@ -41,6 +42,7 @@ export interface ProjectileHitEvent extends GameEvent {
     damage: number;
     position: Vector3;
     team: TeamTag;
+    sourceId: number; // ID of the entity that fired the projectile
 }
 
 // ============================================
@@ -58,6 +60,7 @@ export interface DamageAppliedEvent extends GameEvent {
     amount: number;
     newHealth: number;
     maxHealth: number;
+    sourceId?: number; // ID of the entity that caused the damage
 }
 
 export interface HealRequestedEvent extends GameEvent {
@@ -162,4 +165,121 @@ export interface ShowDestinationMarkerEvent extends GameEvent {
 }
 
 export interface HideDestinationMarkerEvent extends GameEvent {}
+
+// ============================================
+// Resource Events
+// ============================================
+
+export interface ResourcesChangedEvent extends GameEvent {
+    playerId: string;
+    team: TeamTag;
+    oldAmount: number;
+    newAmount: number;
+}
+
+export interface ResourcesGeneratedEvent extends GameEvent {
+    playerId: string;
+    team: TeamTag;
+    amount: number;
+    currentTotal: number;
+    generationRate: number;
+}
+
+export interface UnitPurchaseRequestedEvent extends GameEvent {
+    playerId: string;
+    team: TeamTag;
+    unitType: 'sphere' | 'prisma';
+    gridPosition: { x: number; z: number };
+}
+
+export interface UnitPurchaseCompletedEvent extends GameEvent {
+    playerId: string;
+    team: TeamTag;
+    unitType: 'sphere' | 'prisma';
+    entityId: number;
+    cost: number;
+}
+
+export interface UnitPurchaseFailedEvent extends GameEvent {
+    playerId: string;
+    team: TeamTag;
+    unitType: 'sphere' | 'prisma';
+    reason: 'insufficient_resources' | 'invalid_position' | 'grid_occupied';
+}
+
+// ============================================
+// Territory Events
+// ============================================
+
+export interface TerritoryChangedEvent extends GameEvent {
+    team: TeamTag;
+    averagePosition: number; // X position of team's units
+    onEnemyTerritory: boolean;
+}
+
+export interface AggressionBonusActivatedEvent extends GameEvent {
+    team: TeamTag;
+    bonusMultiplier: number;
+}
+
+export interface AggressionBonusDeactivatedEvent extends GameEvent {
+    team: TeamTag;
+}
+
+// ============================================
+// Game State Events
+// ============================================
+
+export interface GameStartedEvent extends GameEvent {
+    team1PlayerId: string;
+    team2PlayerId: string;
+}
+
+export interface GameOverEvent extends GameEvent {
+    winnerTeam: TeamTag;
+    winnerPlayerId: string;
+    reason: 'base_destroyed' | 'disconnect' | 'forfeit';
+}
+
+export interface BaseDestroyedEvent extends GameEvent {
+    team: TeamTag;
+    entityId: number;
+}
+
+export interface TowerDestroyedEvent extends GameEvent {
+    team: TeamTag;
+    entityId: number;
+    resourceBonus: number;
+}
+
+// ============================================
+// Formation Events
+// ============================================
+
+export interface FormationModeEnteredEvent extends GameEvent {
+    playerId: string;
+    unitType: 'sphere' | 'prisma';
+}
+
+export interface FormationModeExitedEvent extends GameEvent {
+    playerId: string;
+}
+
+export interface FormationUnitPlacedEvent extends GameEvent {
+    playerId: string;
+    unitType: 'sphere' | 'prisma';
+    gridX: number;
+    gridZ: number;
+}
+
+export interface FormationUnitRemovedEvent extends GameEvent {
+    playerId: string;
+    gridX: number;
+    gridZ: number;
+}
+
+export interface FormationCommittedEvent extends GameEvent {
+    playerId: string;
+    unitCount: number;
+}
 
