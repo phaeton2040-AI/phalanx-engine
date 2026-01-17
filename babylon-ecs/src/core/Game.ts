@@ -10,9 +10,10 @@ import { ProjectileSystem } from "../systems/ProjectileSystem";
 import { CombatSystem } from "../systems/CombatSystem";
 import type { Unit } from "../entities/Unit";
 import type { Tower } from "../entities/Tower";
+import type { Base } from "../entities/Base";
 import { resetEntityIdCounter } from "../entities/Entity";
 import { TeamTag } from "../enums/TeamTag";
-import { TEAM1_SPAWN, TEAM2_SPAWN } from "../config/constants";
+import { TEAM1_SPAWN, TEAM2_SPAWN, arenaParams } from "../config/constants";
 import { GameEvents } from "../events";
 import type { MoveRequestedEvent } from "../events";
 import type { PhalanxClient, MatchFoundEvent, CommandsBatchEvent, PlayerCommand } from "phalanx-client";
@@ -282,8 +283,10 @@ export class Game {
     /**
      * Create entities for both players
      * Uses deterministic IDs so both clients have matching entity IDs
-     * Team 1: tower=1, units=2,3,4
-     * Team 2: tower=5, units=6,7,8
+     * Entity creation order (for deterministic IDs):
+     * Team 1: base=1, towers=2,3, units=4,5,6
+     * Team 2: base=7, towers=8,9, units=10,11,12
+     * Units spawn on their respective formation grids
      */
     private createPlayerEntities(): void {
         // Always create Team 1 entities first, then Team 2
@@ -324,15 +327,27 @@ export class Game {
         console.log(`[Setup] Team 2 owner: ${team2OwnerId}`);
         console.log(`[Setup] Local player ${this.matchData.playerId} owns team ${this.localTeam}`);
 
-        // Create Team 1 entities (IDs will be 1, 2, 3, 4)
-        const team1Tower = this.createTower({
+        // Create Team 1 base (ID will be 1)
+        const team1Base = this.createBase({
             color: team1Color,
             team: TeamTag.Team1,
             debug: false,
-        }, new Vector3(TEAM1_SPAWN.tower.x, 0, TEAM1_SPAWN.tower.z));
-        this.entityOwnership.set(team1Tower.id, team1OwnerId);
-        console.log(`[Setup] Created Team 1 Tower with ID ${team1Tower.id}, owner: ${team1OwnerId}`);
+        }, new Vector3(arenaParams.teamA.base.x, 0, arenaParams.teamA.base.z));
+        this.entityOwnership.set(team1Base.id, team1OwnerId);
+        console.log(`[Setup] Created Team 1 Base with ID ${team1Base.id}, owner: ${team1OwnerId}`);
 
+        // Create Team 1 towers (IDs will be 2, 3)
+        for (const towerPos of arenaParams.teamA.towers) {
+            const tower = this.createTower({
+                color: team1Color,
+                team: TeamTag.Team1,
+                debug: false,
+            }, new Vector3(towerPos.x, 0, towerPos.z));
+            this.entityOwnership.set(tower.id, team1OwnerId);
+            console.log(`[Setup] Created Team 1 Tower with ID ${tower.id}, owner: ${team1OwnerId}`);
+        }
+
+        // Create Team 1 units (IDs will be 4, 5, 6) - spawn on formation grid
         for (const unitPos of TEAM1_SPAWN.units) {
             const unit = this.createUnit({
                 color: team1Color,
@@ -343,15 +358,27 @@ export class Game {
             console.log(`[Setup] Created Team 1 Unit with ID ${unit.id}, owner: ${team1OwnerId}`);
         }
 
-        // Create Team 2 entities (IDs will be 5, 6, 7, 8)
-        const team2Tower = this.createTower({
+        // Create Team 2 base (ID will be 7)
+        const team2Base = this.createBase({
             color: team2Color,
             team: TeamTag.Team2,
             debug: false,
-        }, new Vector3(TEAM2_SPAWN.tower.x, 0, TEAM2_SPAWN.tower.z));
-        this.entityOwnership.set(team2Tower.id, team2OwnerId);
-        console.log(`[Setup] Created Team 2 Tower with ID ${team2Tower.id}, owner: ${team2OwnerId}`);
+        }, new Vector3(arenaParams.teamB.base.x, 0, arenaParams.teamB.base.z));
+        this.entityOwnership.set(team2Base.id, team2OwnerId);
+        console.log(`[Setup] Created Team 2 Base with ID ${team2Base.id}, owner: ${team2OwnerId}`);
 
+        // Create Team 2 towers (IDs will be 8, 9)
+        for (const towerPos of arenaParams.teamB.towers) {
+            const tower = this.createTower({
+                color: team2Color,
+                team: TeamTag.Team2,
+                debug: false,
+            }, new Vector3(towerPos.x, 0, towerPos.z));
+            this.entityOwnership.set(tower.id, team2OwnerId);
+            console.log(`[Setup] Created Team 2 Tower with ID ${tower.id}, owner: ${team2OwnerId}`);
+        }
+
+        // Create Team 2 units (IDs will be 10, 11, 12) - spawn on formation grid
         for (const unitPos of TEAM2_SPAWN.units) {
             const unit = this.createUnit({
                 color: team2Color,
@@ -392,6 +419,18 @@ export class Game {
         this.selectionSystem.registerSelectable(tower);
 
         return tower;
+    }
+
+    private createBase(config: import("../entities/Base").BaseConfig, position: Vector3): Base {
+        const base = this.sceneManager.createBase(config, position);
+
+        // Register with EntityManager
+        this.entityManager.addEntity(base);
+
+        // Register with SelectionSystem for mesh picking
+        this.selectionSystem.registerSelectable(base);
+
+        return base;
     }
 
     /**
