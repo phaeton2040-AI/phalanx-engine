@@ -1,0 +1,61 @@
+import type { PlayerCommand } from "phalanx-client";
+
+/**
+ * Network command types for the lockstep synchronization system
+ * All game commands are sent through the network and executed deterministically
+ */
+
+/**
+ * Move command data - directs an entity to a target position
+ */
+export interface MoveCommandData {
+    entityId: number;
+    targetX: number;
+    targetY: number;
+    targetZ: number;
+}
+
+/**
+ * Network move command
+ */
+export interface NetworkMoveCommand extends PlayerCommand {
+    type: 'move';
+    data: MoveCommandData;
+}
+
+/**
+ * Place unit command data - places a unit on the formation grid
+ */
+export interface PlaceUnitCommandData {
+    unitType: 'sphere' | 'prisma';
+    gridX: number;
+    gridZ: number;
+}
+
+/**
+ * Network place unit command
+ */
+export interface NetworkPlaceUnitCommand extends PlayerCommand {
+    type: 'placeUnit';
+    data: PlaceUnitCommandData;
+}
+
+/**
+ * Deploy units command data - deploys all pending units from formation grid
+ */
+export interface DeployUnitsCommandData {
+    playerId: string;
+}
+
+/**
+ * Network deploy units command
+ */
+export interface NetworkDeployUnitsCommand extends PlayerCommand {
+    type: 'deployUnits';
+    data: DeployUnitsCommandData;
+}
+
+/**
+ * Union type of all network commands
+ */
+export type NetworkCommand = NetworkMoveCommand | NetworkPlaceUnitCommand | NetworkDeployUnitsCommand;
