@@ -1,0 +1,149 @@
+import { Scene, PointerEventTypes } from "@babylonjs/core";
+import { EventBus } from "../core/EventBus";
+import type { SelectionSystem } from "./SelectionSystem";
+import type { SceneManager } from "../core/SceneManager";
+import { ComponentType } from "../components";
+import { GameEvents, createEvent } from "../events";
+import type {
+    MoveRequestedEvent,
+    ShowDestinationMarkerEvent,
+    MoveCompletedEvent,
+    HideDestinationMarkerEvent
+} from "../events";
+
+/**
+ * InputManager - Handles all user input
+ * Uses EventBus for decoupled command issuing
+ */
+export class InputManager {
+    private scene: Scene;
+    private eventBus: EventBus;
+    private selectionSystem: SelectionSystem;
+    private sceneManager: SceneManager;
+    private unsubscribers: (() => void)[] = [];
+
+    // Track entities that are moving to hide marker when all complete
+    private movingEntities: Set<number> = new Set();
+
+    constructor(
+        scene: Scene,
+        eventBus: EventBus,
+        selectionSystem: SelectionSystem,
+        sceneManager: SceneManager
+    ) {
+        this.scene = scene;
+        this.eventBus = eventBus;
+        this.selectionSystem = selectionSystem;
+        this.sceneManager = sceneManager;
+
+        this.setupPointerObserver();
+        this.setupEventListeners();
+    }
+
+    private setupPointerObserver(): void {
+        this.scene.onPointerObservable.add((pointerInfo) => {
+            if (pointerInfo.type === PointerEventTypes.POINTERDOWN) {
+                this.handlePointerDown(pointerInfo);
+            }
+        });
+    }
+
+    private setupEventListeners(): void {
+        // Listen for move completed to potentially hide destination marker
+        this.unsubscribers.push(
+            this.eventBus.on<MoveCompletedEvent>(GameEvents.MOVE_COMPLETED, (event) => {
+                this.movingEntities.delete(event.entityId);
+                if (this.movingEntities.size === 0) {
+                    // Emit hide destination marker event
+                    this.eventBus.emit<HideDestinationMarkerEvent>(GameEvents.HIDE_DESTINATION_MARKER, {
+                        ...createEvent(),
+                    });
+                }
+            })
+        );
+    }
+
+    private handlePointerDown(pointerInfo: any): void {
+        const evt = pointerInfo.event as PointerEvent;
+        const pickResult = pointerInfo.pickInfo;
+
+        if (!pickResult?.hit) return;
+
+        switch (evt.button) {
+            case 0: // Left click - Selection
+                this.handleLeftClick(pickResult);
+                break;
+            case 2: // Right click - Move command
+                this.handleRightClick(pickResult);
+                break;
+        }
+    }
+
+    private handleLeftClick(pickResult: any): void {
+        const pickedMesh = pickResult.pickedMesh;
+        const ground = this.sceneManager.getGround();
+
+        // Check if we clicked on a selectable entity
+        const selectable = this.selectionSystem.findSelectableByMesh(pickedMesh);
+
+        if (selectable) {
+            if (selectable.isSelected) {
+                // Clicking on already selected entity - deselect it
+                this.selectionSystem.deselectEntity(selectable);
+            } else {
+                // Clicking on a new entity - deselect all others first, then select this one
+                this.selectionSystem.deselectAll();
+                this.selectionSystem.selectEntity(selectable);
+            }
+        } else if (pickedMesh === ground) {
+            // Clicked on empty ground - deselect all
+            this.selectionSystem.deselectAll();
+        }
+    }
+
+    private handleRightClick(pickResult: any): void {
+        const ground = this.sceneManager.getGround();
+
+        if (!this.selectionSystem.hasSelection()) return;
+        if (pickResult.pickedMesh !== ground) return;
+
+        const targetPosition = pickResult.pickedPoint!.clone();
+
+        // Show destination marker via event (SceneManager listens for this)
+        this.eventBus.emit<ShowDestinationMarkerEvent>(GameEvents.SHOW_DESTINATION_MARKER, {
+            ...createEvent(),
+            position: targetPosition.clone(),
+        });
+
+        // Issue move command to all selected entities that have Movement component
+        const selectedEntities = this.selectionSystem.getSelectedEntities();
+
+        // Clear moving entities tracking
+        this.movingEntities.clear();
+
+        for (const entity of selectedEntities) {
+            if (entity.hasComponent(ComponentType.Movement)) {
+                // Track this entity as moving
+                this.movingEntities.add(entity.id);
+
+                // Emit move request event instead of calling MovementSystem directly
+                this.eventBus.emit<MoveRequestedEvent>(GameEvents.MOVE_REQUESTED, {
+                    ...createEvent(),
+                    entityId: entity.id,
+                    target: targetPosition.clone(),
+                });
+            }
+        }
+    }
+
+    /**
+     * Dispose and unsubscribe from all events
+     */
+    public dispose(): void {
+        for (const unsubscribe of this.unsubscribers) {
+            unsubscribe();
+        }
+        this.unsubscribers = [];
+        this.movingEntities.clear();
+    }
+}
