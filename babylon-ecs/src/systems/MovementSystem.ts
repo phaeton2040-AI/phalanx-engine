@@ -6,11 +6,15 @@ import { GameEvents, createEvent } from "../events";
 import type { MoveRequestedEvent, MoveStartedEvent, MoveCompletedEvent, StopRequestedEvent } from "../events";
 
 /**
- * MovementSystem - Handles entity movement using component queries
+ * MovementSystem - Handles entity movement commands
  * Follows Single Responsibility: Only handles movement logic
  * Uses EventBus for decoupled communication
+ * 
+ * Note: Actual physics movement is handled by PhysicsSystem.
+ * This system manages movement intent (targets) and emits events.
  */
 export class MovementSystem {
+    // @ts-ignore
     private engine: Engine;
     private entityManager: EntityManager;
     private eventBus: EventBus;
@@ -41,34 +45,28 @@ export class MovementSystem {
     }
 
     /**
-     * Update all movable entities - called every frame
+     * Update movement system - check for completed movements
+     * Physics movement is handled by PhysicsSystem
      */
     public update(): void {
-        const deltaTime = this.engine.getDeltaTime() / 1000;
-
-        // Query all entities with Movement component
+        // Query all entities with Movement component to check for completed movements
         const movableEntities = this.entityManager.queryEntities(ComponentType.Movement);
 
         for (const entity of movableEntities) {
             const movement = entity.getComponent<MovementComponent>(ComponentType.Movement);
-            if (!movement || !movement.isMoving) continue;
+            if (!movement) continue;
 
-            const newPosition = movement.calculateMovement(entity.position, deltaTime);
-
-            if (newPosition) {
-                // Maintain Y position (ground level)
-                newPosition.y = entity.position.y;
-                entity.position = newPosition;
-
-                // Check if movement completed
-                if (!movement.isMoving) {
-                    // Emit move completed event
-                    this.eventBus.emit<MoveCompletedEvent>(GameEvents.MOVE_COMPLETED, {
-                        ...createEvent(),
-                        entityId: entity.id,
-                        position: entity.position.clone(),
-                    });
-                }
+            // Check if movement just completed (isMoving became false but we haven't emitted event)
+            // The PhysicsSystem sets isMoving to false when arrival threshold is reached
+            if (movement.hasJustArrived()) {
+                movement.acknowledgeArrival();
+                
+                // Emit move completed event
+                this.eventBus.emit<MoveCompletedEvent>(GameEvents.MOVE_COMPLETED, {
+                    ...createEvent(),
+                    entityId: entity.id,
+                    position: entity.position.clone(),
+                });
             }
         }
     }

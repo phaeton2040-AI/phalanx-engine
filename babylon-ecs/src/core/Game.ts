@@ -5,6 +5,7 @@ import { EventBus } from "./EventBus";
 import { InputManager } from "../systems/InputManager";
 import { SelectionSystem } from "../systems/SelectionSystem";
 import { MovementSystem } from "../systems/MovementSystem";
+import { PhysicsSystem } from "../systems/PhysicsSystem";
 import { HealthSystem } from "../systems/HealthSystem";
 import { ProjectileSystem } from "../systems/ProjectileSystem";
 import { CombatSystem } from "../systems/CombatSystem";
@@ -53,6 +54,7 @@ export class Game {
     private entityManager: EntityManager;
     private selectionSystem: SelectionSystem;
     private movementSystem: MovementSystem;
+    private physicsSystem: PhysicsSystem;
     private healthSystem: HealthSystem;
     private projectileSystem: ProjectileSystem;
     private combatSystem: CombatSystem;
@@ -97,6 +99,7 @@ export class Game {
         // Initialize systems with EventBus for decoupled communication
         this.selectionSystem = new SelectionSystem(this.entityManager, this.eventBus);
         this.movementSystem = new MovementSystem(this.engine, this.entityManager, this.eventBus);
+        this.physicsSystem = new PhysicsSystem(this.entityManager, this.eventBus);
         this.healthSystem = new HealthSystem(this.entityManager, this.eventBus);
         this.projectileSystem = new ProjectileSystem(this.scene, this.engine, this.entityManager, this.eventBus);
         this.combatSystem = new CombatSystem(this.engine, this.entityManager, this.eventBus);
@@ -406,6 +409,13 @@ export class Game {
         // Register with SelectionSystem for mesh picking
         this.selectionSystem.registerSelectable(unit);
 
+        // Register with PhysicsSystem - units are dynamic bodies
+        this.physicsSystem.registerBody(unit.id, {
+            radius: 1.0,
+            mass: 1.0,
+            isStatic: false,
+        });
+
         return unit;
     }
 
@@ -418,6 +428,13 @@ export class Game {
         // Register with SelectionSystem for mesh picking
         this.selectionSystem.registerSelectable(tower);
 
+        // Register with PhysicsSystem - towers are static bodies (can push but don't move)
+        this.physicsSystem.registerBody(tower.id, {
+            radius: 1.5,
+            mass: 10.0,
+            isStatic: true,
+        });
+
         return tower;
     }
 
@@ -429,6 +446,13 @@ export class Game {
 
         // Register with SelectionSystem for mesh picking
         this.selectionSystem.registerSelectable(base);
+
+        // Register with PhysicsSystem - bases are static bodies (can push but don't move)
+        this.physicsSystem.registerBody(base.id, {
+            radius: 3.0,
+            mass: 100.0,
+            isStatic: true,
+        });
 
         return base;
     }
@@ -455,6 +479,12 @@ export class Game {
             this.pendingCommands = [];
         }
 
+        // Get delta time for physics
+        const deltaTime = this.engine.getDeltaTime() / 1000;
+
+        // Update physics (deterministic fixed timestep internally)
+        this.physicsSystem.update(deltaTime);
+
         // Update all systems
         this.movementSystem.update();
         this.combatSystem.update();
@@ -473,6 +503,9 @@ export class Game {
         for (const entity of destroyed) {
             // Remove from ownership tracking
             this.entityOwnership.delete(entity.id);
+
+            // Unregister from physics system
+            this.physicsSystem.unregisterBody(entity.id);
 
             // Unregister from selection system
             if (typeof (entity as any).canBeSelected === 'function') {
@@ -580,6 +613,7 @@ export class Game {
         this.projectileSystem.dispose();
         this.combatSystem.dispose();
         this.healthSystem.dispose();
+        this.physicsSystem.dispose();
         this.movementSystem.dispose();
         this.selectionSystem.dispose();
         this.sceneManager.dispose();
