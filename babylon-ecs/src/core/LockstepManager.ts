@@ -31,6 +31,10 @@ export interface LockstepCallbacks {
     getLocalTeam: () => TeamTag;
     /** Get the local player's ID */
     getLocalPlayerId: () => string;
+    /** Called before simulation tick to snapshot positions for interpolation */
+    onBeforeSimulationTick?: () => void;
+    /** Called after simulation tick to capture new positions for interpolation */
+    onAfterSimulationTick?: () => void;
 }
 
 /**
@@ -55,6 +59,7 @@ export interface LockstepSystems {
  * - Executing commands at the correct tick
  * - Running deterministic simulation ticks
  * - Sending local commands to the server
+ * - Providing interpolation timing for smooth visuals
  */
 export class LockstepManager {
     private client: PhalanxClient;
@@ -67,6 +72,10 @@ export class LockstepManager {
     // Lockstep synchronization state
     private lastSimulatedTick: number = -1;
     private pendingTickCommands: Map<number, PlayerCommand[]> = new Map();
+
+    // Interpolation timing
+    private lastTickTime: number = 0;
+    private tickDuration: number = networkConfig.tickTimestep * 1000; // in ms
 
     constructor(
         client: PhalanxClient,
@@ -143,18 +152,38 @@ export class LockstepManager {
             // Execute all commands for this tick (from ALL players)
             this.executeTickCommands(commands);
 
+            // Snapshot positions BEFORE simulation for interpolation
+            this.callbacks.onBeforeSimulationTick?.();
+
             // Run one tick of deterministic simulation
             this.simulateTick();
 
             // Process resources deterministically based on tick
             this.systems.resourceSystem.processTick(tickToSimulate);
 
+            // Capture positions AFTER simulation for interpolation
+            this.callbacks.onAfterSimulationTick?.();
+
             // Update last simulated tick
             this.lastSimulatedTick = tickToSimulate;
 
             // Clean up processed commands
             this.pendingTickCommands.delete(tickToSimulate);
+
+            // Update tick time for interpolation
+            this.lastTickTime = performance.now();
         }
+    }
+
+    /**
+     * Get the interpolation alpha for smooth visual rendering
+     * Returns a value between 0 and 1 representing progress between ticks
+     * 0 = at last tick position, 1 = at current tick position (ready for next)
+     */
+    public getInterpolationAlpha(): number {
+        const elapsed = performance.now() - this.lastTickTime;
+        const alpha = elapsed / this.tickDuration;
+        return Math.min(1, Math.max(0, alpha));
     }
 
     /**

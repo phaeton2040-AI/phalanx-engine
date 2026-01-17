@@ -14,6 +14,11 @@ export function resetEntityIdCounter(): void {
 /**
  * Base Entity class - Container for components
  * Uses composition over inheritance
+ * 
+ * INTERPOLATION ARCHITECTURE:
+ * - simulationPosition: The authoritative position updated by physics (deterministic)
+ * - mesh.position: The visual position used for rendering (can be interpolated)
+ * - By default, they are the same. InterpolationSystem can separate them for smooth visuals.
  */
 export abstract class Entity {
     public readonly id: number;
@@ -21,6 +26,9 @@ export abstract class Entity {
     protected mesh: Mesh | null = null;
     protected components: Map<symbol, IComponent> = new Map();
     private _isDestroyed: boolean = false;
+
+    // Simulation position (authoritative, used by physics/combat)
+    private _simulationPosition: Vector3 = new Vector3();
 
     constructor(scene: Scene) {
         this.id = ++entityIdCounter;
@@ -65,18 +73,50 @@ export abstract class Entity {
     }
 
     /**
-     * Get the entity's world position
+     * Get the entity's simulation position (authoritative, deterministic)
+     * This is the position used by physics, combat, and other gameplay systems.
      */
     public get position(): Vector3 {
-        return this.mesh?.position ?? Vector3.Zero();
+        return this._simulationPosition;
     }
 
     /**
-     * Set the entity's world position
+     * Set the entity's simulation position (authoritative, deterministic)
+     * By default, also updates the visual (mesh) position.
+     * InterpolationSystem may override the visual position separately.
      */
     public set position(value: Vector3) {
+        this._simulationPosition.copyFrom(value);
+        // Also update mesh position (visual) by default
         if (this.mesh) {
             this.mesh.position.copyFrom(value);
+        }
+    }
+
+    /**
+     * Set only the visual position (mesh) without affecting simulation position
+     * Used by InterpolationSystem for smooth rendering between ticks
+     */
+    public setVisualPosition(value: Vector3): void {
+        if (this.mesh) {
+            this.mesh.position.copyFrom(value);
+        }
+    }
+
+    /**
+     * Get the visual position (mesh position)
+     */
+    public getVisualPosition(): Vector3 {
+        return this.mesh?.position ?? this._simulationPosition.clone();
+    }
+
+    /**
+     * Sync simulation position from mesh (call after mesh is created)
+     * Used during entity initialization
+     */
+    public syncSimulationPosition(): void {
+        if (this.mesh) {
+            this._simulationPosition.copyFrom(this.mesh.position);
         }
     }
 

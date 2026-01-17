@@ -52,6 +52,9 @@ export class PrismaUnit extends Entity {
         this.mesh.position = position;
         this.selectionIndicator = this.createSelectionIndicator();
 
+        // Sync simulation position with mesh position
+        this.syncSimulationPosition();
+
         // Add components
         this.addComponent(new TeamComponent(config.team ?? TeamTag.Team1));
         this.addComponent(new HealthComponent(config.health ?? 150)); // Higher health than sphere

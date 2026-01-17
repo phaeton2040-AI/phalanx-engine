@@ -48,6 +48,9 @@ export class Tower extends Entity {
         this.mesh.position.y = 1.5; // Half height of cone
         this.selectionIndicator = this.createSelectionIndicator();
 
+        // Sync simulation position with mesh position
+        this.syncSimulationPosition();
+
         // Add components
         this.addComponent(new TeamComponent(config.team));
         this.addComponent(new HealthComponent(config.health ?? 150));

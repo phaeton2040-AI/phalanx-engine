@@ -3,6 +3,7 @@ import type { SceneManager } from "./SceneManager";
 import type { EntityManager } from "./EntityManager";
 import type { SelectionSystem } from "../systems/SelectionSystem";
 import type { PhysicsSystem } from "../systems/PhysicsSystem";
+import type { InterpolationSystem } from "../systems/InterpolationSystem";
 import type { Unit, UnitConfig } from "../entities/Unit";
 import type { PrismaUnit, PrismaUnitConfig } from "../entities/PrismaUnit";
 import type { Tower, TowerConfig } from "../entities/Tower";
@@ -23,6 +24,7 @@ export class EntityFactory {
     private entityManager: EntityManager;
     private selectionSystem: SelectionSystem;
     private physicsSystem: PhysicsSystem;
+    private interpolationSystem: InterpolationSystem | null = null;
 
     // Map entity IDs to player info
     private entityOwnership: Map<number, string> = new Map();
@@ -37,6 +39,14 @@ export class EntityFactory {
         this.entityManager = entityManager;
         this.selectionSystem = selectionSystem;
         this.physicsSystem = physicsSystem;
+    }
+
+    /**
+     * Set the interpolation system for smooth visual updates
+     * Called after construction to avoid circular dependency
+     */
+    public setInterpolationSystem(interpolationSystem: InterpolationSystem): void {
+        this.interpolationSystem = interpolationSystem;
     }
 
     /**
@@ -57,6 +67,9 @@ export class EntityFactory {
             mass: 1.0,
             isStatic: false,
         });
+
+        // Register with InterpolationSystem for smooth visual movement
+        this.interpolationSystem?.registerEntity(unit.id, false);
 
         return unit;
     }
@@ -80,6 +93,9 @@ export class EntityFactory {
             isStatic: false,
         });
 
+        // Register with InterpolationSystem for smooth visual movement
+        this.interpolationSystem?.registerEntity(unit.id, false);
+
         return unit;
     }
 
@@ -102,6 +118,9 @@ export class EntityFactory {
             isStatic: true,
         });
 
+        // Register with InterpolationSystem as static (doesn't need smooth movement)
+        this.interpolationSystem?.registerEntity(tower.id, true);
+
         return tower;
     }
 
@@ -123,6 +142,9 @@ export class EntityFactory {
             mass: 100.0,
             isStatic: true,
         });
+
+        // Register with InterpolationSystem as static (doesn't need smooth movement)
+        this.interpolationSystem?.registerEntity(base.id, true);
 
         return base;
     }

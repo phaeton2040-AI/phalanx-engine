@@ -17,6 +17,7 @@ import { TerritorySystem } from "../systems/TerritorySystem";
 import { FormationGridSystem } from "../systems/FormationGridSystem";
 import { VictorySystem } from "../systems/VictorySystem";
 import { CameraController } from "../systems/CameraController";
+import { InterpolationSystem } from "../systems/InterpolationSystem";
 import { resetEntityIdCounter } from "../entities/Entity";
 import { TeamTag } from "../enums/TeamTag";
 import { arenaParams } from "../config/constants";
@@ -58,6 +59,7 @@ export class Game {
     private territorySystem: TerritorySystem;
     private formationGridSystem: FormationGridSystem;
     private victorySystem: VictorySystem;
+    private interpolationSystem: InterpolationSystem;
     private cameraController!: CameraController;
     // @ts-ignore - InputManager registers event listeners in constructor
     private inputManager: InputManager;
@@ -113,6 +115,7 @@ export class Game {
         this.territorySystem = new TerritorySystem(this.entityManager, this.eventBus);
         this.formationGridSystem = new FormationGridSystem(this.scene, this.entityManager, this.eventBus);
         this.victorySystem = new VictorySystem(this.entityManager, this.eventBus);
+        this.interpolationSystem = new InterpolationSystem(this.entityManager);
 
         this.inputManager = new InputManager(
             this.scene,
@@ -128,6 +131,8 @@ export class Game {
             this.selectionSystem,
             this.physicsSystem
         );
+        // Wire up interpolation system to entity factory
+        this.entityFactory.setInterpolationSystem(this.interpolationSystem);
 
         this.uiManager = new UIManager(
             this.resourceSystem,
@@ -153,6 +158,9 @@ export class Game {
                 onCommitButtonUpdate: () => this.uiManager.updateCommitButton(),
                 getLocalTeam: () => this.localTeam,
                 getLocalPlayerId: () => this.matchData.playerId,
+                // Interpolation callbacks for smooth visual movement
+                onBeforeSimulationTick: () => this.interpolationSystem.snapshotPositions(),
+                onAfterSimulationTick: () => this.interpolationSystem.captureCurrentPositions(),
             }
         );
 
@@ -516,6 +524,10 @@ export class Game {
     private renderUpdate(): void {
         this.lockstepManager.sendPendingCommands();
         this.resourceSystem.update(0);
+
+        // Interpolate visual positions for smooth movement between network ticks
+        const alpha = this.lockstepManager.getInterpolationAlpha();
+        this.interpolationSystem.interpolate(alpha);
     }
 
     /**
@@ -527,6 +539,7 @@ export class Game {
         for (const entity of destroyed) {
             this.entityFactory.removeOwnership(entity.id);
             this.physicsSystem.unregisterBody(entity.id);
+            this.interpolationSystem.unregisterEntity(entity.id);
 
             if (typeof (entity as any).canBeSelected === 'function') {
                 this.selectionSystem.unregisterSelectable(entity as any);
@@ -564,6 +577,7 @@ export class Game {
         this.territorySystem.dispose();
         this.formationGridSystem.dispose();
         this.victorySystem.dispose();
+        this.interpolationSystem.dispose();
 
         // Clear managers and entity data
         this.eventBus.clearAll();
