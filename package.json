@@ -4,17 +4,16 @@
   "private": true,
   "description": "A game-agnostic deterministic lockstep multiplayer engine with authentication, matchmaking, and command synchronization",
   "type": "module",
-  "workspaces": [
-    "phalanx-server",
-    "phalanx-client",
-    "game-test"
-  ],
   "scripts": {
-    "build": "npm run build --workspaces",
-    "clean": "npm run clean --workspaces",
-    "test": "npm run test --workspaces",
-    "test:server": "npm run test --workspace=phalanx-server",
-    "test:client": "npm run test --workspace=phalanx-client"
+    "build": "pnpm -r build",
+    "clean": "pnpm -r clean",
+    "test": "pnpm -r test",
+    "test:server": "pnpm --filter phalanx-server test",
+    "test:client": "pnpm --filter phalanx-client test",
+    "test:watch": "pnpm -r test:watch",
+    "dev:server": "pnpm --filter phalanx-server dev",
+    "dev:client": "pnpm --filter phalanx-client dev",
+    "dev:game": "pnpm --filter game-test dev"
   },
   "keywords": [
     "multiplayer",

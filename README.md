@@ -4,6 +4,13 @@ A game-agnostic deterministic lockstep multiplayer engine with authentication, m
 
 > ⚠️ **NOT IN PRODUCTION** - This project is currently in active development and not yet published to npm. Please clone the repository to use it.
 
+## Quick Links
+
+- 🚀 [Quick Start Guide](./QUICK_START.md) - Get up and running with pnpm
+- 📖 [Server Documentation](./phalanx-server/README.md)
+- 📖 [Client Documentation](./phalanx-client/README.md)
+- 🔄 [pnpm Migration Guide](./PNPM_MIGRATION.md)
+
 ## Installation
 
 **Clone the repository:**
@@ -64,7 +71,7 @@ From the cloned repository, navigate to the client package:
 
 ```bash
 cd phalanx-client
-npm install
+pnpm install
 ```
 
 ```typescript
@@ -93,6 +100,7 @@ client.on('tick', (data) => {
 ## Requirements
 
 - Node.js 18+
+- pnpm (install with `npm install -g pnpm`)
 - Socket.IO compatible transport
 
 ## License

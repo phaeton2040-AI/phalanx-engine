@@ -12,8 +12,8 @@
   },
   "dependencies": {
     "@babylonjs/core": "^7.54.3",
-    "phalanx-client": "file:../phalanx-client",
-    "phalanx-server": "file:../phalanx-server"
+    "phalanx-client": "workspace:*",
+    "phalanx-server": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
