@@ -25,7 +25,7 @@ import { arenaParams } from "../config/constants";
 import { GameEvents } from "../events";
 import type { MoveRequestedEvent, GameOverEvent, AggressionBonusActivatedEvent, AggressionBonusDeactivatedEvent, WaveCountdownEvent, WaveStartedEvent, WaveDeploymentEvent } from "../events";
 import type { PhalanxClient, MatchFoundEvent } from "phalanx-client";
-import type { NetworkMoveCommand, NetworkPlaceUnitCommand } from "./NetworkCommands";
+import type { NetworkMoveCommand, NetworkPlaceUnitCommand, NetworkMoveGridUnitCommand } from "./NetworkCommands";
 
 /**
  * Game - Main game class using component-based architecture
@@ -257,12 +257,32 @@ export class Game {
             }
         });
 
+        // Formation unit move requests (repositioning units on the grid)
+        this.eventBus.on(GameEvents.FORMATION_UNIT_MOVE_REQUESTED, (event: any) => {
+            if (event.playerId === this.matchData.playerId) {
+                const command: NetworkMoveGridUnitCommand = {
+                    type: 'moveGridUnit',
+                    data: {
+                        fromGridX: event.fromGridX,
+                        fromGridZ: event.fromGridZ,
+                        toGridX: event.toGridX,
+                        toGridZ: event.toGridZ,
+                    },
+                };
+                this.lockstepManager.queueCommand(command);
+            }
+        });
+
         // Formation changes (UI updates)
         this.eventBus.on(GameEvents.FORMATION_UNIT_PLACED, () => {
             this.uiManager.updateFormationInfo();
         });
 
         this.eventBus.on(GameEvents.FORMATION_UNIT_REMOVED, () => {
+            this.uiManager.updateFormationInfo();
+        });
+
+        this.eventBus.on(GameEvents.FORMATION_UNIT_MOVED, () => {
             this.uiManager.updateFormationInfo();
         });
 

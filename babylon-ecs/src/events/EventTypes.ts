@@ -283,6 +283,34 @@ export interface FormationCommittedEvent extends GameEvent {
     unitCount: number;
 }
 
+export interface FormationUpdateModeEnteredEvent extends GameEvent {
+    playerId: string;
+    gridX: number;
+    gridZ: number;
+    unitType: 'sphere' | 'prisma';
+}
+
+export interface FormationUpdateModeExitedEvent extends GameEvent {
+    playerId: string;
+}
+
+export interface FormationUnitMoveRequestedEvent extends GameEvent {
+    playerId: string;
+    fromGridX: number;
+    fromGridZ: number;
+    toGridX: number;
+    toGridZ: number;
+}
+
+export interface FormationUnitMovedEvent extends GameEvent {
+    playerId: string;
+    unitType: 'sphere' | 'prisma';
+    fromGridX: number;
+    fromGridZ: number;
+    toGridX: number;
+    toGridZ: number;
+}
+
 // ============================================
 // Wave Events
 // ============================================

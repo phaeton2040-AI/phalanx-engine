@@ -17,6 +17,7 @@ import type {
     NetworkCommand,
     NetworkMoveCommand,
     NetworkPlaceUnitCommand,
+    NetworkMoveGridUnitCommand,
 } from "./NetworkCommands";
 
 /**
@@ -214,6 +215,26 @@ export class LockstepManager {
                     }
                     this.callbacks.onCommitButtonUpdate();
                 }
+            } else if (cmd.type === 'moveGridUnit') {
+                const moveGridCmd = cmd as NetworkMoveGridUnitCommand;
+                const data = moveGridCmd.data;
+                const commandPlayerId = (cmd as any).playerId as string | undefined;
+
+                if (!commandPlayerId) {
+                    console.warn(`[Lockstep] moveGridUnit command missing playerId:`, JSON.stringify(cmd));
+                    continue;
+                }
+
+                console.log(`[Lockstep] Executing moveGridUnit for player ${commandPlayerId}: from (${data.fromGridX}, ${data.fromGridZ}) to (${data.toGridX}, ${data.toGridZ})`);
+
+                // Move unit on the player's grid
+                this.systems.formationGridSystem.moveUnit(
+                    commandPlayerId,
+                    data.fromGridX,
+                    data.fromGridZ,
+                    data.toGridX,
+                    data.toGridZ
+                );
             }
         }
     }

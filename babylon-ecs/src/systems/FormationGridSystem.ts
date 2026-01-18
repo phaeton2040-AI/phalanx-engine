@@ -11,6 +11,9 @@ import type {
     FormationUnitRemovedEvent,
     FormationCommittedEvent,
     UnitPurchaseCompletedEvent,
+    FormationUpdateModeEnteredEvent,
+    FormationUpdateModeExitedEvent,
+    FormationUnitMovedEvent,
 } from "../events";
 
 /**
@@ -67,6 +70,7 @@ export class FormationGridSystem {
 
     private grids: Map<string, FormationGrid> = new Map();
     private activePlacementMode: { playerId: string; unitType: 'sphere' | 'prisma' } | null = null;
+    private activeUpdateMode: { playerId: string; gridX: number; gridZ: number; unitType: 'sphere' | 'prisma' } | null = null;
     private gridVisuals: Map<string, Mesh[]> = new Map();
     private previewMesh: Mesh | null = null;
 
@@ -162,6 +166,34 @@ export class FormationGridSystem {
      * Handle pointer move for hover highlight
      */
     private handlePointerMove(pickResult: any): void {
+        // Check for update mode first
+        if (this.activeUpdateMode) {
+            const { playerId, unitType } = this.activeUpdateMode;
+            const grid = this.grids.get(playerId);
+            if (!grid) return;
+
+            // Check if we're hovering over the grid ground plane
+            const gridPlane = this.gridGroundPlanes.get(playerId);
+            if (!pickResult?.hit || pickResult.pickedMesh !== gridPlane) {
+                this.hideHoverHighlight();
+                return;
+            }
+
+            const hitPoint = pickResult.pickedPoint;
+            if (!hitPoint) return;
+
+            // Convert to grid coordinates
+            const gridCoords = this.worldToGrid(playerId, hitPoint);
+            if (!gridCoords) {
+                this.hideHoverHighlight();
+                return;
+            }
+
+            // Show hover highlight at this position (for moving the selected unit)
+            this.showHoverHighlightForMove(playerId, gridCoords.x, gridCoords.z, unitType);
+            return;
+        }
+
         if (!this.activePlacementMode) {
             this.hideHoverHighlight();
             return;
@@ -196,7 +228,87 @@ export class FormationGridSystem {
      * Handle pointer down for unit placement
      */
     private handlePointerDown(pickResult: any): void {
-        if (!this.activePlacementMode) return;
+        // Handle update mode first - clicking on empty cell to move the unit
+        if (this.activeUpdateMode) {
+            const { playerId, gridX: fromGridX, gridZ: fromGridZ, unitType } = this.activeUpdateMode;
+            const grid = this.grids.get(playerId);
+            if (!grid) return;
+
+            // Check if we clicked on the grid ground plane
+            const gridPlane = this.gridGroundPlanes.get(playerId);
+            if (!pickResult?.hit || pickResult.pickedMesh !== gridPlane) return;
+
+            const hitPoint = pickResult.pickedPoint;
+            if (!hitPoint) return;
+
+            // Convert to grid coordinates
+            const gridCoords = this.worldToGrid(playerId, hitPoint);
+            if (!gridCoords) return;
+
+            // Check if the target cell is the same as the selected unit's cell
+            if (gridCoords.x === fromGridX && gridCoords.z === fromGridZ) {
+                // Clicking on the same cell - just exit update mode
+                this.exitUpdateMode(playerId);
+                return;
+            }
+
+            // Check if clicking on another unit - select that unit instead
+            const targetCell = grid.cells[gridCoords.x]?.[gridCoords.z];
+            if (targetCell?.occupied && targetCell.unitType) {
+                // Exit current update mode and enter update mode for the clicked unit
+                this.exitUpdateMode(playerId);
+                const origin = this.findUnitOrigin(playerId, gridCoords.x, gridCoords.z);
+                if (origin) {
+                    this.enterUpdateMode(playerId, origin.x, origin.z, targetCell.unitType);
+                }
+                return;
+            }
+
+            // Check if we can move the unit to this position
+            if (this.canMoveUnit(playerId, fromGridX, fromGridZ, gridCoords.x, gridCoords.z, unitType)) {
+                // Emit move request event - actual move happens through network lockstep
+                this.eventBus.emit(GameEvents.FORMATION_UNIT_MOVE_REQUESTED, {
+                    ...createEvent(),
+                    playerId,
+                    fromGridX,
+                    fromGridZ,
+                    toGridX: gridCoords.x,
+                    toGridZ: gridCoords.z,
+                });
+
+                // Exit update mode after requesting move
+                this.exitUpdateMode(playerId);
+            }
+            return;
+        }
+
+        // Not in any mode - check if clicking on an existing unit to enter update mode
+        if (!this.activePlacementMode) {
+            // Find which player's grid we might be clicking on
+            for (const [playerId, grid] of this.grids.entries()) {
+                const gridPlane = this.gridGroundPlanes.get(playerId);
+                if (!pickResult?.hit || pickResult.pickedMesh !== gridPlane) continue;
+
+                const hitPoint = pickResult.pickedPoint;
+                if (!hitPoint) continue;
+
+                // Convert to grid coordinates
+                const gridCoords = this.worldToGrid(playerId, hitPoint);
+                if (!gridCoords) continue;
+
+                // Check if there's a unit at this cell
+                const cell = grid.cells[gridCoords.x]?.[gridCoords.z];
+                if (cell?.occupied && cell.unitType) {
+                    // Find the origin cell for this unit (important for prisma units)
+                    const origin = this.findUnitOrigin(playerId, gridCoords.x, gridCoords.z);
+                    if (origin) {
+                        this.enterUpdateMode(playerId, origin.x, origin.z, cell.unitType);
+                    }
+                }
+                return;
+            }
+            return;
+        }
 
         const { playerId, unitType } = this.activePlacementMode;
         const grid = this.grids.get(playerId);
@@ -212,6 +324,18 @@ export class FormationGridSystem {
         // Convert to grid coordinates
         const gridCoords = this.worldToGrid(playerId, hitPoint);
         if (!gridCoords) return;
+
+        // Check if clicking on an existing unit - enter update mode instead
+        const cell = grid.cells[gridCoords.x]?.[gridCoords.z];
+        if (cell?.occupied && cell.unitType) {
+            // Exit placement mode and enter update mode
+            this.exitPlacementMode(playerId);
+            const origin = this.findUnitOrigin(playerId, gridCoords.x, gridCoords.z);
+            if (origin) {
+                this.enterUpdateMode(playerId, origin.x, origin.z, cell.unitType);
+            }
+            return;
+        }
 
         // Check if player can afford this unit
         if (this.canAffordCallback && !this.canAffordCallback(playerId, unitType)) {
@@ -291,6 +415,124 @@ export class FormationGridSystem {
     private hideHoverHighlight(): void {
         if (this.hoverHighlight) {
             this.hoverHighlight.isVisible = false;
+        }
+    }
+
+    // Mesh for highlighting the currently selected unit in update mode
+    private selectedUnitHighlight: Mesh | null = null;
+    private selectedUnitHighlightMaterial: StandardMaterial | null = null;
+
+    /**
+     * Show hover highlight for move operation (in update mode)
+     */
+    private showHoverHighlightForMove(
+        playerId: string,
+        gridX: number,
+        gridZ: number,
+        unitType: 'sphere' | 'prisma'
+    ): void {
+        if (!this.activeUpdateMode) return;
+
+        const { gridX: fromGridX, gridZ: fromGridZ } = this.activeUpdateMode;
+        const grid = this.grids.get(playerId);
+        if (!grid) return;
+
+        const size = unitType === 'sphere' ? 1 : 2;
+        const worldSize = size * grid.cellSize;
+
+        // Create or update highlight mesh
+        if (!this.hoverHighlight) {
+            this.hoverHighlight = MeshBuilder.CreateBox(
+                "hoverHighlight",
+                { width: worldSize, height: 0.2, depth: worldSize },
+                this.scene
+            );
+            this.hoverHighlight.isPickable = false;
+        } else {
+            this.hoverHighlight.dispose();
+            this.hoverHighlight = MeshBuilder.CreateBox(
+                "hoverHighlight",
+                { width: worldSize, height: 0.2, depth: worldSize },
+                this.scene
+            );
+            this.hoverHighlight.isPickable = false;
+        }
+
+        // Position the highlight
+        const worldPos = this.gridToWorld(playerId, gridX, gridZ);
+        if (!worldPos) return;
+
+        // Offset for larger units
+        if (unitType === 'prisma') {
+            worldPos.x += grid.cellSize / 2;
+            worldPos.z += grid.cellSize / 2;
+        }
+
+        this.hoverHighlight.position = new Vector3(worldPos.x, 0.15, worldPos.z);
+
+        // Check if this is the same cell as the selected unit
+        const isSameCell = gridX === fromGridX && gridZ === fromGridZ;
+
+        // Set material based on whether move is valid
+        const canMove = isSameCell || this.canMoveUnit(playerId, fromGridX, fromGridZ, gridX, gridZ, unitType);
+        this.hoverHighlight.material = canMove ? this.hoverHighlightMaterial : this.invalidHighlightMaterial;
+        this.hoverHighlight.isVisible = true;
+    }
+
+    /**
+     * Highlight the currently selected unit in update mode
+     */
+    private highlightSelectedUnit(
+        playerId: string,
+        gridX: number,
+        gridZ: number,
+        unitType: 'sphere' | 'prisma'
+    ): void {
+        const grid = this.grids.get(playerId);
+        if (!grid) return;
+
+        this.clearSelectedUnitHighlight();
+
+        const size = unitType === 'sphere' ? 1 : 2;
+        const worldSize = size * grid.cellSize;
+
+        // Create highlight material if needed
+        if (!this.selectedUnitHighlightMaterial) {
+            this.selectedUnitHighlightMaterial = new StandardMaterial("selectedUnitHighlight", this.scene);
+            this.selectedUnitHighlightMaterial.diffuseColor = new Color3(1.0, 0.85, 0.2); // Yellow/gold
+            this.selectedUnitHighlightMaterial.alpha = 0.6;
+            this.selectedUnitHighlightMaterial.emissiveColor = new Color3(0.5, 0.4, 0.1);
+        }
+
+        // Create highlight mesh
+        this.selectedUnitHighlight = MeshBuilder.CreateBox(
+            "selectedUnitHighlight",
+            { width: worldSize, height: 0.3, depth: worldSize },
+            this.scene
+        );
+        this.selectedUnitHighlight.isPickable = false;
+
+        // Position the highlight
+        const worldPos = this.gridToWorld(playerId, gridX, gridZ);
+        if (!worldPos) return;
+
+        // Offset for larger units
+        if (unitType === 'prisma') {
+            worldPos.x += grid.cellSize / 2;
+            worldPos.z += grid.cellSize / 2;
+        }
+
+        this.selectedUnitHighlight.position = new Vector3(worldPos.x, 0.25, worldPos.z);
+        this.selectedUnitHighlight.material = this.selectedUnitHighlightMaterial;
+    }
+
+    /**
+     * Clear the selected unit highlight
+     */
+    private clearSelectedUnitHighlight(): void {
+        if (this.selectedUnitHighlight) {
+            this.selectedUnitHighlight.dispose();
+            this.selectedUnitHighlight = null;
         }
     }
 
@@ -428,6 +670,11 @@ export class FormationGridSystem {
      * Enter placement mode for a unit type
      */
     public enterPlacementMode(playerId: string, unitType: 'sphere' | 'prisma'): void {
+        // Exit update mode if active
+        if (this.activeUpdateMode?.playerId === playerId) {
+            this.exitUpdateMode(playerId);
+        }
+
         this.activePlacementMode = { playerId, unitType };
 
         this.eventBus.emit<FormationModeEnteredEvent>(GameEvents.FORMATION_MODE_ENTERED, {
@@ -446,12 +693,69 @@ export class FormationGridSystem {
         if (this.activePlacementMode?.playerId === playerId) {
             this.activePlacementMode = null;
             this.clearPreviewMesh();
+            this.hideHoverHighlight();
 
             this.eventBus.emit<FormationModeExitedEvent>(GameEvents.FORMATION_MODE_EXITED, {
                 ...createEvent(),
                 playerId,
             });
         }
+    }
+
+    /**
+     * Enter update mode for repositioning an existing unit
+     */
+    public enterUpdateMode(playerId: string, gridX: number, gridZ: number, unitType: 'sphere' | 'prisma'): void {
+        // Exit placement mode if active
+        if (this.activePlacementMode?.playerId === playerId) {
+            this.activePlacementMode = null;
+            this.clearPreviewMesh();
+        }
+
+        this.activeUpdateMode = { playerId, gridX, gridZ, unitType };
+
+        // Highlight the selected unit
+        this.highlightSelectedUnit(playerId, gridX, gridZ, unitType);
+
+        this.eventBus.emit<FormationUpdateModeEnteredEvent>(GameEvents.FORMATION_UPDATE_MODE_ENTERED, {
+            ...createEvent(),
+            playerId,
+            gridX,
+            gridZ,
+            unitType,
+        });
+
+        console.log(`[FormationGridSystem] Player ${playerId} entered update mode for ${unitType} at (${gridX}, ${gridZ})`);
+    }
+
+    /**
+     * Exit update mode
+     */
+    public exitUpdateMode(playerId: string): void {
+        if (this.activeUpdateMode?.playerId === playerId) {
+            this.activeUpdateMode = null;
+            this.hideHoverHighlight();
+            this.clearSelectedUnitHighlight();
+
+            this.eventBus.emit<FormationUpdateModeExitedEvent>(GameEvents.FORMATION_UPDATE_MODE_EXITED, {
+                ...createEvent(),
+                playerId,
+            });
+        }
+    }
+
+    /**
+     * Check if we're currently in update mode
+     */
+    public isInUpdateMode(playerId: string): boolean {
+        return this.activeUpdateMode?.playerId === playerId;
+    }
+
+    /**
+     * Check if we're currently in placement mode
+     */
+    public isInPlacementMode(playerId: string): boolean {
+        return this.activePlacementMode?.playerId === playerId;
     }
 
     /**
@@ -515,6 +819,192 @@ export class FormationGridSystem {
             }
         }
 
+        return true;
+    }
+
+    /**
+     * Check if a unit can be moved from one position to another
+     * The target cells must be empty (excluding the unit being moved)
+     */
+    public canMoveUnit(
+        playerId: string,
+        fromGridX: number,
+        fromGridZ: number,
+        toGridX: number,
+        toGridZ: number,
+        unitType: 'sphere' | 'prisma'
+    ): boolean {
+        const grid = this.grids.get(playerId);
+        if (!grid) return false;
+
+        const size = unitType === 'sphere' ? 1 : 2;
+
+        // Check bounds for target position
+        if (toGridX < 0 || toGridX + size > grid.gridWidth) return false;
+        if (toGridZ < 0 || toGridZ + size > grid.gridHeight) return false;
+
+        // Check if target cells are occupied (ignoring cells occupied by the unit being moved)
+        for (let dx = 0; dx < size; dx++) {
+            for (let dz = 0; dz < size; dz++) {
+                const targetCell = grid.cells[toGridX + dx][toGridZ + dz];
+                if (targetCell.occupied) {
+                    // Check if this cell is part of the source unit
+                    const isPartOfSource =
+                        (toGridX + dx >= fromGridX && toGridX + dx < fromGridX + size) &&
+                        (toGridZ + dz >= fromGridZ && toGridZ + dz < fromGridZ + size);
+                    if (!isPartOfSource) {
+                        return false;
+                    }
+                }
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Find the origin cell (top-left corner) of a unit at a given position
+     * For sphere units, returns the same position
+     * For prisma units, finds the top-left corner of the 2x2 area
+     */
+    public findUnitOrigin(playerId: string, gridX: number, gridZ: number): { x: number; z: number } | null {
+        const grid = this.grids.get(playerId);
+        if (!grid) return null;
+
+        const cell = grid.cells[gridX]?.[gridZ];
+        if (!cell?.occupied || !cell.unitType) return null;
+
+        const unitType = cell.unitType;
+
+        if (unitType === 'sphere') {
+            return { x: gridX, z: gridZ };
+        }
+
+        // For prisma, find the top-left corner
+        // Check all four possible corners and find the one that's actually the origin
+        for (let dx = 0; dx >= -1; dx--) {
+            for (let dz = 0; dz >= -1; dz--) {
+                const checkX = gridX + dx;
+                const checkZ = gridZ + dz;
+                if (checkX >= 0 && checkZ >= 0) {
+                    const checkCell = grid.cells[checkX]?.[checkZ];
+                    if (checkCell?.unitType === 'prisma') {
+                        // Verify this is actually an origin by checking if all 2x2 cells match
+                        const isOrigin =
+                            checkX + 1 < grid.gridWidth &&
+                            checkZ + 1 < grid.gridHeight &&
+                            grid.cells[checkX][checkZ]?.unitType === 'prisma' &&
+                            grid.cells[checkX + 1][checkZ]?.unitType === 'prisma' &&
+                            grid.cells[checkX][checkZ + 1]?.unitType === 'prisma' &&
+                            grid.cells[checkX + 1][checkZ + 1]?.unitType === 'prisma';
+
+                        if (isOrigin) {
+                            // Check if this origin's placedUnit matches
+                            const hasPlacedUnit = grid.placedUnits.some(
+                                u => u.gridX === checkX && u.gridZ === checkZ && u.unitType === 'prisma'
+                            );
+                            if (hasPlacedUnit) {
+                                return { x: checkX, z: checkZ };
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Fallback: find the origin from placedUnits
+        for (const unit of grid.placedUnits) {
+            if (unit.unitType === 'prisma') {
+                const size = 2;
+                if (gridX >= unit.gridX && gridX < unit.gridX + size &&
+                    gridZ >= unit.gridZ && gridZ < unit.gridZ + size) {
+                    return { x: unit.gridX, z: unit.gridZ };
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Move a unit from one grid position to another
+     */
+    public moveUnit(
+        playerId: string,
+        fromGridX: number,
+        fromGridZ: number,
+        toGridX: number,
+        toGridZ: number
+    ): boolean {
+        const grid = this.grids.get(playerId);
+        if (!grid) return false;
+
+        const cell = grid.cells[fromGridX]?.[fromGridZ];
+        if (!cell?.occupied || !cell.unitType) return false;
+
+        const unitType = cell.unitType;
+
+        // Check if move is valid
+        if (!this.canMoveUnit(playerId, fromGridX, fromGridZ, toGridX, toGridZ, unitType)) {
+            return false;
+        }
+
+        const size = unitType === 'sphere' ? 1 : 2;
+
+        // Clear old cells
+        for (let dx = 0; dx < size; dx++) {
+            for (let dz = 0; dz < size; dz++) {
+                const cx = fromGridX + dx;
+                const cz = fromGridZ + dz;
+                grid.cells[cx][cz].occupied = false;
+                grid.cells[cx][cz].unitType = null;
+                if (grid.cells[cx][cz].previewMesh) {
+                    grid.cells[cx][cz].previewMesh!.dispose();
+                    grid.cells[cx][cz].previewMesh = null;
+                }
+            }
+        }
+
+        // Mark new cells as occupied
+        for (let dx = 0; dx < size; dx++) {
+            for (let dz = 0; dz < size; dz++) {
+                grid.cells[toGridX + dx][toGridZ + dz].occupied = true;
+                grid.cells[toGridX + dx][toGridZ + dz].unitType = unitType;
+            }
+        }
+
+        // Update placedUnits
+        const placedIndex = grid.placedUnits.findIndex(
+            u => u.gridX === fromGridX && u.gridZ === fromGridZ
+        );
+        if (placedIndex !== -1) {
+            grid.placedUnits[placedIndex].gridX = toGridX;
+            grid.placedUnits[placedIndex].gridZ = toGridZ;
+        }
+
+        // Update pendingUnits
+        const pendingIndex = grid.pendingUnits.findIndex(
+            u => u.gridX === fromGridX && u.gridZ === fromGridZ
+        );
+        if (pendingIndex !== -1) {
+            grid.pendingUnits[pendingIndex].gridX = toGridX;
+            grid.pendingUnits[pendingIndex].gridZ = toGridZ;
+        }
+
+        // Create new preview mesh
+        this.createUnitPreview(playerId, toGridX, toGridZ, unitType, grid);
+
+        this.eventBus.emit<FormationUnitMovedEvent>(GameEvents.FORMATION_UNIT_MOVED, {
+            ...createEvent(),
+            playerId,
+            unitType,
+            fromGridX,
+            fromGridZ,
+            toGridX,
+            toGridZ,
+        });
+
+        console.log(`[FormationGridSystem] Moved ${unitType} from (${fromGridX}, ${fromGridZ}) to (${toGridX}, ${toGridZ})`);
         return true;
     }
 
@@ -851,6 +1341,11 @@ export class FormationGridSystem {
             this.hoverHighlight.dispose();
             this.hoverHighlight = null;
         }
+
+        // Dispose selected unit highlight
+        this.clearSelectedUnitHighlight();
+        this.selectedUnitHighlightMaterial?.dispose();
+        this.selectedUnitHighlightMaterial = null;
 
         // Dispose highlight materials
         this.hoverHighlightMaterial?.dispose();

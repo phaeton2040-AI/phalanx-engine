@@ -66,6 +66,10 @@ export const GameEvents = {
     FORMATION_UNIT_PLACED: 'formation:unitPlaced',
     FORMATION_UNIT_REMOVED: 'formation:unitRemoved',
     FORMATION_COMMITTED: 'formation:committed',
+    FORMATION_UPDATE_MODE_ENTERED: 'formation:updateModeEntered',
+    FORMATION_UPDATE_MODE_EXITED: 'formation:updateModeExited',
+    FORMATION_UNIT_MOVE_REQUESTED: 'formation:unitMoveRequested',
+    FORMATION_UNIT_MOVED: 'formation:unitMoved',
 
     // Wave events
     WAVE_STARTED: 'wave:started',

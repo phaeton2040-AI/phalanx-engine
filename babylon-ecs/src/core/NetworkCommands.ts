@@ -56,6 +56,24 @@ export interface NetworkDeployUnitsCommand extends PlayerCommand {
 }
 
 /**
+ * Move grid unit command data - moves a unit from one grid cell to another
+ */
+export interface MoveGridUnitCommandData {
+    fromGridX: number;
+    fromGridZ: number;
+    toGridX: number;
+    toGridZ: number;
+}
+
+/**
+ * Network move grid unit command
+ */
+export interface NetworkMoveGridUnitCommand extends PlayerCommand {
+    type: 'moveGridUnit';
+    data: MoveGridUnitCommandData;
+}
+
+/**
  * Union type of all network commands
  */
-export type NetworkCommand = NetworkMoveCommand | NetworkPlaceUnitCommand | NetworkDeployUnitsCommand;
+export type NetworkCommand = NetworkMoveCommand | NetworkPlaceUnitCommand | NetworkDeployUnitsCommand | NetworkMoveGridUnitCommand;
