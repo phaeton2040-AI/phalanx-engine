@@ -63,27 +63,35 @@ export const resourceConfig = {
 
 /**
  * Unit costs and stats
+ * Note: Grid sizes are defined in UnitGridSize (components/UnitTypeComponent.ts)
  */
 export const unitConfig = {
     sphere: {
         cost: 100,
         health: 50,
-        attackDamage: 10,
+        attackDamage: 7,
         attackRange: 12,
-        attackCooldown: 1.0,
+        attackCooldown: 0.6,
         moveSpeed: 8,
-        gridSize: 1, // 1x1
     },
     prisma: {
         cost: 350,
-        health: 200,
-        attackDamage: 35,
+        health: 180,      // Reduced from 200
+        attackDamage: 35, // Unchanged
         attackRange: 15,
         attackCooldown: 1,
         moveSpeed: 8,
-        gridSize: 2, // 2x2
+    },
+    lance: {
+        cost: 200,
+        health: 90,       // Reduced from 100
+        attackDamage: 18, // Unchanged
+        attackRange: 14,
+        attackCooldown: 1.2,
+        moveSpeed: 8,
     },
 };
+
 
 /**
  * Wave system configuration

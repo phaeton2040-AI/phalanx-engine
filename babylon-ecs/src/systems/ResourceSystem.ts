@@ -182,7 +182,18 @@ export class ResourceSystem {
             return;
         }
 
-        const cost = event.unitType === 'sphere' ? unitConfig.sphere.cost : unitConfig.prisma.cost;
+        let cost: number;
+        switch (event.unitType) {
+            case 'sphere':
+                cost = unitConfig.sphere.cost;
+                break;
+            case 'prisma':
+                cost = unitConfig.prisma.cost;
+                break;
+            case 'lance':
+                cost = unitConfig.lance.cost;
+                break;
+        }
 
         if (resources.currentResources < cost) {
             this.eventBus.emit<UnitPurchaseFailedEvent>(GameEvents.UNIT_PURCHASE_FAILED, {
@@ -267,11 +278,22 @@ export class ResourceSystem {
     /**
      * Check if player can afford a unit
      */
-    public canAfford(playerId: string, unitType: 'sphere' | 'prisma'): boolean {
+    public canAfford(playerId: string, unitType: 'sphere' | 'prisma' | 'lance'): boolean {
         const resources = this.playerResources.get(playerId);
         if (!resources) return false;
 
-        const cost = unitType === 'sphere' ? unitConfig.sphere.cost : unitConfig.prisma.cost;
+        let cost: number;
+        switch (unitType) {
+            case 'sphere':
+                cost = unitConfig.sphere.cost;
+                break;
+            case 'prisma':
+                cost = unitConfig.prisma.cost;
+                break;
+            case 'lance':
+                cost = unitConfig.lance.cost;
+                break;
+        }
         return resources.currentResources >= cost;
     }
 

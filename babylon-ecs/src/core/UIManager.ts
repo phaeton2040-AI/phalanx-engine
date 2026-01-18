@@ -192,9 +192,11 @@ export class UIManager {
     public updateUnitButtonStates(): void {
         const sphereBtn = document.getElementById('sphere-btn');
         const prismaBtn = document.getElementById('prisma-btn');
+        const lanceBtn = document.getElementById('lance-btn');
 
         const canAffordSphere = this.resourceSystem.canAfford(this.localPlayerId, 'sphere');
         const canAffordPrisma = this.resourceSystem.canAfford(this.localPlayerId, 'prisma');
+        const canAffordLance = this.resourceSystem.canAfford(this.localPlayerId, 'lance');
 
         if (sphereBtn) {
             if (canAffordSphere) {
@@ -209,6 +211,14 @@ export class UIManager {
                 prismaBtn.classList.remove('disabled');
             } else {
                 prismaBtn.classList.add('disabled');
+            }
+        }
+
+        if (lanceBtn) {
+            if (canAffordLance) {
+                lanceBtn.classList.remove('disabled');
+            } else {
+                lanceBtn.classList.add('disabled');
             }
         }
     }
@@ -272,19 +282,23 @@ export class UIManager {
     /**
      * Set active unit button
      */
-    public setActiveUnitButton(unitType: 'sphere' | 'prisma' | null): void {
+    public setActiveUnitButton(unitType: 'sphere' | 'prisma' | 'lance' | null): void {
         const sphereBtn = document.getElementById('sphere-btn');
         const prismaBtn = document.getElementById('prisma-btn');
+        const lanceBtn = document.getElementById('lance-btn');
 
-        // Remove active class from both buttons
+        // Remove active class from all buttons
         sphereBtn?.classList.remove('active');
         prismaBtn?.classList.remove('active');
+        lanceBtn?.classList.remove('active');
 
         // Add active class to specified button
         if (unitType === 'sphere') {
             sphereBtn?.classList.add('active');
         } else if (unitType === 'prisma') {
             prismaBtn?.classList.add('active');
+        } else if (unitType === 'lance') {
+            lanceBtn?.classList.add('active');
         }
     }
 
@@ -294,13 +308,16 @@ export class UIManager {
      */
     public setupUnitPlacementButtons(
         onSphereClick: () => void,
-        onPrismaClick: () => void
+        onPrismaClick: () => void,
+        onLanceClick: () => void
     ): void {
         const sphereBtn = document.getElementById('sphere-btn');
         const prismaBtn = document.getElementById('prisma-btn');
+        const lanceBtn = document.getElementById('lance-btn');
 
         sphereBtn?.addEventListener('click', onSphereClick);
         prismaBtn?.addEventListener('click', onPrismaClick);
+        lanceBtn?.addEventListener('click', onLanceClick);
     }
 
     /**

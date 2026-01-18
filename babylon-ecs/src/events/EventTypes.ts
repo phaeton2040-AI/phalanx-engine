@@ -2,6 +2,11 @@ import { Vector3 } from "@babylonjs/core";
 import type { TeamTag } from "../enums/TeamTag";
 
 /**
+ * Unit type for formation and unit events
+ */
+export type FormationUnitType = 'sphere' | 'prisma' | 'lance';
+
+/**
  * Base interface for all game events
  */
 export interface GameEvent {
@@ -188,14 +193,14 @@ export interface ResourcesGeneratedEvent extends GameEvent {
 export interface UnitPurchaseRequestedEvent extends GameEvent {
     playerId: string;
     team: TeamTag;
-    unitType: 'sphere' | 'prisma';
+    unitType: FormationUnitType;
     gridPosition: { x: number; z: number };
 }
 
 export interface UnitPurchaseCompletedEvent extends GameEvent {
     playerId: string;
     team: TeamTag;
-    unitType: 'sphere' | 'prisma';
+    unitType: FormationUnitType;
     entityId: number;
     cost: number;
 }
@@ -203,7 +208,7 @@ export interface UnitPurchaseCompletedEvent extends GameEvent {
 export interface UnitPurchaseFailedEvent extends GameEvent {
     playerId: string;
     team: TeamTag;
-    unitType: 'sphere' | 'prisma';
+    unitType: FormationUnitType;
     reason: 'insufficient_resources' | 'invalid_position' | 'grid_occupied';
 }
 
@@ -258,7 +263,7 @@ export interface TowerDestroyedEvent extends GameEvent {
 
 export interface FormationModeEnteredEvent extends GameEvent {
     playerId: string;
-    unitType: 'sphere' | 'prisma';
+    unitType: FormationUnitType;
 }
 
 export interface FormationModeExitedEvent extends GameEvent {
@@ -267,7 +272,7 @@ export interface FormationModeExitedEvent extends GameEvent {
 
 export interface FormationUnitPlacedEvent extends GameEvent {
     playerId: string;
-    unitType: 'sphere' | 'prisma';
+    unitType: FormationUnitType;
     gridX: number;
     gridZ: number;
 }
@@ -287,7 +292,7 @@ export interface FormationUpdateModeEnteredEvent extends GameEvent {
     playerId: string;
     gridX: number;
     gridZ: number;
-    unitType: 'sphere' | 'prisma';
+    unitType: FormationUnitType;
 }
 
 export interface FormationUpdateModeExitedEvent extends GameEvent {
@@ -304,7 +309,7 @@ export interface FormationUnitMoveRequestedEvent extends GameEvent {
 
 export interface FormationUnitMovedEvent extends GameEvent {
     playerId: string;
-    unitType: 'sphere' | 'prisma';
+    unitType: FormationUnitType;
     fromGridX: number;
     fromGridZ: number;
     toGridX: number;

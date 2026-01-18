@@ -540,14 +540,15 @@ export class Game {
     private setupUnitPlacementUI(): void {
         this.uiManager.setupUnitPlacementButtons(
             () => this.handleUnitButtonClick('sphere'),
-            () => this.handleUnitButtonClick('prisma')
+            () => this.handleUnitButtonClick('prisma'),
+            () => this.handleUnitButtonClick('lance')
         );
     }
 
     /**
      * Handle unit button click
      */
-    private handleUnitButtonClick(unitType: 'sphere' | 'prisma'): void {
+    private handleUnitButtonClick(unitType: 'sphere' | 'prisma' | 'lance'): void {
         if (!this.resourceSystem.canAfford(this.matchData.playerId, unitType)) {
             this.uiManager.showNotification('Not enough resources!', 'warning');
             return;

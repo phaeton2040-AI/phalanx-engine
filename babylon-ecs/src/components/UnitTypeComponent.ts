@@ -7,16 +7,20 @@ import { ComponentType } from "./Component";
 export const UnitType = {
     Sphere: 'sphere',  // 1x1 grid space
     Prisma: 'prisma',  // 2x2 grid space
+    Lance: 'lance',    // 1x2 grid space
 } as const;
 
 export type UnitType = typeof UnitType[keyof typeof UnitType];
 
 /**
  * Grid size configuration for each unit type
+ * This is the single source of truth for unit grid dimensions.
+ * Used by FormationGridSystem and UnitTypeComponent.
  */
 export const UnitGridSize: Record<UnitType, { width: number; height: number }> = {
     [UnitType.Sphere]: { width: 1, height: 1 },
     [UnitType.Prisma]: { width: 2, height: 2 },
+    [UnitType.Lance]: { width: 2, height: 1 },
 };
 
 /**

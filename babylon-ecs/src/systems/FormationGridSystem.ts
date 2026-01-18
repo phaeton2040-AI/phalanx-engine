@@ -4,6 +4,7 @@ import { EventBus } from "../core/EventBus";
 import { GameEvents, createEvent } from "../events";
 import { TeamTag } from "../enums/TeamTag";
 import { arenaParams } from "../config/constants";
+import { UnitGridSize } from "../components";
 import type {
     FormationModeEnteredEvent,
     FormationModeExitedEvent,
@@ -17,13 +18,19 @@ import type {
 } from "../events";
 
 /**
+ * Unit type for formation placement
+ * Re-exported from UnitType for convenience
+ */
+export type FormationUnitType = 'sphere' | 'prisma' | 'lance';
+
+/**
  * Represents a cell in the formation grid
  */
 interface GridCell {
     x: number;
     z: number;
     occupied: boolean;
-    unitType: 'sphere' | 'prisma' | null;
+    unitType: FormationUnitType | null;
     previewMesh: Mesh | null;
 }
 
@@ -40,16 +47,16 @@ interface FormationGrid {
     centerX: number;    // World X position of grid center
     centerZ: number;    // World Z position of grid center
     // All units placed on the grid (persistent across waves)
-    placedUnits: { unitType: 'sphere' | 'prisma'; gridX: number; gridZ: number }[];
+    placedUnits: { unitType: FormationUnitType; gridX: number; gridZ: number }[];
     // Units that were placed but not yet synced (for backward compatibility)
-    pendingUnits: { unitType: 'sphere' | 'prisma'; gridX: number; gridZ: number }[];
+    pendingUnits: { unitType: FormationUnitType; gridX: number; gridZ: number }[];
 }
 
 /**
  * Callback type for creating units
  */
 export type CreateUnitCallback = (
-    unitType: 'sphere' | 'prisma',
+    unitType: FormationUnitType,
     team: TeamTag,
     position: Vector3
 ) => { id: number; position: Vector3 };
@@ -69,8 +76,8 @@ export class FormationGridSystem {
     private unsubscribers: (() => void)[] = [];
 
     private grids: Map<string, FormationGrid> = new Map();
-    private activePlacementMode: { playerId: string; unitType: 'sphere' | 'prisma' } | null = null;
-    private activeUpdateMode: { playerId: string; gridX: number; gridZ: number; unitType: 'sphere' | 'prisma' } | null = null;
+    private activePlacementMode: { playerId: string; unitType: FormationUnitType } | null = null;
+    private activeUpdateMode: { playerId: string; gridX: number; gridZ: number; unitType: FormationUnitType } | null = null;
     private gridVisuals: Map<string, Mesh[]> = new Map();
     private previewMesh: Mesh | null = null;
 
@@ -89,7 +96,7 @@ export class FormationGridSystem {
     private moveUnitCallback: MoveUnitCallback | null = null;
 
     // Callback for checking if player can afford a unit - set by Game.ts
-    private canAffordCallback: ((playerId: string, unitType: 'sphere' | 'prisma') => boolean) | null = null;
+    private canAffordCallback: ((playerId: string, unitType: FormationUnitType) => boolean) | null = null;
 
     constructor(scene: Scene, _entityManager: EntityManager, eventBus: EventBus) {
         this.scene = scene;
@@ -98,6 +105,15 @@ export class FormationGridSystem {
         this.setupEventListeners();
         this.setupMouseHandling();
         this.createHighlightMaterials();
+    }
+
+    /**
+     * Get the grid size (width and depth) for a unit type
+     * Uses the centralized UnitGridSize configuration
+     */
+    private getUnitGridSize(unitType: FormationUnitType): { width: number; depth: number } {
+        const size = UnitGridSize[unitType];
+        return { width: size.width, depth: size.height };
     }
 
     /**
@@ -121,7 +137,7 @@ export class FormationGridSystem {
      * Set the callback for checking affordability
      * This should be called by Game.ts after initialization
      */
-    public setCanAffordCallback(callback: (playerId: string, unitType: 'sphere' | 'prisma') => boolean): void {
+    public setCanAffordCallback(callback: (playerId: string, unitType: FormationUnitType) => boolean): void {
         this.canAffordCallback = callback;
     }
 
@@ -365,18 +381,19 @@ export class FormationGridSystem {
     /**
      * Show hover highlight at grid position
      */
-    private showHoverHighlight(playerId: string, gridX: number, gridZ: number, unitType: 'sphere' | 'prisma'): void {
+    private showHoverHighlight(playerId: string, gridX: number, gridZ: number, unitType: FormationUnitType): void {
         const grid = this.grids.get(playerId);
         if (!grid) return;
 
-        const size = unitType === 'sphere' ? 1 : 2;
-        const worldSize = size * grid.cellSize;
+        const { width, depth } = this.getUnitGridSize(unitType);
+        const worldWidth = width * grid.cellSize;
+        const worldDepth = depth * grid.cellSize;
 
         // Create or update highlight mesh
         if (!this.hoverHighlight) {
             this.hoverHighlight = MeshBuilder.CreateBox(
                 "hoverHighlight",
-                { width: worldSize, height: 0.2, depth: worldSize },
+                { width: worldWidth, height: 0.2, depth: worldDepth },
                 this.scene
             );
             this.hoverHighlight.isPickable = false;
@@ -385,7 +402,7 @@ export class FormationGridSystem {
             this.hoverHighlight.dispose();
             this.hoverHighlight = MeshBuilder.CreateBox(
                 "hoverHighlight",
-                { width: worldSize, height: 0.2, depth: worldSize },
+                { width: worldWidth, height: 0.2, depth: worldDepth },
                 this.scene
             );
             this.hoverHighlight.isPickable = false;
@@ -395,10 +412,12 @@ export class FormationGridSystem {
         const worldPos = this.gridToWorld(playerId, gridX, gridZ);
         if (!worldPos) return;
 
-        // Offset for larger units
-        if (unitType === 'prisma') {
-            worldPos.x += grid.cellSize / 2;
-            worldPos.z += grid.cellSize / 2;
+        // Offset for larger units (center of multi-cell units)
+        if (width > 1) {
+            worldPos.x += grid.cellSize * (width - 1) / 2;
+        }
+        if (depth > 1) {
+            worldPos.z += grid.cellSize * (depth - 1) / 2;
         }
 
         this.hoverHighlight.position = new Vector3(worldPos.x, 0.15, worldPos.z);
@@ -429,7 +448,7 @@ export class FormationGridSystem {
         playerId: string,
         gridX: number,
         gridZ: number,
-        unitType: 'sphere' | 'prisma'
+        unitType: FormationUnitType
     ): void {
         if (!this.activeUpdateMode) return;
 
@@ -437,14 +456,15 @@ export class FormationGridSystem {
         const grid = this.grids.get(playerId);
         if (!grid) return;
 
-        const size = unitType === 'sphere' ? 1 : 2;
-        const worldSize = size * grid.cellSize;
+        const { width, depth } = this.getUnitGridSize(unitType);
+        const worldWidth = width * grid.cellSize;
+        const worldDepth = depth * grid.cellSize;
 
         // Create or update highlight mesh
         if (!this.hoverHighlight) {
             this.hoverHighlight = MeshBuilder.CreateBox(
                 "hoverHighlight",
-                { width: worldSize, height: 0.2, depth: worldSize },
+                { width: worldWidth, height: 0.2, depth: worldDepth },
                 this.scene
             );
             this.hoverHighlight.isPickable = false;
@@ -452,7 +472,7 @@ export class FormationGridSystem {
             this.hoverHighlight.dispose();
             this.hoverHighlight = MeshBuilder.CreateBox(
                 "hoverHighlight",
-                { width: worldSize, height: 0.2, depth: worldSize },
+                { width: worldWidth, height: 0.2, depth: worldDepth },
                 this.scene
             );
             this.hoverHighlight.isPickable = false;
@@ -463,9 +483,11 @@ export class FormationGridSystem {
         if (!worldPos) return;
 
         // Offset for larger units
-        if (unitType === 'prisma') {
-            worldPos.x += grid.cellSize / 2;
-            worldPos.z += grid.cellSize / 2;
+        if (width > 1) {
+            worldPos.x += grid.cellSize * (width - 1) / 2;
+        }
+        if (depth > 1) {
+            worldPos.z += grid.cellSize * (depth - 1) / 2;
         }
 
         this.hoverHighlight.position = new Vector3(worldPos.x, 0.15, worldPos.z);
@@ -486,15 +508,16 @@ export class FormationGridSystem {
         playerId: string,
         gridX: number,
         gridZ: number,
-        unitType: 'sphere' | 'prisma'
+        unitType: FormationUnitType
     ): void {
         const grid = this.grids.get(playerId);
         if (!grid) return;
 
         this.clearSelectedUnitHighlight();
 
-        const size = unitType === 'sphere' ? 1 : 2;
-        const worldSize = size * grid.cellSize;
+        const { width, depth } = this.getUnitGridSize(unitType);
+        const worldWidth = width * grid.cellSize;
+        const worldDepth = depth * grid.cellSize;
 
         // Create highlight material if needed
         if (!this.selectedUnitHighlightMaterial) {
@@ -507,7 +530,7 @@ export class FormationGridSystem {
         // Create highlight mesh
         this.selectedUnitHighlight = MeshBuilder.CreateBox(
             "selectedUnitHighlight",
-            { width: worldSize, height: 0.3, depth: worldSize },
+            { width: worldWidth, height: 0.3, depth: worldDepth },
             this.scene
         );
         this.selectedUnitHighlight.isPickable = false;
@@ -517,9 +540,11 @@ export class FormationGridSystem {
         if (!worldPos) return;
 
         // Offset for larger units
-        if (unitType === 'prisma') {
-            worldPos.x += grid.cellSize / 2;
-            worldPos.z += grid.cellSize / 2;
+        if (width > 1) {
+            worldPos.x += grid.cellSize * (width - 1) / 2;
+        }
+        if (depth > 1) {
+            worldPos.z += grid.cellSize * (depth - 1) / 2;
         }
 
         this.selectedUnitHighlight.position = new Vector3(worldPos.x, 0.25, worldPos.z);
@@ -669,7 +694,7 @@ export class FormationGridSystem {
     /**
      * Enter placement mode for a unit type
      */
-    public enterPlacementMode(playerId: string, unitType: 'sphere' | 'prisma'): void {
+    public enterPlacementMode(playerId: string, unitType: FormationUnitType): void {
         // Exit update mode if active
         if (this.activeUpdateMode?.playerId === playerId) {
             this.exitUpdateMode(playerId);
@@ -705,7 +730,7 @@ export class FormationGridSystem {
     /**
      * Enter update mode for repositioning an existing unit
      */
-    public enterUpdateMode(playerId: string, gridX: number, gridZ: number, unitType: 'sphere' | 'prisma'): void {
+    public enterUpdateMode(playerId: string, gridX: number, gridZ: number, unitType: FormationUnitType): void {
         // Exit placement mode if active
         if (this.activePlacementMode?.playerId === playerId) {
             this.activePlacementMode = null;
@@ -800,19 +825,19 @@ export class FormationGridSystem {
     /**
      * Check if a position is valid for placing a unit
      */
-    public canPlaceUnit(playerId: string, gridX: number, gridZ: number, unitType: 'sphere' | 'prisma'): boolean {
+    public canPlaceUnit(playerId: string, gridX: number, gridZ: number, unitType: FormationUnitType): boolean {
         const grid = this.grids.get(playerId);
         if (!grid) return false;
 
-        const size = unitType === 'sphere' ? 1 : 2;
+        const { width, depth } = this.getUnitGridSize(unitType);
 
         // Check bounds
-        if (gridX < 0 || gridX + size > grid.gridWidth) return false;
-        if (gridZ < 0 || gridZ + size > grid.gridHeight) return false;
+        if (gridX < 0 || gridX + width > grid.gridWidth) return false;
+        if (gridZ < 0 || gridZ + depth > grid.gridHeight) return false;
 
         // Check if cells are occupied
-        for (let dx = 0; dx < size; dx++) {
-            for (let dz = 0; dz < size; dz++) {
+        for (let dx = 0; dx < width; dx++) {
+            for (let dz = 0; dz < depth; dz++) {
                 if (grid.cells[gridX + dx][gridZ + dz].occupied) {
                     return false;
                 }
@@ -832,26 +857,26 @@ export class FormationGridSystem {
         fromGridZ: number,
         toGridX: number,
         toGridZ: number,
-        unitType: 'sphere' | 'prisma'
+        unitType: FormationUnitType
     ): boolean {
         const grid = this.grids.get(playerId);
         if (!grid) return false;
 
-        const size = unitType === 'sphere' ? 1 : 2;
+        const { width, depth } = this.getUnitGridSize(unitType);
 
         // Check bounds for target position
-        if (toGridX < 0 || toGridX + size > grid.gridWidth) return false;
-        if (toGridZ < 0 || toGridZ + size > grid.gridHeight) return false;
+        if (toGridX < 0 || toGridX + width > grid.gridWidth) return false;
+        if (toGridZ < 0 || toGridZ + depth > grid.gridHeight) return false;
 
         // Check if target cells are occupied (ignoring cells occupied by the unit being moved)
-        for (let dx = 0; dx < size; dx++) {
-            for (let dz = 0; dz < size; dz++) {
+        for (let dx = 0; dx < width; dx++) {
+            for (let dz = 0; dz < depth; dz++) {
                 const targetCell = grid.cells[toGridX + dx][toGridZ + dz];
                 if (targetCell.occupied) {
                     // Check if this cell is part of the source unit
                     const isPartOfSource =
-                        (toGridX + dx >= fromGridX && toGridX + dx < fromGridX + size) &&
-                        (toGridZ + dz >= fromGridZ && toGridZ + dz < fromGridZ + size);
+                        (toGridX + dx >= fromGridX && toGridX + dx < fromGridX + width) &&
+                        (toGridZ + dz >= fromGridZ && toGridZ + dz < fromGridZ + depth);
                     if (!isPartOfSource) {
                         return false;
                     }
@@ -1011,7 +1036,7 @@ export class FormationGridSystem {
     /**
      * Place a unit on the formation grid
      */
-    public placeUnit(playerId: string, gridX: number, gridZ: number, unitType: 'sphere' | 'prisma'): boolean {
+    public placeUnit(playerId: string, gridX: number, gridZ: number, unitType: FormationUnitType): boolean {
         if (!this.canPlaceUnit(playerId, gridX, gridZ, unitType)) {
             return false;
         }
@@ -1019,11 +1044,11 @@ export class FormationGridSystem {
         const grid = this.grids.get(playerId);
         if (!grid) return false;
 
-        const size = unitType === 'sphere' ? 1 : 2;
+        const { width, depth } = this.getUnitGridSize(unitType);
 
         // Mark cells as occupied
-        for (let dx = 0; dx < size; dx++) {
-            for (let dz = 0; dz < size; dz++) {
+        for (let dx = 0; dx < width; dx++) {
+            for (let dz = 0; dz < depth; dz++) {
                 grid.cells[gridX + dx][gridZ + dz].occupied = true;
                 grid.cells[gridX + dx][gridZ + dz].unitType = unitType;
             }
@@ -1132,45 +1157,178 @@ export class FormationGridSystem {
         playerId: string,
         gridX: number,
         gridZ: number,
-        unitType: 'sphere' | 'prisma',
+        unitType: FormationUnitType,
         grid: FormationGrid
     ): void {
         const worldPos = this.gridToWorld(playerId, gridX, gridZ);
         if (!worldPos) return;
 
-        // Offset for prisma (center of 2x2)
-        if (unitType === 'prisma') {
-            worldPos.x += grid.cellSize / 2;
-            worldPos.z += grid.cellSize / 2;
+        const { width, depth } = this.getUnitGridSize(unitType);
+
+        // Offset for multi-cell units (center of occupied area)
+        if (width > 1) {
+            worldPos.x += grid.cellSize * (width - 1) / 2;
         }
+        if (depth > 1) {
+            worldPos.z += grid.cellSize * (depth - 1) / 2;
+        }
+
+        const teamColor = grid.team === TeamTag.Team1
+            ? arenaParams.colors.teamA
+            : arenaParams.colors.teamB;
+        const color = new Color3(teamColor.r, teamColor.g, teamColor.b);
 
         let mesh: Mesh;
         if (unitType === 'sphere') {
-            mesh = MeshBuilder.CreateSphere(
-                `preview_${playerId}_${gridX}_${gridZ}`,
-                { diameter: 2 },
-                this.scene
-            );
+            mesh = this.createSpherePreview(playerId, gridX, gridZ, color);
+        } else if (unitType === 'prisma') {
+            mesh = this.createPrismaPreview(playerId, gridX, gridZ, color);
         } else {
-            mesh = MeshBuilder.CreateBox(
-                `preview_${playerId}_${gridX}_${gridZ}`,
-                { width: 3.5, height: 2.5, depth: 3.5 },
-                this.scene
-            );
+            mesh = this.createLancePreview(playerId, gridX, gridZ, color, grid.team);
         }
 
         mesh.position = worldPos;
         mesh.isPickable = false;
 
+        grid.cells[gridX][gridZ].previewMesh = mesh;
+    }
+
+    /**
+     * Create a sphere unit preview mesh
+     */
+    private createSpherePreview(playerId: string, gridX: number, gridZ: number, teamColor: Color3): Mesh {
+        const mesh = MeshBuilder.CreateSphere(
+            `preview_${playerId}_${gridX}_${gridZ}`,
+            { diameter: 2 },
+            this.scene
+        );
+
         const material = new StandardMaterial(`previewMat_${playerId}_${gridX}_${gridZ}`, this.scene);
-        const teamColor = grid.team === TeamTag.Team1
-            ? arenaParams.colors.teamA
-            : arenaParams.colors.teamB;
-        material.diffuseColor = new Color3(teamColor.r, teamColor.g, teamColor.b);
+        material.diffuseColor = teamColor;
         material.alpha = 0.6;
         mesh.material = material;
 
-        grid.cells[gridX][gridZ].previewMesh = mesh;
+        return mesh;
+    }
+
+    /**
+     * Create a prisma unit preview mesh (4 triangular prisms + central crystal)
+     */
+    private createPrismaPreview(playerId: string, gridX: number, gridZ: number, teamColor: Color3): Mesh {
+        const parentMesh = new Mesh(`preview_${playerId}_${gridX}_${gridZ}`, this.scene);
+
+        // Create 4 prisms arranged in a 2x2 pattern
+        const prismSize = 1.5;
+        const spacing = 1.8;
+        const positions = [
+            new Vector3(-spacing/2, 0, -spacing/2),
+            new Vector3(spacing/2, 0, -spacing/2),
+            new Vector3(-spacing/2, 0, spacing/2),
+            new Vector3(spacing/2, 0, spacing/2),
+        ];
+
+        const prismMaterial = new StandardMaterial(`previewPrismMat_${playerId}_${gridX}_${gridZ}`, this.scene);
+        prismMaterial.diffuseColor = new Color3(0.4, 0.4, 0.45);
+        prismMaterial.alpha = 0.6;
+
+        positions.forEach((pos, index) => {
+            // Use a simple box as prism approximation for preview
+            const prism = MeshBuilder.CreateCylinder(
+                `previewPrism_${playerId}_${gridX}_${gridZ}_${index}`,
+                { height: prismSize * 1.5, diameter: prismSize * 0.8, tessellation: 3 },
+                this.scene
+            );
+            prism.parent = parentMesh;
+            prism.position = pos;
+            prism.rotation.y = index * Math.PI / 2;
+            prism.material = prismMaterial;
+            prism.isPickable = false;
+        });
+
+        // Create central crystal with team color
+        const crystal = MeshBuilder.CreatePolyhedron(
+            `previewCrystal_${playerId}_${gridX}_${gridZ}`,
+            { type: 1, size: 0.6 },
+            this.scene
+        );
+        crystal.position = new Vector3(0, 1.2, 0);
+        crystal.scaling = new Vector3(0.8, 1.4, 0.8);
+        crystal.parent = parentMesh;
+        crystal.isPickable = false;
+
+        const crystalMaterial = new StandardMaterial(`previewCrystalMat_${playerId}_${gridX}_${gridZ}`, this.scene);
+        crystalMaterial.diffuseColor = teamColor;
+        crystalMaterial.emissiveColor = teamColor.scale(0.3);
+        crystalMaterial.alpha = 0.7;
+        crystal.material = crystalMaterial;
+
+        return parentMesh;
+    }
+
+    /**
+     * Create a lance unit preview mesh (body + tip + crystal)
+     */
+    private createLancePreview(playerId: string, gridX: number, gridZ: number, teamColor: Color3, team: TeamTag): Mesh {
+        const parentMesh = new Mesh(`preview_${playerId}_${gridX}_${gridZ}`, this.scene);
+
+        const bodyLength = 4.0;  // Match battle unit size
+
+        // Main body - elongated cylinder along X-axis (forward)
+        const body = MeshBuilder.CreateCylinder(
+            `previewBody_${playerId}_${gridX}_${gridZ}`,
+            { height: bodyLength, diameterTop: 0.9, diameterBottom: 1.1, tessellation: 12 },
+            this.scene
+        );
+        body.rotation.z = -Math.PI / 2;
+        body.position.y = 1.0;
+        body.parent = parentMesh;
+        body.isPickable = false;
+
+        const bodyMaterial = new StandardMaterial(`previewBodyMat_${playerId}_${gridX}_${gridZ}`, this.scene);
+        bodyMaterial.diffuseColor = new Color3(0.5, 0.5, 0.55);
+        bodyMaterial.alpha = 0.6;
+        body.material = bodyMaterial;
+
+        // Spear tip - cone at front (positive X) - larger
+        const tip = MeshBuilder.CreateCylinder(
+            `previewTip_${playerId}_${gridX}_${gridZ}`,
+            { height: 1.5, diameterTop: 0, diameterBottom: 0.7, tessellation: 8 },
+            this.scene
+        );
+        tip.rotation.z = -Math.PI / 2;
+        tip.position.y = 1.0;
+        tip.position.x = bodyLength / 2 + 0.75;
+        tip.parent = parentMesh;
+        tip.isPickable = false;
+
+        const tipMaterial = new StandardMaterial(`previewTipMat_${playerId}_${gridX}_${gridZ}`, this.scene);
+        tipMaterial.diffuseColor = new Color3(0.7, 0.7, 0.75);
+        tipMaterial.alpha = 0.6;
+        tip.material = tipMaterial;
+
+        // Central crystal with team color - larger
+        const crystal = MeshBuilder.CreatePolyhedron(
+            `previewCrystal_${playerId}_${gridX}_${gridZ}`,
+            { type: 1, size: 0.55 },
+            this.scene
+        );
+        crystal.position = new Vector3(0, 1.7, 0);
+        crystal.scaling = new Vector3(0.8, 1.2, 0.8);
+        crystal.parent = parentMesh;
+        crystal.isPickable = false;
+
+        const crystalMaterial = new StandardMaterial(`previewCrystalMat_${playerId}_${gridX}_${gridZ}`, this.scene);
+        crystalMaterial.diffuseColor = teamColor;
+        crystalMaterial.emissiveColor = teamColor.scale(0.3);
+        crystalMaterial.alpha = 0.7;
+        crystal.material = crystalMaterial;
+
+        // Rotate 180 degrees for Team2 so lance faces towards enemy
+        if (team === TeamTag.Team2) {
+            parentMesh.rotation.y = Math.PI;
+        }
+
+        return parentMesh;
     }
 
     /**
@@ -1292,14 +1450,14 @@ export class FormationGridSystem {
     /**
      * Get the pending units for a player (units placed but not yet synced)
      */
-    public getPendingUnits(playerId: string): { unitType: 'sphere' | 'prisma'; gridX: number; gridZ: number }[] {
+    public getPendingUnits(playerId: string): { unitType: FormationUnitType; gridX: number; gridZ: number }[] {
         return this.grids.get(playerId)?.pendingUnits ?? [];
     }
 
     /**
      * Get all placed units for a player (persistent on grid, deployed each wave)
      */
-    public getPlacedUnits(playerId: string): { unitType: 'sphere' | 'prisma'; gridX: number; gridZ: number }[] {
+    public getPlacedUnits(playerId: string): { unitType: FormationUnitType; gridX: number; gridZ: number }[] {
         return this.grids.get(playerId)?.placedUnits ?? [];
     }
 

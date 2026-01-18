@@ -6,6 +6,7 @@ import type { PhysicsSystem } from "../systems/PhysicsSystem";
 import type { InterpolationSystem } from "../systems/InterpolationSystem";
 import type { Unit, UnitConfig } from "../entities/Unit";
 import type { PrismaUnit, PrismaUnitConfig } from "../entities/PrismaUnit";
+import type { LanceUnit, LanceUnitConfig } from "../entities/LanceUnit";
 import type { Tower, TowerConfig } from "../entities/Tower";
 import type { Base, BaseConfig } from "../entities/Base";
 import { TeamTag } from "../enums/TeamTag";
@@ -100,6 +101,31 @@ export class EntityFactory {
     }
 
     /**
+     * Create a LanceUnit and register it with all necessary systems
+     */
+    public createLanceUnit(config: LanceUnitConfig, position: Vector3): LanceUnit {
+        const unit = this.sceneManager.createLanceUnit(config, position);
+
+        // Register with EntityManager
+        this.entityManager.addEntity(unit);
+
+        // Register with SelectionSystem for mesh picking
+        this.selectionSystem.registerSelectable(unit);
+
+        // Register with PhysicsSystem - lance units are elongated 1x2 bodies
+        this.physicsSystem.registerBody(unit.id, {
+            radius: 1.4, // Medium radius for 1x2 unit
+            mass: 1.5,   // Between sphere and prisma
+            isStatic: false,
+        });
+
+        // Register with InterpolationSystem for smooth visual movement
+        this.interpolationSystem?.registerEntity(unit.id, false);
+
+        return unit;
+    }
+
+    /**
      * Create a tower and register it with all necessary systems
      */
     public createTower(config: TowerConfig, position: Vector3): Tower {
@@ -154,7 +180,7 @@ export class EntityFactory {
      * Returns the unit info needed for move commands
      */
     public createUnitForFormation(
-        unitType: 'sphere' | 'prisma',
+        unitType: 'sphere' | 'prisma' | 'lance',
         team: TeamTag,
         position: Vector3,
         localPlayerId: string,
@@ -165,7 +191,7 @@ export class EntityFactory {
             ? new Color3(arenaParams.colors.teamA.r, arenaParams.colors.teamA.g, arenaParams.colors.teamA.b)
             : new Color3(arenaParams.colors.teamB.r, arenaParams.colors.teamB.g, arenaParams.colors.teamB.b);
 
-        let unit: Unit | PrismaUnit;
+        let unit: Unit | PrismaUnit | LanceUnit;
 
         if (unitType === 'sphere') {
             unit = this.createUnit({
@@ -177,7 +203,7 @@ export class EntityFactory {
                 attackCooldown: unitConfig.sphere.attackCooldown,
                 moveSpeed: unitConfig.sphere.moveSpeed,
             }, position);
-        } else {
+        } else if (unitType === 'prisma') {
             unit = this.createPrismaUnit({
                 color,
                 team,
@@ -186,6 +212,16 @@ export class EntityFactory {
                 attackRange: unitConfig.prisma.attackRange,
                 attackCooldown: unitConfig.prisma.attackCooldown,
                 moveSpeed: unitConfig.prisma.moveSpeed,
+            }, position);
+        } else {
+            unit = this.createLanceUnit({
+                color,
+                team,
+                health: unitConfig.lance.health,
+                attackDamage: unitConfig.lance.attackDamage,
+                attackRange: unitConfig.lance.attackRange,
+                attackCooldown: unitConfig.lance.attackCooldown,
+                moveSpeed: unitConfig.lance.moveSpeed,
             }, position);
         }
 
