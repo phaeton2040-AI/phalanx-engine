@@ -91,6 +91,8 @@ export interface CountdownEvent {
  */
 export interface GameStartEvent {
   matchId: string;
+  /** Random seed for deterministic RNG (optional for backward compatibility) */
+  randomSeed?: number;
 }
 
 /**

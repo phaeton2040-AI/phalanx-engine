@@ -2,6 +2,7 @@ import { Engine, Vector3 } from "@babylonjs/core";
 import { Entity } from "../entities/Entity";
 import { EntityManager } from "../core/EntityManager";
 import { EventBus } from "../core/EventBus";
+import { GameRandom } from "../core/GameRandom";
 import { ComponentType, TeamComponent, HealthComponent, AttackComponent, MovementComponent } from "../components";
 import { GameEvents, createEvent } from "../events";
 import type { ProjectileSpawnedEvent, DamageAppliedEvent } from "../events";
@@ -12,11 +13,16 @@ import { networkConfig } from "../config/constants";
  */
 export interface CombatConfig {
     fixedTimestep: number; // Fixed delta time for deterministic updates (e.g., 1/60)
+    criticalHitChance: number; // Probability of critical hit (0-1)
+    criticalHitMultiplier: number; // Damage multiplier on critical hit
 }
 
 const DEFAULT_COMBAT_CONFIG: CombatConfig = {
     // Combat updates once per network tick for deterministic lockstep
     fixedTimestep: networkConfig.tickTimestep,
+    // Critical hit settings (using GameRandom for determinism)
+    criticalHitChance: 0.10, // 10% base crit chance
+    criticalHitMultiplier: 1.5, // 50% bonus damage on crit
 };
 
 /**
@@ -311,6 +317,7 @@ export class CombatSystem {
 
     /**
      * Perform an attack from attacker to target
+     * Uses GameRandom for deterministic critical hit calculation
      */
     private performAttack(attacker: Entity, target: Entity): void {
         const attack = attacker.getComponent<AttackComponent>(ComponentType.Attack)!;
@@ -320,12 +327,24 @@ export class CombatSystem {
         const origin = attack.getAttackOrigin(attacker.position);
         const direction = target.position.subtract(origin).normalize();
 
+        // Calculate damage with critical hit chance (deterministic via GameRandom)
+        let damage = attack.damage;
+        let isCritical = false;
+
+        if (GameRandom.isInitialized()) {
+            isCritical = GameRandom.boolean(this.config.criticalHitChance);
+            if (isCritical) {
+                damage = Math.floor(damage * this.config.criticalHitMultiplier);
+                console.log(`[Combat] Critical hit! ${damage} damage (${this.config.criticalHitMultiplier}x)`);
+            }
+        }
+
         // Emit projectile spawn event instead of calling ProjectileSystem directly
         this.eventBus.emit<ProjectileSpawnedEvent>(GameEvents.PROJECTILE_SPAWNED, {
             ...createEvent(),
             origin: origin.clone(),
             direction: direction.clone(),
-            damage: attack.damage,
+            damage: damage,
             speed: attack.projectileSpeed,
             team: team.team,
             sourceId: attacker.id,

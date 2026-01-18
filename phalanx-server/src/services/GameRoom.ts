@@ -1,3 +1,4 @@
+import { randomBytes } from 'crypto';
 import type { Server as SocketIOServer } from 'socket.io';
 import type { PhalanxConfig, QueuedPlayer, MatchInfo, PlayerInfo, PlayerCommand, TickCommands } from '../types/index.js';
 
@@ -33,6 +34,12 @@ export class GameRoom {
   private commandHistory: Map<number, PlayerCommand[]> = new Map();
   // Track players who are currently lagging (to avoid spamming events)
   private laggingPlayers: Set<string> = new Set();
+  // Random seed for deterministic RNG (generated at match creation)
+  private readonly randomSeed: number;
+  // Track last sequence number per player for input validation (2.1.4)
+  private lastSequence: Map<string, number> = new Map();
+  // State hashes per tick for desync detection (2.1.3)
+  private stateHashes: Map<number, Map<string, string>> = new Map();
 
   constructor(
     id: string,
@@ -48,6 +55,8 @@ export class GameRoom {
     this.teams = teams;
     this.eventEmitter = eventEmitter;
     this.createdAt = new Date();
+    // Generate deterministic random seed for this match (32-bit unsigned integer)
+    this.randomSeed = randomBytes(4).readUInt32BE();
 
     // Initialize players from teams
     teams.forEach((team, teamId) => {
@@ -121,8 +130,11 @@ export class GameRoom {
           clearInterval(this.countdownInterval);
           this.countdownInterval = null;
         }
-        // Emit game-start event
-        this.io.to(this.roomId).emit('game-start', { matchId: this.id });
+        // Emit game-start event with random seed for deterministic RNG
+        this.io.to(this.roomId).emit('game-start', {
+          matchId: this.id,
+          randomSeed: this.randomSeed
+        });
         this.startGame();
       }
     }, 1000);
@@ -274,14 +286,37 @@ export class GameRoom {
   }
 
   /**
+   * Validate command sequence number (2.1.4)
+   * Returns true if sequence is valid, false otherwise
+   */
+  private validateCommandSequence(playerId: string, command: PlayerCommand): boolean {
+    // If command has no sequence, accept it (backward compatibility)
+    if (command.sequence === undefined) {
+      return true;
+    }
+
+    const lastSeq = this.lastSequence.get(playerId) ?? -1;
+    const expectedSeq = lastSeq + 1;
+
+    if (command.sequence !== expectedSeq) {
+      console.log(`[SECURITY] Player ${playerId} invalid sequence: got ${command.sequence}, expected ${expectedSeq}`);
+      return false;
+    }
+
+    // Update last sequence
+    this.lastSequence.set(playerId, command.sequence);
+    return true;
+  }
+
+  /**
    * Receive commands from a player for a specific tick (LOCKSTEP-2)
    * Commands can be empty if player has no actions for this tick.
    * This is normal - units may be moving/idle and player doesn't need to input anything.
    */
-  receivePlayerCommands(playerId: string, tick: number, commands: PlayerCommand[]): boolean {
+  receivePlayerCommands(playerId: string, tick: number, commands: PlayerCommand[]): { accepted: boolean; invalidCommands?: PlayerCommand[] } {
     const player = this.players.get(playerId);
     if (!player || this.state !== 'playing') {
-      return false;
+      return { accepted: false };
     }
 
     // Update activity tracking (LOCKSTEP-5) - any message = player is alive
@@ -291,7 +326,25 @@ export class GameRoom {
     const tickDiff = tick - this.currentTick;
     if (tickDiff < -this.config.maxTickBehind || tickDiff > this.config.maxTickAhead) {
       console.log(`[LOCKSTEP] Player ${playerId} rejected: tick ${tick} out of range (current: ${this.currentTick})`);
-      return false;
+      return { accepted: false };
+    }
+
+    // Validate input sequences if enabled (2.1.4)
+    const validCommands: PlayerCommand[] = [];
+    const invalidCommands: PlayerCommand[] = [];
+
+    if (this.config.validateInputSequence) {
+      for (const cmd of commands) {
+        if (!this.validateCommandSequence(playerId, cmd)) {
+          invalidCommands.push(cmd);
+          console.log(`[LOCKSTEP] Player ${playerId} command rejected: invalid sequence ${cmd.sequence}`);
+        } else {
+          validCommands.push(cmd);
+        }
+      }
+    } else {
+      // No validation - accept all commands
+      validCommands.push(...commands);
     }
 
     // Get or create tick entry in command buffer
@@ -307,7 +360,7 @@ export class GameRoom {
     }
 
     // Store commands for this player (can be empty array - this is valid)
-    tickData[playerId] = commands;
+    tickData[playerId] = validCommands;
 
     // Track submission
     if (!this.tickSubmissions.has(tick)) {
@@ -323,18 +376,18 @@ export class GameRoom {
     if (!this.pendingCommands.has(targetTick)) {
       this.pendingCommands.set(targetTick, []);
     }
-    this.pendingCommands.get(targetTick)!.push(...commands);
+    this.pendingCommands.get(targetTick)!.push(...validCommands);
 
     // Let external handlers process each command
-    for (const command of commands) {
+    for (const command of validCommands) {
       this.eventEmitter('player-command', playerId, command);
     }
 
     console.log(
-      `[LOCKSTEP] Player ${playerId} submitted ${commands.length} command${commands.length !== 1 ? 's' : ''} for tick ${tick}`
+      `[LOCKSTEP] Player ${playerId} submitted ${validCommands.length} command${validCommands.length !== 1 ? 's' : ''} for tick ${tick}${invalidCommands.length > 0 ? ` (${invalidCommands.length} rejected)` : ''}`
     );
 
-    return true;
+    return { accepted: true, invalidCommands: invalidCommands.length > 0 ? invalidCommands : undefined };
   }
 
   /**
@@ -608,5 +661,94 @@ export class GameRoom {
    */
   getId(): string {
     return this.id;
+  }
+
+  /**
+   * Get the random seed for this match
+   * Clients use this to initialize their deterministic RNG
+   */
+  getRandomSeed(): number {
+    return this.randomSeed;
+  }
+
+  // ============================================================
+  // STATE HASHING (2.1.3): Desync Detection
+  // ============================================================
+
+  /**
+   * Receive state hash from a player for a specific tick
+   * @param playerId - The player sending the hash
+   * @param tick - The tick this hash is for
+   * @param hash - The state hash string
+   */
+  receiveStateHash(playerId: string, tick: number, hash: string): void {
+    // Only process if state hashing is enabled
+    if (!this.config.enableStateHashing) {
+      return;
+    }
+
+    const player = this.players.get(playerId);
+    if (!player || this.state !== 'playing') {
+      return;
+    }
+
+    // Get or create hash map for this tick
+    if (!this.stateHashes.has(tick)) {
+      this.stateHashes.set(tick, new Map());
+    }
+
+    const tickHashes = this.stateHashes.get(tick)!;
+    tickHashes.set(playerId, hash);
+
+    // Check if all connected players have submitted for this tick
+    const connectedPlayers = Array.from(this.players.entries())
+      .filter(([_, p]) => p.connected)
+      .map(([id]) => id);
+
+    const allSubmitted = connectedPlayers.every(id => tickHashes.has(id));
+
+    if (allSubmitted) {
+      this.checkForDesync(tick, tickHashes);
+      // Clean up old hashes
+      this.cleanupOldStateHashes(tick);
+    }
+  }
+
+  /**
+   * Check if there's a desync at a given tick
+   */
+  private checkForDesync(tick: number, hashes: Map<string, string>): void {
+    const hashValues = Array.from(hashes.values());
+    const allMatch = hashValues.every(h => h === hashValues[0]);
+
+    if (!allMatch) {
+      const hashObject: { [playerId: string]: string } = {};
+      hashes.forEach((hash, playerId) => {
+        hashObject[playerId] = hash;
+      });
+
+      console.log(`[DESYNC] Detected at tick ${tick} in match ${this.id}:`, hashObject);
+
+      // Emit desync event to server handlers
+      this.eventEmitter('desync-detected', this.id, tick, hashObject);
+
+      // Broadcast to all clients in the room
+      this.io.to(this.roomId).emit('desync-detected', {
+        tick,
+        hashes: hashObject,
+      });
+    }
+  }
+
+  /**
+   * Clean up state hashes older than the specified tick
+   */
+  private cleanupOldStateHashes(currentTick: number): void {
+    const keepTicks = 10; // Keep last 10 ticks of hashes for debugging
+    for (const [tick] of this.stateHashes) {
+      if (tick < currentTick - keepTicks) {
+        this.stateHashes.delete(tick);
+      }
+    }
   }
 }

@@ -58,6 +58,14 @@ export interface PhalanxConfig {
 
   // === Command History (for reconnection) ===
   commandHistoryTicks: number;
+
+  // === Determinism Features (Phase 2.1) ===
+  /** Enable input sequence validation (default: false for backward compatibility) */
+  validateInputSequence?: boolean;
+  /** Enable state hashing for desync detection (default: false) */
+  enableStateHashing?: boolean;
+  /** Interval in ticks between state hash checks (default: 60) */
+  stateHashInterval?: number;
 }
 
 /**
@@ -68,6 +76,8 @@ export interface PlayerCommand {
   tick: number;
   playerId: string;
   data: unknown;
+  /** Optional sequence number for input validation (monotonically increasing per player) */
+  sequence?: number;
 }
 
 /**
@@ -122,6 +132,8 @@ export interface CountdownEvent {
  */
 export interface GameStartEvent {
   matchId: string;
+  /** Random seed for deterministic RNG (optional for backward compatibility) */
+  randomSeed?: number;
 }
 
 /**
@@ -174,6 +186,22 @@ export interface QueueStatusEvent {
 }
 
 /**
+ * State hash event from client (2.1.3)
+ */
+export interface StateHashEvent {
+  tick: number;
+  hash: string;
+}
+
+/**
+ * Desync detected event (2.1.3)
+ */
+export interface DesyncDetectedEvent {
+  tick: number;
+  hashes: { [playerId: string]: string };
+}
+
+/**
  * Available Phalanx events
  */
 export type PhalanxEventType =
@@ -183,7 +211,8 @@ export type PhalanxEventType =
   | 'player-command'
   | 'player-timeout'
   | 'player-reconnected'
-  | 'player-disconnected';
+  | 'player-disconnected'
+  | 'desync-detected';
 
 /**
  * Event handler types
@@ -196,4 +225,5 @@ export interface PhalanxEventHandlers {
   'player-timeout': (playerId: string, matchId: string) => void;
   'player-reconnected': (playerId: string, matchId: string) => void;
   'player-disconnected': (playerId: string, matchId: string) => void;
+  'desync-detected': (matchId: string, tick: number, hashes: { [playerId: string]: string }) => void;
 }

@@ -195,19 +195,44 @@ export class Phalanx extends EventEmitter {
             continue;
           }
 
-          // Enrich command with playerId and tick
+          // Enrich command with playerId and tick, preserve sequence if present
           const enrichedCommand: PlayerCommand = {
             type: cmd.type,
             data: cmd.data,
             playerId: playerId!,
             tick,
+            ...(cmd.sequence !== undefined && { sequence: cmd.sequence }),
           };
 
           validCommands.push(enrichedCommand);
         }
 
-        const accepted = gameRoom.receivePlayerCommands(playerId, tick, validCommands);
-        socket.emit('submit-commands-ack', { tick, accepted });
+        const result = gameRoom.receivePlayerCommands(playerId, tick, validCommands);
+        socket.emit('submit-commands-ack', {
+          tick,
+          accepted: result.accepted,
+          ...(result.invalidCommands && { rejectedCount: result.invalidCommands.length })
+        });
+      });
+
+      // Handle state-hash for desync detection (2.1.3)
+      socket.on('state-hash', (data: { tick: number; hash: string }) => {
+        if (!playerId) return;
+
+        const { tick, hash } = data;
+
+        // Validate input
+        if (typeof tick !== 'number' || typeof hash !== 'string') {
+          return;
+        }
+
+        const matchId = socket.data.matchId;
+        if (!matchId) return;
+
+        const gameRoom = this.matchmaking!.getMatch(matchId);
+        if (gameRoom) {
+          gameRoom.receiveStateHash(playerId, tick, hash);
+        }
       });
 
       // Note: tick-ack is no longer needed - we use socket.onAny() to track activity

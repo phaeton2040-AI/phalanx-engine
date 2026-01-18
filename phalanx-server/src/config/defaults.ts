@@ -39,4 +39,9 @@ export const DEFAULT_CONFIG: PhalanxConfig = {
 
   // Command History (for reconnection)
   commandHistoryTicks: 200, // 10 seconds at 20 TPS
+
+  // Determinism Features (Phase 2.1) - disabled by default for backward compatibility
+  validateInputSequence: false,
+  enableStateHashing: false,
+  stateHashInterval: 60, // 3 seconds at 20 TPS
 };

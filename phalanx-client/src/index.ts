@@ -20,6 +20,9 @@ export type {
   AfterTickCallback,
 } from './TickSimulation.js';
 
+// Deterministic utilities
+export { DeterministicRandom } from './DeterministicRandom.js';
+
 // All types
 export type {
   // Configuration

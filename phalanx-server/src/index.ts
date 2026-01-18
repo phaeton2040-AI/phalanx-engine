@@ -6,11 +6,17 @@
 // Main class
 export { Phalanx } from './Phalanx.js';
 
+// Utilities
+export { DeterministicRandom } from './utils/index.js';
+export { Fixed, FixedMath, FixedVector2, FixedPoint } from './utils/index.js';
+export type { FPVector2 } from './utils/index.js';
+
 // Types for TypeScript users
 export type {
   PhalanxConfig,
   PlayerCommand,
   MatchFoundEvent,
+  GameStartEvent,
   TickSyncEvent,
   CommandsBatchEvent,
   TickCommands,
@@ -23,6 +29,8 @@ export type {
   CorsConfig,
   QueuedPlayer,
   QueueStatusEvent,
+  StateHashEvent,
+  DesyncDetectedEvent,
   PhalanxEventType,
   PhalanxEventHandlers,
 } from './types/index.js';

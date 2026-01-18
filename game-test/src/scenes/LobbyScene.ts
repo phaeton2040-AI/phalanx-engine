@@ -4,6 +4,7 @@
 
 import { PhalanxClient, MatchFoundEvent, CountdownEvent } from 'phalanx-client';
 import { SERVER_URL } from '../game/constants';
+import { GameRandom } from '../game/GameRandom';
 
 export class LobbyScene {
   private client: PhalanxClient | null = null;
@@ -117,8 +118,20 @@ export class LobbyScene {
       this.setStatus(`Game starting in ${event.seconds}...`);
     });
 
-    // Wait for game start
-    await this.client.waitForGameStart();
+    // Wait for game start and initialize deterministic RNG
+    const gameStartEvent = await this.client.waitForGameStart();
+
+    // Initialize deterministic RNG with server-provided seed
+    if (gameStartEvent.randomSeed !== undefined) {
+      GameRandom.initialize(gameStartEvent.randomSeed);
+    } else {
+      // Fallback for backward compatibility - use match ID hash
+      console.warn('[LobbyScene] No randomSeed in game-start event, using fallback');
+      const fallbackSeed = this.matchData!.matchId
+        .split('')
+        .reduce((acc, char) => ((acc << 5) - acc) + char.charCodeAt(0), 0) >>> 0;
+      GameRandom.initialize(fallbackSeed);
+    }
 
     // Transition to game scene
     this.transitionToGame();
