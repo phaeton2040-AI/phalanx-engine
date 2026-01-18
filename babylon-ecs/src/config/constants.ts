@@ -55,10 +55,10 @@ export const resourceConfig = {
     baseGenerationRate: 5,
 
     // Aggression bonus multiplier when on enemy territory
-    aggressionBonusMultiplier: 1.5,
+    aggressionBonusMultiplier: 2.0,
 
     // Resource bonus for destroying enemy tower
-    towerDestructionBonus: 100,
+    towerDestructionBonus: 300,
 };
 
 /**

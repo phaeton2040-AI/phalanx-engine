@@ -19,11 +19,12 @@ import { VictorySystem } from "../systems/VictorySystem";
 import { WaveSystem } from "../systems/WaveSystem";
 import { CameraController } from "../systems/CameraController";
 import { InterpolationSystem } from "../systems/InterpolationSystem";
+import { HealthBarSystem } from "../systems/HealthBarSystem";
 import { resetEntityIdCounter } from "../entities/Entity";
 import { TeamTag } from "../enums/TeamTag";
 import { arenaParams } from "../config/constants";
 import { GameEvents } from "../events";
-import type { MoveRequestedEvent, GameOverEvent, AggressionBonusActivatedEvent, AggressionBonusDeactivatedEvent, WaveCountdownEvent, WaveStartedEvent, WaveDeploymentEvent } from "../events";
+import type { MoveRequestedEvent, GameOverEvent, AggressionBonusActivatedEvent, AggressionBonusDeactivatedEvent, WaveCountdownEvent, WaveStartedEvent, WaveDeploymentEvent, FormationModeEnteredEvent, FormationPlacementFailedEvent } from "../events";
 import type { PhalanxClient, MatchFoundEvent } from "phalanx-client";
 import type { NetworkMoveCommand, NetworkPlaceUnitCommand, NetworkMoveGridUnitCommand } from "./NetworkCommands";
 
@@ -62,6 +63,7 @@ export class Game {
     private victorySystem: VictorySystem;
     private waveSystem: WaveSystem;
     private interpolationSystem: InterpolationSystem;
+    private healthBarSystem!: HealthBarSystem;
     private cameraController!: CameraController;
     // @ts-ignore - InputManager registers event listeners in constructor
     private inputManager: InputManager;
@@ -286,6 +288,23 @@ export class Game {
             this.uiManager.updateFormationInfo();
         });
 
+        // Formation mode changes (UI button highlighting)
+        this.eventBus.on<FormationModeEnteredEvent>(GameEvents.FORMATION_MODE_ENTERED, (event) => {
+            // Only update UI for local player
+            if (event.playerId === this.matchData.playerId) {
+                this.uiManager.setActiveUnitButton(event.unitType);
+            }
+        });
+
+        // Formation placement failed (show notification)
+        this.eventBus.on<FormationPlacementFailedEvent>(GameEvents.FORMATION_PLACEMENT_FAILED, (event) => {
+            if (event.playerId === this.matchData.playerId) {
+                if (event.reason === 'insufficient_resources') {
+                    this.uiManager.showNotification('Not enough resources!', 'warning');
+                }
+            }
+        });
+
         // Wave events (UI updates)
         this.eventBus.on<WaveCountdownEvent>(GameEvents.WAVE_COUNTDOWN, (event) => {
             this.uiManager.updateWaveTimer(
@@ -373,6 +392,16 @@ export class Game {
         // Initialize RTS-style camera controller for the local player
         this.cameraController = new CameraController(this.scene, this.localTeam);
 
+        // Initialize health bar system (uses GUI with automatic billboarding)
+        this.healthBarSystem = new HealthBarSystem(
+            this.scene,
+            this.entityManager,
+            this.eventBus
+        );
+
+        // Wire up health bar system to entity factory
+        this.entityFactory.setHealthBarSystem(this.healthBarSystem);
+
         this.sceneManager.setupLighting();
         this.sceneManager.createGround();
 
@@ -451,6 +480,9 @@ export class Game {
 
         // Start the wave system (Wave 0 - preparation phase)
         this.waveSystem.start(0);
+
+        // Set default placement mode for local player (sphere selected by default)
+        this.formationGridSystem.enterPlacementMode(this.matchData.playerId, 'sphere');
 
         // Initial UI update
         setTimeout(() => {
@@ -549,11 +581,7 @@ export class Game {
      * Handle unit button click
      */
     private handleUnitButtonClick(unitType: 'sphere' | 'prisma' | 'lance'): void {
-        if (!this.resourceSystem.canAfford(this.matchData.playerId, unitType)) {
-            this.uiManager.showNotification('Not enough resources!', 'warning');
-            return;
-        }
-
+        // Allow switching to any unit type - affordability is checked when placing
         this.uiManager.setActiveUnitButton(unitType);
         this.formationGridSystem.enterPlacementMode(this.matchData.playerId, unitType);
     }
@@ -578,6 +606,9 @@ export class Game {
         // Interpolate visual positions for smooth movement between network ticks
         const alpha = this.lockstepManager.getInterpolationAlpha();
         this.interpolationSystem.interpolate(alpha);
+
+        // Update health bars (billboarding and position updates)
+        this.healthBarSystem.update();
     }
 
     /**
@@ -590,6 +621,7 @@ export class Game {
             this.entityFactory.removeOwnership(entity.id);
             this.physicsSystem.unregisterBody(entity.id);
             this.interpolationSystem.unregisterEntity(entity.id);
+            this.healthBarSystem.unregisterEntity(entity.id);
 
             if (typeof (entity as any).canBeSelected === 'function') {
                 this.selectionSystem.unregisterSelectable(entity as any);
@@ -629,6 +661,7 @@ export class Game {
         this.victorySystem.dispose();
         this.waveSystem.dispose();
         this.interpolationSystem.dispose();
+        this.healthBarSystem.dispose();
 
         // Clear managers and entity data
         this.eventBus.clearAll();

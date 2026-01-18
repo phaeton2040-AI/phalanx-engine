@@ -277,6 +277,12 @@ export interface FormationUnitPlacedEvent extends GameEvent {
     gridZ: number;
 }
 
+export interface FormationPlacementFailedEvent extends GameEvent {
+    playerId: string;
+    unitType: FormationUnitType;
+    reason: 'insufficient_resources' | 'invalid_position';
+}
+
 export interface FormationUnitRemovedEvent extends GameEvent {
     playerId: string;
     gridX: number;

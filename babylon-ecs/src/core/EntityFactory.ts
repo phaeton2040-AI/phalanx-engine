@@ -4,6 +4,7 @@ import type { EntityManager } from "./EntityManager";
 import type { SelectionSystem } from "../systems/SelectionSystem";
 import type { PhysicsSystem } from "../systems/PhysicsSystem";
 import type { InterpolationSystem } from "../systems/InterpolationSystem";
+import type { HealthBarSystem } from "../systems/HealthBarSystem";
 import type { Unit, UnitConfig } from "../entities/Unit";
 import type { PrismaUnit, PrismaUnitConfig } from "../entities/PrismaUnit";
 import type { LanceUnit, LanceUnitConfig } from "../entities/LanceUnit";
@@ -26,6 +27,7 @@ export class EntityFactory {
     private selectionSystem: SelectionSystem;
     private physicsSystem: PhysicsSystem;
     private interpolationSystem: InterpolationSystem | null = null;
+    private healthBarSystem: HealthBarSystem | null = null;
 
     // Map entity IDs to player info
     private entityOwnership: Map<number, string> = new Map();
@@ -51,6 +53,14 @@ export class EntityFactory {
     }
 
     /**
+     * Set the health bar system for displaying health bars above entities
+     * Called after construction to avoid circular dependency
+     */
+    public setHealthBarSystem(healthBarSystem: HealthBarSystem): void {
+        this.healthBarSystem = healthBarSystem;
+    }
+
+    /**
      * Create a unit and register it with all necessary systems
      */
     public createUnit(config: UnitConfig, position: Vector3): Unit {
@@ -71,6 +81,9 @@ export class EntityFactory {
 
         // Register with InterpolationSystem for smooth visual movement
         this.interpolationSystem?.registerEntity(unit.id, false);
+
+        // Register with HealthBarSystem for health visualization
+        this.healthBarSystem?.registerEntity(unit, 2.5);
 
         return unit;
     }
@@ -97,6 +110,9 @@ export class EntityFactory {
         // Register with InterpolationSystem for smooth visual movement
         this.interpolationSystem?.registerEntity(unit.id, false);
 
+        // Register with HealthBarSystem for health visualization
+        this.healthBarSystem?.registerEntity(unit, 3.5);
+
         return unit;
     }
 
@@ -121,6 +137,9 @@ export class EntityFactory {
 
         // Register with InterpolationSystem for smooth visual movement
         this.interpolationSystem?.registerEntity(unit.id, false);
+
+        // Register with HealthBarSystem for health visualization
+        this.healthBarSystem?.registerEntity(unit, 3.0);
 
         return unit;
     }
@@ -147,6 +166,9 @@ export class EntityFactory {
         // Register with InterpolationSystem as static (doesn't need smooth movement)
         this.interpolationSystem?.registerEntity(tower.id, true);
 
+        // Register with HealthBarSystem for health visualization
+        this.healthBarSystem?.registerEntity(tower, 5.0);
+
         return tower;
     }
 
@@ -171,6 +193,9 @@ export class EntityFactory {
 
         // Register with InterpolationSystem as static (doesn't need smooth movement)
         this.interpolationSystem?.registerEntity(base.id, true);
+
+        // Register with HealthBarSystem for health visualization
+        this.healthBarSystem?.registerEntity(base, 5.5);
 
         return base;
     }

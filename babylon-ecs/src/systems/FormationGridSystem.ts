@@ -15,6 +15,7 @@ import type {
     FormationUpdateModeEnteredEvent,
     FormationUpdateModeExitedEvent,
     FormationUnitMovedEvent,
+    FormationPlacementFailedEvent,
 } from "../events";
 
 /**
@@ -78,6 +79,8 @@ export class FormationGridSystem {
     private grids: Map<string, FormationGrid> = new Map();
     private activePlacementMode: { playerId: string; unitType: FormationUnitType } | null = null;
     private activeUpdateMode: { playerId: string; gridX: number; gridZ: number; unitType: FormationUnitType } | null = null;
+    // Store previous placement mode to restore after exiting update mode
+    private savedPlacementMode: { playerId: string; unitType: FormationUnitType } | null = null;
     private gridVisuals: Map<string, Mesh[]> = new Map();
     private previewMesh: Mesh | null = null;
 
@@ -344,8 +347,7 @@ export class FormationGridSystem {
         // Check if clicking on an existing unit - enter update mode instead
         const cell = grid.cells[gridCoords.x]?.[gridCoords.z];
         if (cell?.occupied && cell.unitType) {
-            // Exit placement mode and enter update mode
-            this.exitPlacementMode(playerId);
+            // Enter update mode (will save current placement mode for restoration)
             const origin = this.findUnitOrigin(playerId, gridCoords.x, gridCoords.z);
             if (origin) {
                 this.enterUpdateMode(playerId, origin.x, origin.z, cell.unitType);
@@ -355,8 +357,13 @@ export class FormationGridSystem {
 
         // Check if player can afford this unit
         if (this.canAffordCallback && !this.canAffordCallback(playerId, unitType)) {
-            // Can't afford - exit placement mode
-            this.exitPlacementMode(playerId);
+            // Can't afford - emit failure event and stay in placement mode
+            this.eventBus.emit<FormationPlacementFailedEvent>(GameEvents.FORMATION_PLACEMENT_FAILED, {
+                ...createEvent(),
+                playerId,
+                unitType,
+                reason: 'insufficient_resources',
+            });
             return;
         }
 
@@ -604,6 +611,7 @@ export class FormationGridSystem {
         this.createGridVisualization(playerId, grid);
         this.createGridGroundPlane(playerId, grid);
 
+
         console.log(`[FormationGridSystem] Initialized grid for player ${playerId}, team ${team}`);
     }
 
@@ -695,8 +703,10 @@ export class FormationGridSystem {
      * Enter placement mode for a unit type
      */
     public enterPlacementMode(playerId: string, unitType: FormationUnitType): void {
-        // Exit update mode if active
+        // Exit update mode if active (don't restore saved mode since we're explicitly setting a new one)
         if (this.activeUpdateMode?.playerId === playerId) {
+            // Clear saved mode first to prevent restoration in exitUpdateMode
+            this.savedPlacementMode = null;
             this.exitUpdateMode(playerId);
         }
 
@@ -731,8 +741,9 @@ export class FormationGridSystem {
      * Enter update mode for repositioning an existing unit
      */
     public enterUpdateMode(playerId: string, gridX: number, gridZ: number, unitType: FormationUnitType): void {
-        // Exit placement mode if active
+        // Save placement mode to restore after exiting update mode
         if (this.activePlacementMode?.playerId === playerId) {
+            this.savedPlacementMode = { ...this.activePlacementMode };
             this.activePlacementMode = null;
             this.clearPreviewMesh();
         }
@@ -766,6 +777,12 @@ export class FormationGridSystem {
                 ...createEvent(),
                 playerId,
             });
+
+            // Restore previous placement mode if it was saved for this player
+            if (this.savedPlacementMode?.playerId === playerId) {
+                this.enterPlacementMode(playerId, this.savedPlacementMode.unitType);
+                this.savedPlacementMode = null;
+            }
         }
     }
 
@@ -889,8 +906,7 @@ export class FormationGridSystem {
 
     /**
      * Find the origin cell (top-left corner) of a unit at a given position
-     * For sphere units, returns the same position
-     * For prisma units, finds the top-left corner of the 2x2 area
+     * Delegates to unit-type-specific methods for multi-cell units
      */
     public findUnitOrigin(playerId: string, gridX: number, gridZ: number): { x: number; z: number } | null {
         const grid = this.grids.get(playerId);
@@ -901,11 +917,63 @@ export class FormationGridSystem {
 
         const unitType = cell.unitType;
 
-        if (unitType === 'sphere') {
-            return { x: gridX, z: gridZ };
+        switch (unitType) {
+            case 'sphere':
+                return this.findSphereOrigin(gridX, gridZ);
+            case 'lance':
+                return this.findLanceOrigin(grid, gridX, gridZ);
+            case 'prisma':
+                return this.findPrismaOrigin(grid, gridX, gridZ);
+            default:
+                return null;
+        }
+    }
+
+    /**
+     * Find origin for sphere unit (1x1) - simply returns the same position
+     */
+    private findSphereOrigin(gridX: number, gridZ: number): { x: number; z: number } {
+        return { x: gridX, z: gridZ };
+    }
+
+    /**
+     * Find origin for lance unit (2x1) - finds the left cell of the 2x1 area
+     */
+    private findLanceOrigin(grid: FormationGrid, gridX: number, gridZ: number): { x: number; z: number } | null {
+        // Lance is 2x1 (2 cells wide along X, 1 cell deep along Z)
+        // Check if this cell or the one to the left is the origin
+        for (let dx = 0; dx >= -1; dx--) {
+            const checkX = gridX + dx;
+            if (checkX >= 0) {
+                const checkCell = grid.cells[checkX]?.[gridZ];
+                if (checkCell?.unitType === 'lance') {
+                    // Verify this is the origin by checking if both cells match
+                    const isOrigin =
+                        checkX + 1 < grid.gridWidth &&
+                        grid.cells[checkX][gridZ]?.unitType === 'lance' &&
+                        grid.cells[checkX + 1][gridZ]?.unitType === 'lance';
+
+                    if (isOrigin) {
+                        // Check if this origin's placedUnit matches
+                        const hasPlacedUnit = grid.placedUnits.some(
+                            u => u.gridX === checkX && u.gridZ === gridZ && u.unitType === 'lance'
+                        );
+                        if (hasPlacedUnit) {
+                            return { x: checkX, z: gridZ };
+                        }
+                    }
+                }
+            }
         }
 
-        // For prisma, find the top-left corner
+        // Fallback: find the origin from placedUnits
+        return this.findOriginFromPlacedUnits(grid, gridX, gridZ, 'lance');
+    }
+
+    /**
+     * Find origin for prisma unit (2x2) - finds the top-left corner of the 2x2 area
+     */
+    private findPrismaOrigin(grid: FormationGrid, gridX: number, gridZ: number): { x: number; z: number } | null {
         // Check all four possible corners and find the one that's actually the origin
         for (let dx = 0; dx >= -1; dx--) {
             for (let dz = 0; dz >= -1; dz--) {
@@ -938,11 +1006,24 @@ export class FormationGridSystem {
         }
 
         // Fallback: find the origin from placedUnits
+        return this.findOriginFromPlacedUnits(grid, gridX, gridZ, 'prisma');
+    }
+
+    /**
+     * Fallback method to find unit origin from placedUnits array
+     */
+    private findOriginFromPlacedUnits(
+        grid: FormationGrid,
+        gridX: number,
+        gridZ: number,
+        unitType: FormationUnitType
+    ): { x: number; z: number } | null {
+        const { width, depth } = this.getUnitGridSize(unitType);
+
         for (const unit of grid.placedUnits) {
-            if (unit.unitType === 'prisma') {
-                const size = 2;
-                if (gridX >= unit.gridX && gridX < unit.gridX + size &&
-                    gridZ >= unit.gridZ && gridZ < unit.gridZ + size) {
+            if (unit.unitType === unitType) {
+                if (gridX >= unit.gridX && gridX < unit.gridX + width &&
+                    gridZ >= unit.gridZ && gridZ < unit.gridZ + depth) {
                     return { x: unit.gridX, z: unit.gridZ };
                 }
             }

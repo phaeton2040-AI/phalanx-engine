@@ -63,6 +63,7 @@ export const GameEvents = {
     FORMATION_MODE_ENTERED: 'formation:entered',
     FORMATION_MODE_EXITED: 'formation:exited',
     FORMATION_PLACEMENT_REQUESTED: 'formation:placementRequested',
+    FORMATION_PLACEMENT_FAILED: 'formation:placementFailed',
     FORMATION_UNIT_PLACED: 'formation:unitPlaced',
     FORMATION_UNIT_REMOVED: 'formation:unitRemoved',
     FORMATION_COMMITTED: 'formation:committed',
