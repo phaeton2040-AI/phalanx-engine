@@ -1,6 +1,6 @@
 import { EventEmitter } from 'events';
 import { Server as SocketIOServer, Socket } from 'socket.io';
-import { createServer, Server as HttpServer } from 'http';
+import { createServer, Server as HttpServer, IncomingMessage, ServerResponse } from 'http';
 import type {
   PhalanxConfig,
   MatchInfo,
@@ -36,8 +36,16 @@ export class Phalanx extends EventEmitter {
       throw new Error('Phalanx server is already running');
     }
 
-    // Create HTTP server
-    this.httpServer = createServer();
+    // Create HTTP server with health check endpoint
+    this.httpServer = createServer((req: IncomingMessage, res: ServerResponse) => {
+      if (req.url === '/' || req.url === '/health') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ status: 'ok', timestamp: new Date().toISOString() }));
+      } else {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Not found' }));
+      }
+    });
 
     // Create Socket.IO server
     this.io = new SocketIOServer(this.httpServer, {
