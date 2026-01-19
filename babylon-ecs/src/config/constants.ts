@@ -106,7 +106,7 @@ export const unitConfig = {
  */
 export const waveConfig = {
     // Duration of each wave in seconds
-    waveDuration: 40 ,
+    waveDuration: 45 ,
 
     // Wave 0 duration - initial preparation time before first deployment
     // Set to same as waveDuration by default, but can be customized
