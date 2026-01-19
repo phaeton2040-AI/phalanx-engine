@@ -392,6 +392,9 @@ export class Game {
         // Initialize RTS-style camera controller for the local player
         this.cameraController = new CameraController(this.scene, this.localTeam);
 
+        // Auto-fit camera to show formation grid at game start
+        this.cameraController.focusOnFormationGrid();
+
         // Initialize health bar system (uses GUI with automatic billboarding)
         this.healthBarSystem = new HealthBarSystem(
             this.scene,
@@ -575,6 +578,30 @@ export class Game {
             () => this.handleUnitButtonClick('prisma'),
             () => this.handleUnitButtonClick('lance')
         );
+
+        // Setup touch drag callbacks for mobile unit placement
+        this.uiManager.setDragCallbacks({
+            onDragStart: (unitType) => {
+                // Disable camera movement during drag
+                this.cameraController.enableDragMode();
+                // Start the touch drag in formation system
+                this.formationGridSystem.startTouchDrag(this.matchData.playerId, unitType);
+            },
+            onDragMove: (x, y) => {
+                // Update preview position
+                this.formationGridSystem.updateTouchDrag(x, y);
+            },
+            onDragEnd: (x, y) => {
+                // Attempt to place unit and re-enable camera
+                this.formationGridSystem.endTouchDrag(x, y);
+                this.cameraController.disableDragMode();
+            },
+            onDragCancel: () => {
+                // Cancel drag and re-enable camera
+                this.formationGridSystem.cancelTouchDrag();
+                this.cameraController.disableDragMode();
+            },
+        });
     }
 
     /**

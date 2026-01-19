@@ -58,7 +58,7 @@ export class Unit extends Entity {
         this.addComponent(new TeamComponent(config.team ?? TeamTag.Team1));
         this.addComponent(new HealthComponent(config.health ?? 50));
         this.addComponent(new AttackComponent({
-            range: config.attackRange ?? 8,
+            range: config.attackRange ?? 16,
             cooldown: config.attackCooldown ?? 1.0,
             damage: config.attackDamage ?? 10,
         }));

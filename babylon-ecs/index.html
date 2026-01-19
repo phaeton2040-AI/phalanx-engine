@@ -281,7 +281,8 @@
       /* Game UI Overlay */
       #game-ui {
         position: absolute;
-        top: max(10px, env(safe-area-inset-top));
+        /* Add extra padding (10px) on top of the safe area inset for better spacing on iPhones */
+        top: calc(max(10px, env(safe-area-inset-top)) + 10px);
         left: max(10px, env(safe-area-inset-left));
         right: max(10px, env(safe-area-inset-right));
         display: flex;
@@ -341,9 +342,9 @@
       /* Mobile optimizations for game UI */
       @media (max-width: 768px) {
         #game-ui {
-          top: 8px;
-          left: 8px;
-          right: 8px;
+          top: calc(max(8px, env(safe-area-inset-top)) + 8px);
+          left: max(8px, env(safe-area-inset-left));
+          right: max(8px, env(safe-area-inset-right));
         }
 
         #player-info {
@@ -373,9 +374,9 @@
 
       @media (max-width: 480px) {
         #game-ui {
-          top: 6px;
-          left: 6px;
-          right: 6px;
+          top: calc(max(6px, env(safe-area-inset-top)) + 6px);
+          left: max(6px, env(safe-area-inset-left));
+          right: max(6px, env(safe-area-inset-right));
         }
 
         #player-info {
@@ -398,7 +399,8 @@
 
       #notification {
         position: absolute;
-        bottom: 20px;
+        /* Position above unit panel */
+        bottom: calc(max(50px, calc(env(safe-area-inset-bottom) + 20px)) + 120px);
         left: 50%;
         transform: translateX(-50%);
         background: rgba(0, 0, 0, 0.8);
@@ -477,7 +479,8 @@
         #notification {
           font-size: 0.8rem;
           padding: 8px 14px;
-          bottom: 12px;
+          /* Keep above unit panel */
+          bottom: calc(max(50px, calc(env(safe-area-inset-bottom) + 20px)) + 110px);
           border-radius: 6px;
         }
 
@@ -522,6 +525,8 @@
         #notification {
           font-size: 0.75rem;
           padding: 6px 12px;
+          /* Keep above unit panel */
+          bottom: calc(max(50px, calc(env(safe-area-inset-bottom) + 20px)) + 100px);
         }
 
         #resource-icon {
@@ -711,10 +716,11 @@
         }
       }
 
-      /* Territory Indicator */
+      /* Territory Indicator - Positioned below wave counter */
       #territory-indicator {
         position: absolute;
-        top: 55px;
+        /* Position below wave counter: wave counter base + extra spacing */
+        top: calc(max(10px, env(safe-area-inset-top)) + 10px + 60px);
         left: 50%;
         transform: translateX(-50%);
         background: rgba(0, 0, 0, 0.7);
@@ -735,7 +741,8 @@
       /* Wave Timer Display */
       #wave-container {
         position: absolute;
-        top: 10px;
+        /* Add extra padding on top of safe area inset for iPhone notch/Dynamic Island */
+        top: calc(max(10px, env(safe-area-inset-top)) + 10px);
         left: 50%;
         transform: translateX(-50%);
         background: rgba(0, 0, 0, 0.85);
@@ -789,14 +796,15 @@
       /* Mobile optimizations for wave and territory */
       @media (max-width: 768px) {
         #territory-indicator {
-          top: 45px;
+          /* Position below wave counter */
+          top: calc(max(6px, env(safe-area-inset-top)) + 6px + 50px);
           font-size: 0.65rem;
           padding: 3px 10px;
           border-radius: 12px;
         }
 
         #wave-container {
-          top: 6px;
+          top: calc(max(6px, env(safe-area-inset-top)) + 6px);
           padding: 5px 12px;
           min-width: 80px;
           border-radius: 8px;
@@ -818,13 +826,14 @@
 
       @media (max-width: 480px) {
         #territory-indicator {
-          top: 38px;
+          /* Position below wave counter */
+          top: calc(max(4px, env(safe-area-inset-top)) + 4px + 45px);
           font-size: 0.6rem;
           padding: 2px 8px;
         }
 
         #wave-container {
-          top: 4px;
+          top: calc(max(4px, env(safe-area-inset-top)) + 4px);
           padding: 4px 10px;
           min-width: 70px;
           border-radius: 6px;
@@ -1000,7 +1009,7 @@
 
         /* Wave timer compact for landscape */
         #wave-container {
-          top: max(4px, env(safe-area-inset-top));
+          top: calc(max(4px, env(safe-area-inset-top)) + 4px);
           padding: 3px 10px;
           min-width: 65px;
           flex-direction: row;
@@ -1017,13 +1026,15 @@
         }
 
         #territory-indicator {
-          top: calc(max(4px, env(safe-area-inset-top)) + 26px);
+          /* Position below wave counter in landscape */
+          top: calc(max(4px, env(safe-area-inset-top)) + 4px + 35px);
           font-size: 0.55rem;
           padding: 2px 8px;
         }
 
         #notification {
-          bottom: max(8px, env(safe-area-inset-bottom));
+          /* Keep above unit panel in landscape */
+          bottom: calc(max(50px, calc(env(safe-area-inset-bottom) + 20px)) + 80px);
           font-size: 0.7rem;
           padding: 6px 12px;
         }
@@ -1082,7 +1093,7 @@
         }
 
         #wave-container {
-          top: max(3px, env(safe-area-inset-top));
+          top: calc(max(3px, env(safe-area-inset-top)) + 3px);
           padding: 2px 8px;
           min-width: 55px;
         }
@@ -1096,7 +1107,8 @@
         }
 
         #territory-indicator {
-          top: calc(max(3px, env(safe-area-inset-top)) + 22px);
+          /* Position below wave counter in very short landscape */
+          top: calc(max(3px, env(safe-area-inset-top)) + 3px + 30px);
           font-size: 0.5rem;
         }
 
