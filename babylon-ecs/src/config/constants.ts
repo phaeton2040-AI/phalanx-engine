@@ -2,8 +2,8 @@
  * Game constants and server configuration
  */
 
-// Server settings
-export const SERVER_URL = 'http://localhost:3000';
+// Server settings - uses environment variable with fallback to localhost
+export const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3000';
 
 /**
  * Network tick configuration for deterministic lockstep simulation
