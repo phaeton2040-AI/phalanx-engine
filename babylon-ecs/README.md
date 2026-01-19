@@ -39,6 +39,20 @@ pnpm dev
 
 The game will be available at `http://localhost:5173` (default Vite port).
 
+#### Access from Mobile Devices
+
+The dev server is configured to be accessible from your local network. After running `pnpm dev`, you'll see output like:
+
+```
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: http://192.168.1.100:5173/
+```
+
+Use the **Network** URL to access the game from your mobile device. Make sure:
+1. Your mobile device is on the same WiFi network as your development machine
+2. Your firewall allows incoming connections on port 5173
+3. You use the IP address shown in the terminal output
+
 ### Environment Configuration
 
 The game server URL is configured via environment variables:
