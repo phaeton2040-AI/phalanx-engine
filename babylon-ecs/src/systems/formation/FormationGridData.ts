@@ -27,8 +27,8 @@ export class FormationGridData {
         const gridConfig = arenaParams.formationGrid;
         const teamConfig = team === TeamTag.Team1 ? arenaParams.teamA : arenaParams.teamB;
 
-        const gridWidth = 5;  // 5 cells wide
-        const gridHeight = 10; // 10 cells tall
+        const gridWidth = 10;  // 10 cells wide
+        const gridHeight = 20; // 20 cells tall
         const cellSize = gridConfig.gridSpacing;
 
         // Initialize cells

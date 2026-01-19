@@ -27,17 +27,17 @@ export const networkConfig = {
  * Camera configuration for RTS-style top-down camera
  */
 export const cameraConfig = {
-    // Camera height above ground (not too far, good for RTS view)
-    height: 60,
+    // Camera height above ground (increased for larger arena)
+    height: 90,
 
     // How far ahead of camera position to look (creates the angled view)
-    lookAheadOffset: 25,
+    lookAheadOffset: 50,
 
-    // Camera movement speed (units per second)
-    moveSpeed: 40,
+    // Camera movement speed (units per second, increased for larger arena)
+    moveSpeed: 80,
 
     // Padding from arena edges (prevents camera going too far out)
-    boundsPadding: 10,
+    boundsPadding: 20,
 };
 
 // Game settings
@@ -52,7 +52,7 @@ export const resourceConfig = {
     initialResources: 200,
 
     // Base resource generation rate (per second)
-    baseGenerationRate: 5,
+    baseGenerationRate: 20,
 
     // Aggression bonus multiplier when on enemy territory
     aggressionBonusMultiplier: 2.0,
@@ -99,7 +99,7 @@ export const unitConfig = {
  */
 export const waveConfig = {
     // Duration of each wave in seconds
-    waveDuration: 30,
+    waveDuration: 40 ,
 
     // Wave 0 duration - initial preparation time before first deployment
     // Set to same as waveDuration by default, but can be customized
@@ -111,54 +111,66 @@ export const waveConfig = {
 
 /**
  * Arena parameters for the game map
- * Ground: 168w x 72h units (40% larger in length than 120)
+ *
+ * Calculations:
+ * - Unit move speed: 8 units/second
+ * - Arena length traversable in 45 seconds (1.5 waves): 8 * 45 = 360 units combat zone
+ * - Formation grid: 10 cells wide x 20 cells tall = 40w x 80h units
+ * - Total ground width: combat zone (360) + grids (40*2) + margins = ~480 units
+ *
  * Split vertically at x=0
  */
 export const arenaParams = {
-    // Ground dimensions (40% longer)
+    // Ground dimensions
+    // Width: 360 (combat zone) + 40*2 (grids) + 20*2 (margins) = 480
+    // Height: 80 (grid height) + margins
     ground: {
-        width: 168,
-        height: 72,
+        width: 480,
+        height: 100,
     },
 
     // Formation grid dimensions (spawn area)
-    // 5 cells wide x 10 cells tall (rotated 90 degrees)
+    // 10 cells wide x 20 cells tall
     formationGrid: {
-        width: 20,   // 5 cells * 4 spacing
-        height: 40,  // 10 cells * 4 spacing
+        width: 40,   // 10 cells * 4 spacing
+        height: 80,  // 20 cells * 4 spacing
         gridSpacing: 4, // Space between grid lines
     },
 
     // Team A (Left side, x < 0)
-    // Grid center at x=-74, width 20, so grid spans x=-84 to x=-64
+    // Grid width 40, centered at x=-220 means grid spans x=-240 to x=-200
+    // Spawn area at x=-180, combat zone spans -180 to +180 = 360 units
     teamA: {
-        formationGridCenter: { x: -74, z: 0 },  // Grid spans -84 to -64
-        base: { x: -61, z: 0 },                  // Right next to grid (grid inner edge is at -64)
+        formationGridCenter: { x: -220, z: 0 },  // Grid spans -240 to -200
+        base: { x: -195, z: 0 },                  // Right next to grid (grid inner edge is at -200)
         // Spawn area is in front of the base (towards enemy)
-        spawnArea: { x: -54, z: 0 },             // Units spawn here and move towards x=0
+        spawnArea: { x: -180, z: 0 },             // Units spawn here and move towards x=0
+        // Towers distributed evenly across combat zone (-180 to 0)
+        // Divide -180 to 0 into 3 equal parts: -120, -60
         towers: [
-            { x: -36, z: 0 },   // First tower - evenly distributed along X
-            { x: -18, z: 0 },   // Second tower - evenly distributed along X
+            { x: -120, z: 0 },   // First tower - evenly distributed
+            { x: -60, z: 0 },    // Second tower - evenly distributed
         ],
     },
 
     // Team B (Right side, x > 0) - Mirror of Team A
-    // Grid center at x=74, width 20, so grid spans x=64 to x=84
+    // Grid width 40, centered at x=220 means grid spans x=200 to x=240
     teamB: {
-        formationGridCenter: { x: 74, z: 0 },   // Grid spans 64 to 84
-        base: { x: 61, z: 0 },                   // Right next to grid (grid inner edge is at 64)
+        formationGridCenter: { x: 220, z: 0 },   // Grid spans 200 to 240
+        base: { x: 195, z: 0 },                   // Right next to grid (grid inner edge is at 200)
         // Spawn area is in front of the base (towards enemy)
-        spawnArea: { x: 54, z: 0 },              // Units spawn here and move towards x=0
+        spawnArea: { x: 180, z: 0 },              // Units spawn here and move towards x=0
+        // Towers distributed evenly across combat zone (0 to 180)
         towers: [
-            { x: 36, z: 0 },    // First tower - evenly distributed along X
-            { x: 18, z: 0 },    // Second tower - evenly distributed along X
+            { x: 120, z: 0 },    // First tower - evenly distributed
+            { x: 60, z: 0 },     // Second tower - evenly distributed
         ],
     },
 
     // Walls
     walls: {
-        top: { z: 36 },
-        bottom: { z: -36 },
+        top: { z: 50 },
+        bottom: { z: -50 },
         thickness: 1,
         height: 2,
     },

@@ -93,7 +93,7 @@ export class Tower extends Entity {
         this.addComponent(new HealthComponent(config.health ?? 300));
 
         const attackComponent = new AttackComponent({
-            range: config.attackRange ?? 18,
+            range: config.attackRange ?? 32,
             cooldown: config.attackCooldown ?? 0.2,
             damage: config.attackDamage ?? 15,
         });

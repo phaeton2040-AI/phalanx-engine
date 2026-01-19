@@ -57,7 +57,7 @@ export class Base extends Entity {
         this.addComponent(new HealthComponent(config.health ?? 600));
 
         const attackComponent = new AttackComponent({
-            range: config.attackRange ?? 20,
+            range: config.attackRange ?? 36,
             cooldown: config.attackCooldown ?? 0.2,
             damage: config.attackDamage ?? 30,
         });
