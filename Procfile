@@ -1,1 +1,1 @@
-web: corepack enable && pnpm install --frozen-lockfile && node game-test-server/dist/main.js
+web: corepack enable && pnpm install --frozen-lockfile --force && node game-test-server/dist/main.js
