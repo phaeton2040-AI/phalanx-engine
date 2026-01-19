@@ -68,7 +68,7 @@ export class LanceUnit extends Entity {
         this.addComponent(new TeamComponent(team));
         this.addComponent(new HealthComponent(config.health ?? 100)); // Between sphere (50) and prisma (150)
         this.addComponent(new AttackComponent({
-            range: config.attackRange ?? 12,      // Extended range (spear reach)
+            range: config.attackRange ?? 26,      // Extended range (spear reach)
             cooldown: config.attackCooldown ?? 1.2,
             damage: config.attackDamage ?? 18,    // Between sphere (10) and prisma (25)
         }));

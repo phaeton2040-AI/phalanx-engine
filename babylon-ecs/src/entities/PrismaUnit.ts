@@ -59,7 +59,7 @@ export class PrismaUnit extends Entity {
         this.addComponent(new TeamComponent(config.team ?? TeamTag.Team1));
         this.addComponent(new HealthComponent(config.health ?? 150)); // Higher health than sphere
         this.addComponent(new AttackComponent({
-            range: config.attackRange ?? 10,
+            range: config.attackRange ?? 20,
             cooldown: config.attackCooldown ?? 1.5,
             damage: config.attackDamage ?? 25, // Higher damage than sphere
         }));

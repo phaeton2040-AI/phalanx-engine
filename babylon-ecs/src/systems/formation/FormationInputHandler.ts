@@ -32,6 +32,31 @@ interface UpdateModeState {
 }
 
 /**
+ * State for touch drag placement (mobile)
+ */
+interface TouchDragState {
+    playerId: string;
+    unitType: FormationUnitType;
+    isActive: boolean;
+}
+
+/**
+ * State for tracking touch to distinguish tap from drag
+ */
+interface TouchTrackingState {
+    startX: number;
+    startY: number;
+    startTime: number;
+    isActive: boolean;
+}
+
+/** Maximum distance (in pixels) for a touch to be considered a tap */
+const TAP_DISTANCE_THRESHOLD = 15;
+
+/** Maximum duration (in ms) for a touch to be considered a tap */
+const TAP_TIME_THRESHOLD = 300;
+
+/**
  * FormationInputHandler - Handles mouse/pointer input for the formation grid
  * Responsible for hover detection, click handling, and mode management
  */
@@ -45,6 +70,8 @@ export class FormationInputHandler {
     private activePlacementMode: PlacementModeState | null = null;
     private activeUpdateMode: UpdateModeState | null = null;
     private savedPlacementMode: PlacementModeState | null = null;
+    private touchDragState: TouchDragState | null = null;
+    private touchTrackingState: TouchTrackingState | null = null;
 
     private canAffordCallback: CanAffordCallback | null = null;
 
@@ -82,8 +109,30 @@ export class FormationInputHandler {
             } else if (pointerInfo.type === PointerEventTypes.POINTERDOWN) {
                 const evt = pointerInfo.event as PointerEvent;
                 if (evt.button === 0) {
-                    const pickResult = pointerInfo.pickInfo;
-                    this.handlePointerDown(pickResult);
+                    // Track touch/pointer start for tap detection
+                    this.touchTrackingState = {
+                        startX: evt.clientX,
+                        startY: evt.clientY,
+                        startTime: performance.now(),
+                        isActive: true,
+                    };
+                }
+            } else if (pointerInfo.type === PointerEventTypes.POINTERUP) {
+                const evt = pointerInfo.event as PointerEvent;
+                if (evt.button === 0 && this.touchTrackingState?.isActive) {
+                    // Check if this was a short tap (not a drag)
+                    const dx = evt.clientX - this.touchTrackingState.startX;
+                    const dy = evt.clientY - this.touchTrackingState.startY;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    const duration = performance.now() - this.touchTrackingState.startTime;
+
+                    if (distance <= TAP_DISTANCE_THRESHOLD && duration <= TAP_TIME_THRESHOLD) {
+                        // This is a short tap - handle placement
+                        const pickResult = this.scene.pick(evt.clientX, evt.clientY);
+                        this.handlePointerDown(pickResult);
+                    }
+
+                    this.touchTrackingState = null;
                 }
             }
         });
@@ -453,6 +502,138 @@ export class FormationInputHandler {
      */
     public isInPlacementMode(playerId: string): boolean {
         return this.activePlacementMode?.playerId === playerId;
+    }
+
+    // ============================================
+    // TOUCH DRAG METHODS (Mobile unit placement)
+    // ============================================
+
+    /**
+     * Start touch drag for unit placement
+     * Called when user starts dragging from a unit button
+     */
+    public startTouchDrag(playerId: string, unitType: FormationUnitType): void {
+        // Exit any current modes
+        if (this.activeUpdateMode?.playerId === playerId) {
+            this.exitUpdateMode(playerId);
+        }
+        if (this.activePlacementMode?.playerId === playerId) {
+            this.exitPlacementMode(playerId);
+        }
+
+        this.touchDragState = {
+            playerId,
+            unitType,
+            isActive: true,
+        };
+    }
+
+    /**
+     * Update touch drag position
+     * Shows preview over the grid at screen coordinates
+     */
+    public updateTouchDrag(screenX: number, screenY: number): void {
+        if (!this.touchDragState?.isActive) return;
+
+        const { playerId, unitType } = this.touchDragState;
+        const grid = this.gridData.getGrid(playerId);
+        if (!grid) return;
+
+        // Pick the grid plane at the touch position
+        const pickResult = this.scene.pick(screenX, screenY);
+        const gridPlane = this.renderer.getGridGroundPlane(playerId);
+
+        if (!pickResult?.hit || pickResult.pickedMesh !== gridPlane) {
+            this.hoverPreview.hideHoverHighlight();
+            return;
+        }
+
+        const hitPoint = pickResult.pickedPoint;
+        if (!hitPoint) {
+            this.hoverPreview.hideHoverHighlight();
+            return;
+        }
+
+        const gridCoords = this.gridData.worldToGrid(playerId, hitPoint);
+        if (!gridCoords) {
+            this.hoverPreview.hideHoverHighlight();
+            return;
+        }
+
+        // Show hover highlight
+        this.showHoverHighlightForPlacement(playerId, gridCoords.x, gridCoords.z, unitType, grid);
+    }
+
+    /**
+     * End touch drag - attempt to place unit at screen coordinates
+     * Returns true if unit was placed successfully
+     */
+    public endTouchDrag(screenX: number, screenY: number): boolean {
+        if (!this.touchDragState?.isActive) return false;
+
+        const { playerId, unitType } = this.touchDragState;
+        const grid = this.gridData.getGrid(playerId);
+
+        // Clean up drag state
+        this.touchDragState = null;
+        this.hoverPreview.hideHoverHighlight();
+
+        if (!grid) return false;
+
+        // Pick the grid plane at the touch position
+        const pickResult = this.scene.pick(screenX, screenY);
+        const gridPlane = this.renderer.getGridGroundPlane(playerId);
+
+        if (!pickResult?.hit || pickResult.pickedMesh !== gridPlane) {
+            return false;
+        }
+
+        const hitPoint = pickResult.pickedPoint;
+        if (!hitPoint) return false;
+
+        const gridCoords = this.gridData.worldToGrid(playerId, hitPoint);
+        if (!gridCoords) return false;
+
+        // Check if player can afford this unit
+        if (this.canAffordCallback && !this.canAffordCallback(playerId, unitType)) {
+            this.eventBus.emit<FormationPlacementFailedEvent>(GameEvents.FORMATION_PLACEMENT_FAILED, {
+                ...createEvent(),
+                playerId,
+                unitType,
+                reason: 'insufficient_resources',
+            });
+            return false;
+        }
+
+        // Check if placement is valid
+        if (this.gridData.canPlaceUnit(playerId, gridCoords.x, gridCoords.z, unitType)) {
+            this.eventBus.emit(GameEvents.FORMATION_PLACEMENT_REQUESTED, {
+                ...createEvent(),
+                playerId,
+                team: grid.team,
+                unitType,
+                gridX: gridCoords.x,
+                gridZ: gridCoords.z,
+            });
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Cancel touch drag without placing
+     */
+    public cancelTouchDrag(): void {
+        this.touchDragState = null;
+        this.hoverPreview.hideHoverHighlight();
+    }
+
+    /**
+     * Check if touch drag is currently active
+     */
+    public isTouchDragActive(): boolean {
+        return this.touchDragState?.isActive ?? false;
     }
 
     /**

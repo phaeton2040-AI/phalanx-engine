@@ -85,7 +85,7 @@ export class LockstepManager {
         // Initialize TickSimulation from phalanx-client
         this.tickSimulation = new TickSimulation(client, {
             tickRate: networkConfig.tickRate,
-            debug: true,
+            debug: false,
         });
 
         this.setupSimulationCallbacks();

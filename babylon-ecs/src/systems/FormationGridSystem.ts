@@ -157,6 +157,45 @@ export class FormationGridSystem {
         return this.inputHandler.isInPlacementMode(playerId);
     }
 
+    // ============================================
+    // TOUCH DRAG METHODS (Mobile unit placement)
+    // ============================================
+
+    /**
+     * Start touch drag for unit placement
+     */
+    public startTouchDrag(playerId: string, unitType: FormationUnitType): void {
+        this.inputHandler.startTouchDrag(playerId, unitType);
+    }
+
+    /**
+     * Update touch drag position
+     */
+    public updateTouchDrag(screenX: number, screenY: number): void {
+        this.inputHandler.updateTouchDrag(screenX, screenY);
+    }
+
+    /**
+     * End touch drag - attempt to place unit
+     */
+    public endTouchDrag(screenX: number, screenY: number): boolean {
+        return this.inputHandler.endTouchDrag(screenX, screenY);
+    }
+
+    /**
+     * Cancel touch drag
+     */
+    public cancelTouchDrag(): void {
+        this.inputHandler.cancelTouchDrag();
+    }
+
+    /**
+     * Check if touch drag is active
+     */
+    public isTouchDragActive(): boolean {
+        return this.inputHandler.isTouchDragActive();
+    }
+
     /**
      * Convert world position to grid coordinates
      */

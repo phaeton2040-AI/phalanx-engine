@@ -2,6 +2,21 @@ import type { ResourceSystem } from "../systems/ResourceSystem";
 import type { FormationGridSystem } from "../systems/FormationGridSystem";
 
 /**
+ * Unit type for placement
+ */
+export type UnitType = 'sphere' | 'prisma' | 'lance';
+
+/**
+ * Callback for unit drag operations
+ */
+export interface UnitDragCallbacks {
+    onDragStart: (unitType: UnitType) => void;
+    onDragMove: (x: number, y: number) => void;
+    onDragEnd: (x: number, y: number) => void;
+    onDragCancel: () => void;
+}
+
+/**
  * UIManager - Handles all UI interactions and updates
  * 
  * Responsible for:
@@ -21,6 +36,11 @@ export class UIManager {
     private onExitCallback: (() => void) | null = null;
     private beforeUnloadHandler: ((e: BeforeUnloadEvent) => string | undefined) | null = null;
     private notificationTimeout: number | null = null;
+
+    // Touch drag state for unit placement
+    private dragCallbacks: UnitDragCallbacks | null = null;
+    private activeDragUnitType: UnitType | null = null;
+    private isDragging: boolean = false;
 
     constructor(
         resourceSystem: ResourceSystem,
@@ -305,6 +325,9 @@ export class UIManager {
     /**
      * Setup unit placement button handlers
      * Note: Deployment is now automatic via wave system, no commit button needed
+     *
+     * Desktop: Click to enter placement mode, click on grid to place
+     * Mobile: Touch and drag from button to grid, release to place
      */
     public setupUnitPlacementButtons(
         onSphereClick: () => void,
@@ -315,18 +338,89 @@ export class UIManager {
         const prismaBtn = document.getElementById('prisma-btn');
         const lanceBtn = document.getElementById('lance-btn');
 
+        // Desktop: click handlers
         sphereBtn?.addEventListener('click', onSphereClick);
         prismaBtn?.addEventListener('click', onPrismaClick);
         lanceBtn?.addEventListener('click', onLanceClick);
 
-        // Add touch feedback for mobile devices
-        this.addTouchFeedback(sphereBtn);
-        this.addTouchFeedback(prismaBtn);
-        this.addTouchFeedback(lanceBtn);
+        // Mobile: touch drag handlers
+        this.setupButtonTouchDrag(sphereBtn, 'sphere');
+        this.setupButtonTouchDrag(prismaBtn, 'prisma');
+        this.setupButtonTouchDrag(lanceBtn, 'lance');
 
         // Also add touch feedback to exit button
         const exitBtn = document.getElementById('exit-btn');
         this.addTouchFeedback(exitBtn);
+    }
+
+    /**
+     * Set callbacks for unit drag operations
+     */
+    public setDragCallbacks(callbacks: UnitDragCallbacks): void {
+        this.dragCallbacks = callbacks;
+    }
+
+    /**
+     * Setup touch drag handling for a unit button
+     */
+    private setupButtonTouchDrag(button: HTMLElement | null, unitType: UnitType): void {
+        if (!button) return;
+
+        let dragStarted = false;
+
+        button.addEventListener('touchstart', (e: TouchEvent) => {
+            if (e.touches.length !== 1) return;
+
+            dragStarted = false;
+            this.activeDragUnitType = unitType;
+
+            // Visual feedback
+            button.style.transform = 'scale(0.95)';
+        }, { passive: true });
+
+        button.addEventListener('touchmove', (e: TouchEvent) => {
+            if (e.touches.length !== 1 || !this.activeDragUnitType) return;
+
+            const touch = e.touches[0];
+
+            // Start drag on first move
+            if (!dragStarted) {
+                dragStarted = true;
+                this.isDragging = true;
+                this.dragCallbacks?.onDragStart(this.activeDragUnitType);
+            }
+
+            // Notify drag move
+            this.dragCallbacks?.onDragMove(touch.clientX, touch.clientY);
+        }, { passive: true });
+
+        button.addEventListener('touchend', (e: TouchEvent) => {
+            button.style.transform = '';
+
+            if (this.isDragging && this.activeDragUnitType) {
+                // Get the last touch position from changedTouches
+                const touch = e.changedTouches[0];
+                if (touch) {
+                    this.dragCallbacks?.onDragEnd(touch.clientX, touch.clientY);
+                } else {
+                    this.dragCallbacks?.onDragCancel();
+                }
+            }
+
+            this.isDragging = false;
+            this.activeDragUnitType = null;
+        });
+
+        button.addEventListener('touchcancel', () => {
+            button.style.transform = '';
+
+            if (this.isDragging) {
+                this.dragCallbacks?.onDragCancel();
+            }
+
+            this.isDragging = false;
+            this.activeDragUnitType = null;
+        });
     }
 
     /**

@@ -38,6 +38,13 @@ export const cameraConfig = {
 
     // Padding from arena edges (prevents camera going too far out)
     boundsPadding: 20,
+
+    // Pinch-to-zoom height bounds for mobile
+    minHeight: 40,
+    maxHeight: 180,
+
+    // Pinch zoom sensitivity
+    zoomSensitivity: 0.5,
 };
 
 // Game settings
@@ -70,7 +77,7 @@ export const unitConfig = {
         cost: 100,
         health: 50,
         attackDamage: 7,
-        attackRange: 12,
+        attackRange: 18,
         attackCooldown: 0.6,
         moveSpeed: 8,
     },
@@ -78,7 +85,7 @@ export const unitConfig = {
         cost: 350,
         health: 180,      // Reduced from 200
         attackDamage: 35, // Unchanged
-        attackRange: 15,
+        attackRange: 20,
         attackCooldown: 1,
         moveSpeed: 8,
     },
@@ -86,7 +93,7 @@ export const unitConfig = {
         cost: 200,
         health: 90,       // Reduced from 100
         attackDamage: 18, // Unchanged
-        attackRange: 14,
+        attackRange: 25,
         attackCooldown: 1.2,
         moveSpeed: 8,
     },
