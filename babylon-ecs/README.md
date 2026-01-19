@@ -39,6 +39,26 @@ pnpm dev
 
 The game will be available at `http://localhost:5173` (default Vite port).
 
+### Environment Configuration
+
+The game server URL is configured via environment variables:
+
+- **`.env`** - Default configuration (committed to git, points to production Heroku server)
+- **`.env.local`** - Local overrides (not committed to git)
+
+To use a local development server, create a `.env.local` file:
+
+```bash
+# .env.local
+VITE_SERVER_URL=http://localhost:3000
+```
+
+Available environment variables:
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `VITE_SERVER_URL` | Phalanx game server URL | `http://localhost:3000` |
+
 ### Build for Production
 
 ```bash
