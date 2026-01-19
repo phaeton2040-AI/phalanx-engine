@@ -12,7 +12,7 @@ const PORT = parseInt(process.env.PORT || '3000', 10);
 // In production, set CORS_ORIGINS to your client URLs (comma-separated)
 const CORS_ORIGINS = process.env.CORS_ORIGINS
   ? process.env.CORS_ORIGINS.split(',').map((origin) => origin.trim())
-  : ['http://localhost:3001', 'http://localhost:5173'];
+  : ['http://localhost:3001', 'http://localhost:5173', 'http://192.168.31.228:5173'];
 
 async function main() {
   console.log('Starting Phalanx Test Game Server...');
