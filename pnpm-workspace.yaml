@@ -2,4 +2,5 @@ packages:
   - 'phalanx-server'
   - 'phalanx-client'
   - 'game-test'
+  - 'game-test-server'
   - 'babylon-ecs'

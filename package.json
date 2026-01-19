@@ -13,7 +13,11 @@
     "test:watch": "pnpm -r test:watch",
     "dev:server": "pnpm --filter phalanx-server dev",
     "dev:client": "pnpm --filter phalanx-client dev",
-    "dev:game": "pnpm --filter game-test dev"
+    "dev:game": "pnpm --filter game-test dev",
+    "dev:game-server": "pnpm --filter game-test-server dev",
+    "build:game-server": "pnpm --filter game-test-server build",
+    "heroku-postbuild": "pnpm --filter phalanx-server build && pnpm --filter game-test-server build",
+    "start": "node game-test-server/dist/main.js"
   },
   "keywords": [
     "multiplayer",
@@ -27,6 +31,7 @@
   "author": "",
   "license": "MIT",
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.0.0",
+    "pnpm": ">=10.0.0"
   }
 }
