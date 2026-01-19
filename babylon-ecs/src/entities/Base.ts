@@ -54,7 +54,7 @@ export class Base extends Entity {
 
         // Add components
         this.addComponent(new TeamComponent(config.team));
-        this.addComponent(new HealthComponent(config.health ?? 300));
+        this.addComponent(new HealthComponent(config.health ?? 600));
 
         const attackComponent = new AttackComponent({
             range: config.attackRange ?? 20,
