@@ -3,7 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <title>Energoids Demo - 1v1</title>
     <style>
       * {
@@ -17,6 +19,9 @@
         height: 100%;
         overflow: hidden;
         font-family: Arial, sans-serif;
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        user-select: none;
       }
 
       /* Lobby Styles */
@@ -29,22 +34,27 @@
         justify-content: center;
         background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
         color: white;
+        padding: 20px;
       }
 
       #lobby h1 {
         font-size: 2.5rem;
         margin-bottom: 0.5rem;
         color: #4ecca3;
+        text-align: center;
       }
 
       #lobby h2 {
         font-size: 1.2rem;
         margin-bottom: 2rem;
         color: #888;
+        text-align: center;
       }
 
       #lobby .form-group {
         margin-bottom: 1rem;
+        width: 100%;
+        max-width: 300px;
       }
 
       #lobby input {
@@ -54,7 +64,7 @@
         border-radius: 8px;
         background: rgba(255, 255, 255, 0.1);
         color: white;
-        width: 300px;
+        width: 100%;
         outline: none;
       }
 
@@ -71,7 +81,9 @@
         color: #1a1a2e;
         cursor: pointer;
         font-weight: bold;
-        transition: background 0.3s;
+        transition: background 0.3s, transform 0.1s;
+        min-height: 44px;
+        min-width: 44px;
       }
 
       #lobby button:hover {
@@ -87,6 +99,35 @@
         margin-top: 1.5rem;
         font-size: 1.1rem;
         color: #ccc;
+        text-align: center;
+        padding: 0 20px;
+      }
+
+      /* Mobile optimizations for lobby */
+      @media (max-width: 768px) {
+        #lobby h1 {
+          font-size: 1.8rem;
+          margin-bottom: 0.5rem;
+        }
+
+        #lobby h2 {
+          font-size: 1rem;
+          margin-bottom: 1.5rem;
+        }
+
+        #lobby input {
+          font-size: 16px; /* Prevents zoom on iOS */
+          padding: 0.875rem 1rem;
+        }
+
+        #lobby button {
+          padding: 0.875rem 2rem;
+          font-size: 1.05rem;
+        }
+
+        #status {
+          font-size: 1rem;
+        }
       }
 
       /* Game Container Styles */
@@ -113,6 +154,7 @@
         justify-content: space-between;
         align-items: flex-start;
         pointer-events: none;
+        z-index: 10;
       }
 
       #game-ui > * {
@@ -127,6 +169,7 @@
         display: flex;
         flex-direction: column;
         gap: 8px;
+        font-size: 0.9rem;
       }
 
       #player-info .player-row {
@@ -140,6 +183,7 @@
         height: 20px;
         border-radius: 50%;
         border: 2px solid white;
+        flex-shrink: 0;
       }
 
       #exit-btn {
@@ -150,11 +194,38 @@
         border-radius: 8px;
         cursor: pointer;
         font-weight: bold;
-        transition: background 0.3s;
+        transition: background 0.3s, transform 0.1s;
+        min-height: 44px;
+        min-width: 44px;
       }
 
       #exit-btn:hover {
         background: #c0392b;
+      }
+
+      /* Mobile optimizations for game UI */
+      @media (max-width: 768px) {
+        #game-ui {
+          top: 5px;
+          left: 5px;
+          right: 5px;
+        }
+
+        #player-info {
+          padding: 8px 12px;
+          font-size: 0.85rem;
+          gap: 6px;
+        }
+
+        #player-color-indicator {
+          width: 16px;
+          height: 16px;
+        }
+
+        #exit-btn {
+          padding: 8px 16px;
+          font-size: 0.9rem;
+        }
       }
 
       #notification {
@@ -170,6 +241,8 @@
         opacity: 0;
         transition: opacity 0.3s;
         pointer-events: none;
+        max-width: 90%;
+        text-align: center;
       }
 
       #notification.show {
@@ -193,6 +266,15 @@
         border-radius: 8px;
         color: #ccc;
         font-size: 0.9rem;
+        max-width: calc(100% - 20px);
+      }
+
+      .mobile-controls {
+        display: none;
+      }
+
+      .desktop-controls {
+        display: inline;
       }
 
       /* Resource Display */
@@ -200,6 +282,7 @@
         display: flex;
         align-items: center;
         gap: 8px;
+        flex-wrap: wrap;
       }
 
       #resource-icon {
@@ -221,6 +304,42 @@
         color: #2ecc71;
       }
 
+      /* Mobile optimizations */
+      @media (max-width: 768px) {
+        #notification {
+          font-size: 0.95rem;
+          padding: 12px 20px;
+          bottom: 15px;
+        }
+
+        #controls-help {
+          font-size: 0.75rem;
+          padding: 8px 12px;
+          bottom: 5px;
+          left: 5px;
+        }
+
+        .mobile-controls {
+          display: inline;
+        }
+
+        .desktop-controls {
+          display: none;
+        }
+
+        #resource-icon {
+          font-size: 1rem;
+        }
+
+        #resource-amount {
+          font-size: 0.95rem;
+        }
+
+        #resource-rate {
+          font-size: 0.75rem;
+        }
+      }
+
       /* Unit Placement Panel */
       #unit-panel {
         position: absolute;
@@ -233,6 +352,9 @@
         display: flex;
         gap: 15px;
         align-items: center;
+        flex-wrap: wrap;
+        justify-content: center;
+        max-width: 95%;
       }
 
       .unit-btn {
@@ -244,14 +366,20 @@
         border-radius: 8px;
         padding: 10px 15px;
         cursor: pointer;
-        transition: all 0.2s;
+        transition: all 0.2s, transform 0.1s;
         color: white;
         min-width: 90px;
+        min-height: 44px;
+        touch-action: manipulation;
       }
 
       .unit-btn:hover {
         background: rgba(255, 255, 255, 0.2);
         border-color: #4ecca3;
+      }
+
+      .unit-btn:active {
+        transform: scale(0.95);
       }
 
       .unit-btn.active {
@@ -289,15 +417,84 @@
         font-weight: bold;
         font-size: 1rem;
         transition: background 0.3s;
+        min-height: 44px;
+        min-width: 44px;
+        touch-action: manipulation;
       }
 
       #commit-btn:hover {
         background: #3ba882;
       }
 
+      #commit-btn:active {
+        transform: scale(0.95);
+      }
+
       #commit-btn:disabled {
         background: #555;
         cursor: not-allowed;
+      }
+
+      /* Mobile optimizations for unit panel */
+      @media (max-width: 768px) {
+        #unit-panel {
+          bottom: 50px;
+          padding: 10px 12px;
+          gap: 8px;
+        }
+
+        .unit-btn {
+          min-width: 70px;
+          padding: 8px 10px;
+        }
+
+        .unit-btn .unit-icon {
+          font-size: 1.5rem;
+          margin-bottom: 3px;
+        }
+
+        .unit-btn .unit-name {
+          font-size: 0.75rem;
+        }
+
+        .unit-btn .unit-cost {
+          font-size: 0.7rem;
+        }
+
+        #commit-btn {
+          padding: 10px 20px;
+          font-size: 0.9rem;
+        }
+      }
+
+      @media (max-width: 480px) {
+        #unit-panel {
+          bottom: 40px;
+          padding: 8px 10px;
+          gap: 6px;
+        }
+
+        .unit-btn {
+          min-width: 60px;
+          padding: 6px 8px;
+        }
+
+        .unit-btn .unit-icon {
+          font-size: 1.3rem;
+        }
+
+        .unit-btn .unit-name {
+          font-size: 0.7rem;
+        }
+
+        .unit-btn .unit-cost {
+          font-size: 0.65rem;
+        }
+
+        #commit-btn {
+          padding: 8px 16px;
+          font-size: 0.85rem;
+        }
       }
 
       /* Territory Indicator */
@@ -312,6 +509,8 @@
         font-size: 0.85rem;
         color: white;
         display: none;
+        max-width: 90%;
+        text-align: center;
       }
 
       #territory-indicator.active {
@@ -369,6 +568,51 @@
         font-size: 0.9rem;
         color: #4ecca3;
         font-weight: bold;
+        text-align: center;
+        width: 100%;
+      }
+
+      /* Mobile optimizations for wave and territory */
+      @media (max-width: 768px) {
+        #territory-indicator {
+          top: 50px;
+          font-size: 0.75rem;
+          padding: 4px 12px;
+        }
+
+        #wave-container {
+          top: 5px;
+          padding: 8px 16px;
+          min-width: 120px;
+        }
+
+        #wave-label {
+          font-size: 0.75rem;
+          margin-bottom: 2px;
+        }
+
+        #wave-timer {
+          font-size: 1.4rem;
+        }
+
+        #formation-info {
+          font-size: 0.75rem;
+        }
+      }
+
+      @media (max-width: 480px) {
+        #wave-container {
+          padding: 6px 12px;
+          min-width: 100px;
+        }
+
+        #wave-label {
+          font-size: 0.7rem;
+        }
+
+        #wave-timer {
+          font-size: 1.2rem;
+        }
       }
     </style>
   </head>
@@ -440,7 +684,7 @@
 
       <!-- Controls Help -->
       <div id="controls-help">
-        <strong>Controls:</strong> Left Click - Select/Place Units | Units deploy automatically each wave
+        <strong>Controls:</strong> <span class="desktop-controls">Left Click - Select/Place Units |</span><span class="mobile-controls">Tap - Select/Place Units |</span> Units deploy automatically each wave
       </div>
     </div>
 

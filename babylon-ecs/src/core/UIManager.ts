@@ -318,6 +318,34 @@ export class UIManager {
         sphereBtn?.addEventListener('click', onSphereClick);
         prismaBtn?.addEventListener('click', onPrismaClick);
         lanceBtn?.addEventListener('click', onLanceClick);
+
+        // Add touch feedback for mobile devices
+        this.addTouchFeedback(sphereBtn);
+        this.addTouchFeedback(prismaBtn);
+        this.addTouchFeedback(lanceBtn);
+
+        // Also add touch feedback to exit button
+        const exitBtn = document.getElementById('exit-btn');
+        this.addTouchFeedback(exitBtn);
+    }
+
+    /**
+     * Add touch feedback to a button element for better mobile UX
+     */
+    private addTouchFeedback(element: HTMLElement | null): void {
+        if (!element) return;
+
+        element.addEventListener('touchstart', () => {
+            element.style.transform = 'scale(0.95)';
+        });
+
+        element.addEventListener('touchend', () => {
+            element.style.transform = '';
+        });
+
+        element.addEventListener('touchcancel', () => {
+            element.style.transform = '';
+        });
     }
 
     /**

@@ -49,10 +49,26 @@ export class LobbyScene {
     private setupEventListeners(): void {
         this.connectButton.addEventListener('click', () => this.handleConnect());
 
+        // Support both keyboard enter and mobile users
         this.usernameInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
+                // Blur input to close mobile keyboard
+                this.usernameInput.blur();
                 this.handleConnect();
             }
+        });
+
+        // Add touch feedback for better mobile UX
+        this.connectButton.addEventListener('touchstart', () => {
+            this.connectButton.style.transform = 'scale(0.95)';
+        });
+
+        this.connectButton.addEventListener('touchend', () => {
+            this.connectButton.style.transform = 'scale(1)';
+        });
+
+        this.connectButton.addEventListener('touchcancel', () => {
+            this.connectButton.style.transform = 'scale(1)';
         });
     }
 
