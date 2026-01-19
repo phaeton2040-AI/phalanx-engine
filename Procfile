@@ -1,1 +1,1 @@
-web: corepack enable && pnpm install --prod=false && node game-test-server/dist/main.js
+web: corepack enable && pnpm install && node game-test-server/dist/main.js
