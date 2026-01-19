@@ -16,7 +16,7 @@
     "dev:game": "pnpm --filter game-test dev",
     "dev:game-server": "pnpm --filter game-test-server dev",
     "build:game-server": "pnpm --filter game-test-server build",
-    "heroku-postbuild": "pnpm --filter phalanx-server build && pnpm --filter game-test-server build",
+    "heroku-postbuild": "corepack enable && corepack prepare pnpm@10.6.0 --activate && pnpm install && pnpm --filter phalanx-server build && pnpm --filter game-test-server build",
     "start": "node game-test-server/dist/main.js"
   },
   "keywords": [
