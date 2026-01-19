@@ -603,6 +603,10 @@ export class Game {
         this.lockstepManager.sendPendingCommands();
         this.resourceSystem.update(0);
 
+        // Update tower turret rotations for smooth visual rotation
+        const deltaTime = this.engine.getDeltaTime() / 1000;
+        this.combatSystem.updateTowerTurrets(deltaTime);
+
         // Interpolate visual positions for smooth movement between network ticks
         const alpha = this.lockstepManager.getInterpolationAlpha();
         this.interpolationSystem.interpolate(alpha);

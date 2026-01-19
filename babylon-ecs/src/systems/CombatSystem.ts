@@ -1,5 +1,6 @@
 import { Engine, Vector3 } from "@babylonjs/core";
 import { Entity } from "../entities/Entity";
+import { Tower } from "../entities/Tower";
 import { EntityManager } from "../core/EntityManager";
 import { EventBus } from "../core/EventBus";
 import { GameRandom } from "../core/GameRandom";
@@ -199,8 +200,15 @@ export class CombatSystem {
                     movement.stop();
                 }
 
-                // Attack if ready
-                if (attack.canAttack()) {
+                // Handle tower turret aiming
+                const isTower = attacker instanceof Tower;
+                if (isTower) {
+                    (attacker as Tower).setTargetPosition(target.position);
+                }
+
+                // Attack if ready (for towers, also check if turret is aimed)
+                const canFire = isTower ? (attacker as Tower).isAimedAtTarget : true;
+                if (attack.canAttack() && canFire) {
                     this.performAttack(attacker, target);
                 }
                 
@@ -232,6 +240,11 @@ export class CombatSystem {
                 if (previousTargetId !== undefined) {
                     // We just lost our target - resume movement to original destination
                     this.currentTargets.delete(attacker.id);
+
+                    // Clear tower target
+                    if (attacker instanceof Tower) {
+                        (attacker as Tower).setTargetPosition(null);
+                    }
 
                     const storedTarget = this.storedMoveTargets.get(attacker.id);
                     if (storedTarget && movement) {
@@ -323,9 +336,21 @@ export class CombatSystem {
         const attack = attacker.getComponent<AttackComponent>(ComponentType.Attack)!;
         const team = attacker.getComponent<TeamComponent>(ComponentType.Team)!;
 
-        // Calculate direction
-        const origin = attack.getAttackOrigin(attacker.position);
-        const direction = target.position.subtract(origin).normalize();
+        // Calculate origin and direction (special handling for towers with rotating turrets)
+        let origin: Vector3;
+        let direction: Vector3;
+
+        if (attacker instanceof Tower) {
+            // Use barrel tip position for towers, but calculate direction to target
+            const tower = attacker as Tower;
+            origin = tower.getBarrelTipPosition();
+            // Calculate direction from barrel tip to target (not just horizontal barrel direction)
+            direction = target.position.subtract(origin).normalize();
+        } else {
+            // Standard attack origin for other entities
+            origin = attack.getAttackOrigin(attacker.position);
+            direction = target.position.subtract(origin).normalize();
+        }
 
         // Calculate damage with critical hit chance (deterministic via GameRandom)
         let damage = attack.damage;
@@ -361,6 +386,28 @@ export class CombatSystem {
         const targetId = this.currentTargets.get(entityId);
         if (targetId === undefined) return null;
         return this.entityManager.getEntity(targetId) ?? null;
+    }
+
+    /**
+     * Update tower turret rotations for smooth visual rotation
+     * Should be called in the render loop (not simulation tick) for smooth visuals
+     */
+    public updateTowerTurrets(deltaTime: number): void {
+        // Query all entities with Attack and Team components
+        const attackers = this.entityManager.queryEntities(
+            ComponentType.Attack,
+            ComponentType.Team,
+            ComponentType.Health
+        );
+
+        for (const attacker of attackers) {
+            if (attacker instanceof Tower) {
+                const health = attacker.getComponent<HealthComponent>(ComponentType.Health);
+                if (!health?.isDestroyed) {
+                    (attacker as Tower).updateTurretRotation(deltaTime);
+                }
+            }
+        }
     }
 
     /**
