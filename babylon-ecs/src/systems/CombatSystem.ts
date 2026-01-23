@@ -1,12 +1,13 @@
 import { Engine, Vector3 } from "@babylonjs/core";
 import { Entity } from "../entities/Entity";
 import { Tower } from "../entities/Tower";
+import { MutantUnit } from "../entities/MutantUnit";
 import { EntityManager } from "../core/EntityManager";
 import { EventBus } from "../core/EventBus";
 import { GameRandom } from "../core/GameRandom";
 import { ComponentType, TeamComponent, HealthComponent, AttackComponent, MovementComponent } from "../components";
 import { GameEvents, createEvent } from "../events";
-import type { ProjectileSpawnedEvent, DamageAppliedEvent } from "../events";
+import type { ProjectileSpawnedEvent, DamageAppliedEvent, DamageRequestedEvent } from "../events";
 import { networkConfig } from "../config/constants";
 
 /**
@@ -180,12 +181,15 @@ export class CombatSystem {
                 }
             }
 
-            // Find target in range, or move towards aggro target if out of range
+            // Find target in detection range
             const target = this.findTarget(attacker, attackers, aggroTarget);
             const previousTargetId = this.currentTargets.get(attacker.id);
 
             if (target) {
-                // We have a target in range
+                // We have a target in detection range
+                const distanceToTarget = Vector3.Distance(attacker.position, target.position);
+                const inAttackRange = distanceToTarget <= attack.range;
+
                 if (previousTargetId !== target.id) {
                     // New target - store current movement target if moving
                     if (movement?.isMoving && !this.storedMoveTargets.has(attacker.id)) {
@@ -195,21 +199,36 @@ export class CombatSystem {
 
                 this.currentTargets.set(attacker.id, target.id);
 
-                // Stop movement while attacking
-                if (movement?.isMoving) {
-                    movement.stop();
-                }
-
                 // Handle tower turret aiming
                 const isTower = attacker instanceof Tower;
                 if (isTower) {
                     (attacker as Tower).setTargetPosition(target.position);
                 }
 
-                // Attack if ready (for towers, also check if turret is aimed)
-                const canFire = isTower ? (attacker as Tower).isAimedAtTarget : true;
-                if (attack.canAttack() && canFire) {
-                    this.performAttack(attacker, target);
+                if (inAttackRange) {
+                    // Target is in attack range - stop and attack
+                    if (movement?.isMoving) {
+                        movement.stop();
+                    }
+
+                    // Attack if ready (for towers, also check if turret is aimed)
+                    const canFire = isTower ? (attacker as Tower).isAimedAtTarget : true;
+                    if (attack.canAttack() && canFire) {
+                        this.performAttack(attacker, target);
+                    }
+                } else if (movement) {
+                    // Target detected but out of attack range - move toward target
+                    // Store original target if not already stored
+                    if (!this.storedMoveTargets.has(attacker.id)) {
+                        if (movement.isMoving) {
+                            this.storedMoveTargets.set(attacker.id, movement.targetPosition.clone());
+                        } else {
+                            this.storedMoveTargets.set(attacker.id, attacker.position.clone());
+                        }
+                    }
+
+                    // Move towards the target (use callback for lockstep)
+                    this.requestMove(attacker.id, target.position.clone());
                 }
                 
                 // Clear aggro if we killed our aggro target
@@ -274,9 +293,10 @@ export class CombatSystem {
     }
 
     /**
-     * Find the closest hostile target in attack range
-     * Prioritizes aggro target if it's in range
-     * 
+     * Find the closest hostile target in detection range
+     * Uses detectionRange for finding targets, range for attacking
+     * Prioritizes aggro target if it's in attack range
+     *
      * IMPORTANT: Uses deterministic tie-breaking for network synchronization.
      * When two targets are at equal distance, the one with the lower entity ID
      * is chosen. This ensures all clients select the same target.
@@ -285,7 +305,10 @@ export class CombatSystem {
         const attackerTeam = attacker.getComponent<TeamComponent>(ComponentType.Team)!;
         const attack = attacker.getComponent<AttackComponent>(ComponentType.Attack)!;
 
-        // If we have an aggro target in range, prioritize it
+        // Use detectionRange for finding targets (defaults to attack range if not set)
+        const detectionRange = attack.detectionRange;
+
+        // If we have an aggro target in attack range, prioritize it
         if (aggroTarget) {
             const aggroHealth = aggroTarget.getComponent<HealthComponent>(ComponentType.Health);
             if (!aggroHealth?.isDestroyed) {
@@ -310,7 +333,8 @@ export class CombatSystem {
 
             const distance = Vector3.Distance(attacker.position, potential.position);
 
-            if (distance <= attack.range) {
+            // Use detectionRange for finding targets
+            if (distance <= detectionRange) {
                 // Deterministic tie-breaking: prefer lower entity ID when distances are equal
                 // Use a small epsilon for floating-point comparison
                 const epsilon = 0.0001;
@@ -331,26 +355,13 @@ export class CombatSystem {
     /**
      * Perform an attack from attacker to target
      * Uses GameRandom for deterministic critical hit calculation
+     *
+     * For melee attacks (projectileSpeed === 0), damage is applied directly.
+     * For ranged attacks, a projectile is spawned.
      */
     private performAttack(attacker: Entity, target: Entity): void {
         const attack = attacker.getComponent<AttackComponent>(ComponentType.Attack)!;
         const team = attacker.getComponent<TeamComponent>(ComponentType.Team)!;
-
-        // Calculate origin and direction (special handling for towers with rotating turrets)
-        let origin: Vector3;
-        let direction: Vector3;
-
-        if (attacker instanceof Tower) {
-            // Use barrel tip position for towers, but calculate direction to target
-            const tower = attacker as Tower;
-            origin = tower.getBarrelTipPosition();
-            // Calculate direction from barrel tip to target (not just horizontal barrel direction)
-            direction = target.position.subtract(origin).normalize();
-        } else {
-            // Standard attack origin for other entities
-            origin = attack.getAttackOrigin(attacker.position);
-            direction = target.position.subtract(origin).normalize();
-        }
 
         // Calculate damage with critical hit chance (deterministic via GameRandom)
         let damage = attack.damage;
@@ -364,16 +375,49 @@ export class CombatSystem {
             }
         }
 
-        // Emit projectile spawn event instead of calling ProjectileSystem directly
-        this.eventBus.emit<ProjectileSpawnedEvent>(GameEvents.PROJECTILE_SPAWNED, {
-            ...createEvent(),
-            origin: origin.clone(),
-            direction: direction.clone(),
-            damage: damage,
-            speed: attack.projectileSpeed,
-            team: team.team,
-            sourceId: attacker.id,
-        });
+        // Check if this is a melee attack (no projectile)
+        if (attack.projectileSpeed === 0) {
+            // Trigger attack animation for MutantUnit
+            if (attacker instanceof MutantUnit) {
+                (attacker as MutantUnit).playAttackAnimation();
+            }
+
+            // Melee attack - apply damage directly to target
+            this.eventBus.emit<DamageRequestedEvent>(GameEvents.DAMAGE_REQUESTED, {
+                ...createEvent(),
+                entityId: target.id,
+                amount: damage,
+                sourceId: attacker.id,
+            });
+        } else {
+            // Ranged attack - spawn projectile
+            // Calculate origin and direction (special handling for towers with rotating turrets)
+            let origin: Vector3;
+            let direction: Vector3;
+
+            if (attacker instanceof Tower) {
+                // Use barrel tip position for towers, but calculate direction to target
+                const tower = attacker as Tower;
+                origin = tower.getBarrelTipPosition();
+                // Calculate direction from barrel tip to target (not just horizontal barrel direction)
+                direction = target.position.subtract(origin).normalize();
+            } else {
+                // Standard attack origin for other entities
+                origin = attack.getAttackOrigin(attacker.position);
+                direction = target.position.subtract(origin).normalize();
+            }
+
+            // Emit projectile spawn event instead of calling ProjectileSystem directly
+            this.eventBus.emit<ProjectileSpawnedEvent>(GameEvents.PROJECTILE_SPAWNED, {
+                ...createEvent(),
+                origin: origin.clone(),
+                direction: direction.clone(),
+                damage: damage,
+                speed: attack.projectileSpeed,
+                team: team.team,
+                sourceId: attacker.id,
+            });
+        }
 
         // Reset cooldown
         attack.onAttackPerformed();

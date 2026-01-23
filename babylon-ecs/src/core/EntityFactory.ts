@@ -8,6 +8,7 @@ import type { HealthBarSystem } from "../systems/HealthBarSystem";
 import type { Unit, UnitConfig } from "../entities/Unit";
 import type { PrismaUnit, PrismaUnitConfig } from "../entities/PrismaUnit";
 import type { LanceUnit, LanceUnitConfig } from "../entities/LanceUnit";
+import type { MutantUnit, MutantUnitConfig } from "../entities/MutantUnit";
 import type { Tower, TowerConfig } from "../entities/Tower";
 import type { Base, BaseConfig } from "../entities/Base";
 import { TeamTag } from "../enums/TeamTag";
@@ -145,6 +146,34 @@ export class EntityFactory {
     }
 
     /**
+     * Create a MutantUnit and register it with all necessary systems
+     */
+    public createMutantUnit(config: MutantUnitConfig, position: Vector3): MutantUnit {
+        const unit = this.sceneManager.createMutantUnit(config, position);
+
+        // Register with EntityManager
+        this.entityManager.addEntity(unit);
+
+        // Register with SelectionSystem for mesh picking
+        this.selectionSystem.registerSelectable(unit);
+
+        // Register with PhysicsSystem - mutant units are 2x2 bodies
+        this.physicsSystem.registerBody(unit.id, {
+            radius: 2.0,
+            mass: 2.0,
+            isStatic: false,
+        });
+
+        // Register with InterpolationSystem for smooth visual movement
+        this.interpolationSystem?.registerEntity(unit.id, false);
+
+        // Register with HealthBarSystem for health visualization (higher for larger unit)
+        this.healthBarSystem?.registerEntity(unit, 4.5);
+
+        return unit;
+    }
+
+    /**
      * Create a tower and register it with all necessary systems
      */
     public createTower(config: TowerConfig, position: Vector3): Tower {
@@ -205,7 +234,7 @@ export class EntityFactory {
      * Returns the unit info needed for move commands
      */
     public createUnitForFormation(
-        unitType: 'sphere' | 'prisma' | 'lance',
+        unitType: 'sphere' | 'mutant' | 'prisma' | 'lance',
         team: TeamTag,
         position: Vector3,
         localPlayerId: string,
@@ -216,17 +245,30 @@ export class EntityFactory {
             ? new Color3(arenaParams.colors.teamA.r, arenaParams.colors.teamA.g, arenaParams.colors.teamA.b)
             : new Color3(arenaParams.colors.teamB.r, arenaParams.colors.teamB.g, arenaParams.colors.teamB.b);
 
-        let unit: Unit | PrismaUnit | LanceUnit;
+        let unit: Unit | PrismaUnit | LanceUnit | MutantUnit;
 
         if (unitType === 'sphere') {
-            unit = this.createUnit({
+            // Sphere is deprecated, create mutant instead
+            unit = this.createMutantUnit({
                 color,
                 team,
-                health: unitConfig.sphere.health,
-                attackDamage: unitConfig.sphere.attackDamage,
-                attackRange: unitConfig.sphere.attackRange,
-                attackCooldown: unitConfig.sphere.attackCooldown,
-                moveSpeed: unitConfig.sphere.moveSpeed,
+                health: unitConfig.mutant.health,
+                attackDamage: unitConfig.mutant.attackDamage,
+                attackRange: unitConfig.mutant.attackRange,
+                detectionRange: unitConfig.mutant.detectionRange,
+                attackCooldown: unitConfig.mutant.attackCooldown,
+                moveSpeed: unitConfig.mutant.moveSpeed,
+            }, position);
+        } else if (unitType === 'mutant') {
+            unit = this.createMutantUnit({
+                color,
+                team,
+                health: unitConfig.mutant.health,
+                attackDamage: unitConfig.mutant.attackDamage,
+                attackRange: unitConfig.mutant.attackRange,
+                detectionRange: unitConfig.mutant.detectionRange,
+                attackCooldown: unitConfig.mutant.attackCooldown,
+                moveSpeed: unitConfig.mutant.moveSpeed,
             }, position);
         } else if (unitType === 'prisma') {
             unit = this.createPrismaUnit({

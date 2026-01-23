@@ -1,6 +1,7 @@
 import { Scene, Vector3, MeshBuilder, StandardMaterial, Color3, Mesh } from "@babylonjs/core";
 import { TeamTag } from "../../enums/TeamTag";
 import { arenaParams } from "../../config/constants";
+import { AssetManager, type ModelInstance } from "../../core/AssetManager";
 import type { FormationUnitType, FormationGrid } from "./FormationTypes";
 
 /**
@@ -11,6 +12,8 @@ export class FormationGridRenderer {
     private scene: Scene;
     private gridVisuals: Map<string, Mesh[]> = new Map();
     private gridGroundPlanes: Map<string, Mesh> = new Map();
+    // Store model instances for proper disposal
+    private mutantInstances: Map<string, ModelInstance> = new Map();
 
     constructor(scene: Scene) {
         this.scene = scene;
@@ -117,6 +120,8 @@ export class FormationGridRenderer {
         let mesh: Mesh;
         if (unitType === 'sphere') {
             mesh = this.createSpherePreview(playerId, gridX, gridZ, color);
+        } else if (unitType === 'mutant') {
+            mesh = this.createMutantPreview(playerId, gridX, gridZ, color, grid.team);
         } else if (unitType === 'prisma') {
             mesh = this.createPrismaPreview(playerId, gridX, gridZ, color);
         } else {
@@ -125,6 +130,82 @@ export class FormationGridRenderer {
 
         mesh.position = worldPos;
         mesh.isPickable = false;
+
+        return mesh;
+    }
+
+    /**
+     * Create a mutant unit preview mesh using the preloaded model
+     * Sized for 2x2 grid cells
+     */
+    private createMutantPreview(playerId: string, gridX: number, gridZ: number, teamColor: Color3, team: TeamTag): Mesh {
+        const assetManager = AssetManager.getInstance();
+        const instanceKey = `preview_${playerId}_${gridX}_${gridZ}`;
+
+        // Try to create an instance from the preloaded model
+        if (assetManager) {
+            const instance = assetManager.createPreviewInstance("mutant", instanceKey);
+            if (instance) {
+                // Store the instance for proper disposal
+                this.mutantInstances.set(instanceKey, instance);
+
+                // Create a parent mesh to serve as the "preview mesh"
+                // This is needed because the grid system expects a Mesh
+                const parentMesh = new Mesh(instanceKey, this.scene);
+
+                // Parent the model to this mesh
+                instance.rootNode.parent = parentMesh;
+                instance.rootNode.position = Vector3.Zero();
+
+                // Scale for 2x2 grid size (same as MutantUnit)
+                instance.rootNode.scaling = new Vector3(0.06, 0.06, 0.06);
+
+                // GLB files use rotationQuaternion which overrides Euler angles
+                // Clear it so we can use rotation.y
+                instance.rootNode.rotationQuaternion = null;
+
+                // Rotate to face forward based on team
+                // The model faces along Z axis by default, but units move along X axis
+                // Team1 faces +X (rotate +90 degrees), Team2 faces -X (rotate -90 degrees)
+                if (team === TeamTag.Team1) {
+                    instance.rootNode.rotation.y = Math.PI / 2; // Face +X
+                } else {
+                    instance.rootNode.rotation.y = -Math.PI / 2; // Face -X
+                }
+
+                // Make meshes transparent for preview effect
+                for (const mesh of instance.meshes) {
+                    if (mesh.material) {
+                        const mat = mesh.material.clone(`${mesh.material.name}_preview`);
+                        if (mat && 'alpha' in mat) {
+                            (mat as StandardMaterial).alpha = 0.6;
+                        }
+                        mesh.material = mat;
+                    }
+                    mesh.isPickable = false;
+                }
+
+                // Play idle animation for preview
+                const idleAnim = instance.animationGroups.find(ag => ag.name.includes("Idle"));
+                if (idleAnim) {
+                    idleAnim.start(true, 1.0);
+                }
+
+                return parentMesh;
+            }
+        }
+
+        // Fallback to capsule if asset manager not available (sized for 2x2)
+        const mesh = MeshBuilder.CreateCapsule(
+            instanceKey,
+            { height: 4, radius: 1.0 },
+            this.scene
+        );
+
+        const material = new StandardMaterial(`previewMat_${playerId}_${gridX}_${gridZ}`, this.scene);
+        material.diffuseColor = teamColor;
+        material.alpha = 0.6;
+        mesh.material = material;
 
         return mesh;
     }
@@ -281,5 +362,11 @@ export class FormationGridRenderer {
             plane.dispose();
         }
         this.gridGroundPlanes.clear();
+
+        // Dispose mutant model instances
+        for (const instance of this.mutantInstances.values()) {
+            instance.dispose();
+        }
+        this.mutantInstances.clear();
     }
 }

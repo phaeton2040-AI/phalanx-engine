@@ -4,7 +4,7 @@ import type { FormationGridSystem } from "../systems/FormationGridSystem";
 /**
  * Unit type for placement
  */
-export type UnitType = 'sphere' | 'prisma' | 'lance';
+export type UnitType = 'mutant' | 'prisma' | 'lance';
 
 /**
  * Callback for unit drag operations
@@ -210,19 +210,19 @@ export class UIManager {
      * Update unit button states based on resources
      */
     public updateUnitButtonStates(): void {
-        const sphereBtn = document.getElementById('sphere-btn');
+        const mutantBtn = document.getElementById('mutant-btn');
         const prismaBtn = document.getElementById('prisma-btn');
         const lanceBtn = document.getElementById('lance-btn');
 
-        const canAffordSphere = this.resourceSystem.canAfford(this.localPlayerId, 'sphere');
+        const canAffordMutant = this.resourceSystem.canAfford(this.localPlayerId, 'mutant');
         const canAffordPrisma = this.resourceSystem.canAfford(this.localPlayerId, 'prisma');
         const canAffordLance = this.resourceSystem.canAfford(this.localPlayerId, 'lance');
 
-        if (sphereBtn) {
-            if (canAffordSphere) {
-                sphereBtn.classList.remove('disabled');
+        if (mutantBtn) {
+            if (canAffordMutant) {
+                mutantBtn.classList.remove('disabled');
             } else {
-                sphereBtn.classList.add('disabled');
+                mutantBtn.classList.add('disabled');
             }
         }
 
@@ -302,19 +302,19 @@ export class UIManager {
     /**
      * Set active unit button
      */
-    public setActiveUnitButton(unitType: 'sphere' | 'prisma' | 'lance' | null): void {
-        const sphereBtn = document.getElementById('sphere-btn');
+    public setActiveUnitButton(unitType: 'mutant' | 'prisma' | 'lance' | null): void {
+        const mutantBtn = document.getElementById('mutant-btn');
         const prismaBtn = document.getElementById('prisma-btn');
         const lanceBtn = document.getElementById('lance-btn');
 
         // Remove active class from all buttons
-        sphereBtn?.classList.remove('active');
+        mutantBtn?.classList.remove('active');
         prismaBtn?.classList.remove('active');
         lanceBtn?.classList.remove('active');
 
         // Add active class to specified button
-        if (unitType === 'sphere') {
-            sphereBtn?.classList.add('active');
+        if (unitType === 'mutant') {
+            mutantBtn?.classList.add('active');
         } else if (unitType === 'prisma') {
             prismaBtn?.classList.add('active');
         } else if (unitType === 'lance') {
@@ -330,21 +330,21 @@ export class UIManager {
      * Mobile: Touch and drag from button to grid, release to place
      */
     public setupUnitPlacementButtons(
-        onSphereClick: () => void,
+        onMutantClick: () => void,
         onPrismaClick: () => void,
         onLanceClick: () => void
     ): void {
-        const sphereBtn = document.getElementById('sphere-btn');
+        const mutantBtn = document.getElementById('mutant-btn');
         const prismaBtn = document.getElementById('prisma-btn');
         const lanceBtn = document.getElementById('lance-btn');
 
         // Desktop: click handlers
-        sphereBtn?.addEventListener('click', onSphereClick);
+        mutantBtn?.addEventListener('click', onMutantClick);
         prismaBtn?.addEventListener('click', onPrismaClick);
         lanceBtn?.addEventListener('click', onLanceClick);
 
         // Mobile: touch drag handlers
-        this.setupButtonTouchDrag(sphereBtn, 'sphere');
+        this.setupButtonTouchDrag(mutantBtn, 'mutant');
         this.setupButtonTouchDrag(prismaBtn, 'prisma');
         this.setupButtonTouchDrag(lanceBtn, 'lance');
 

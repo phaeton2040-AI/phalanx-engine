@@ -4,7 +4,7 @@ import { TeamTag } from "../../enums/TeamTag";
 /**
  * Unit type for formation placement
  */
-export type FormationUnitType = 'sphere' | 'prisma' | 'lance';
+export type FormationUnitType = 'sphere' | 'mutant' | 'prisma' | 'lance';
 
 /**
  * Represents a cell in the formation grid

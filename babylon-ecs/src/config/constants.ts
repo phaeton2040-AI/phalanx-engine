@@ -73,6 +73,7 @@ export const resourceConfig = {
  * Note: Grid sizes are defined in UnitGridSize (components/UnitTypeComponent.ts)
  */
 export const unitConfig = {
+    /** @deprecated Use mutant instead */
     sphere: {
         cost: 100,
         health: 50,
@@ -94,6 +95,15 @@ export const unitConfig = {
         health: 90,       // Reduced from 100
         attackDamage: 18, // Unchanged
         attackRange: 25,
+        attackCooldown: 1.2,
+        moveSpeed: 8,
+    },
+    mutant: {
+        cost: 100,
+        health: 60,
+        attackDamage: 12,
+        attackRange: 4,       // Small melee range
+        detectionRange: 30,   // Large detection radius (like tower)
         attackCooldown: 1.2,
         moveSpeed: 8,
     },

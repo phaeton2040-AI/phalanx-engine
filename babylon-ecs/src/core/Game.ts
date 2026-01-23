@@ -21,6 +21,8 @@ import { CameraController } from "../systems/CameraController";
 import { InterpolationSystem } from "../systems/InterpolationSystem";
 import { HealthBarSystem } from "../systems/HealthBarSystem";
 import { resetEntityIdCounter } from "../entities/Entity";
+import { MutantUnit } from "../entities/MutantUnit";
+import { AssetManager } from "./AssetManager";
 import { TeamTag } from "../enums/TeamTag";
 import { arenaParams } from "../config/constants";
 import { GameEvents } from "../events";
@@ -72,6 +74,7 @@ export class Game {
     private lockstepManager: LockstepManager;
     private entityFactory: EntityFactory;
     private uiManager: UIManager;
+    private assetManager: AssetManager;
 
     // Callbacks
     private onExit: (() => void) | null = null;
@@ -144,6 +147,9 @@ export class Game {
             this.formationGridSystem,
             this.matchData.playerId
         );
+
+        // Initialize AssetManager for preloading 3D models
+        this.assetManager = new AssetManager(this.scene);
 
         this.lockstepManager = new LockstepManager(
             this.client,
@@ -389,6 +395,10 @@ export class Game {
         // Reset entity ID counter to ensure deterministic IDs across all clients
         resetEntityIdCounter();
 
+        // Preload all 3D models before setting up the scene
+        // This ensures models are ready for formation grids, previews, and units
+        await this.assetManager.preloadAll();
+
         // Initialize RTS-style camera controller for the local player
         this.cameraController = new CameraController(this.scene, this.localTeam);
 
@@ -484,8 +494,8 @@ export class Game {
         // Start the wave system (Wave 0 - preparation phase)
         this.waveSystem.start(0);
 
-        // Set default placement mode for local player (sphere selected by default)
-        this.formationGridSystem.enterPlacementMode(this.matchData.playerId, 'sphere');
+        // Set default placement mode for local player (mutant selected by default)
+        this.formationGridSystem.enterPlacementMode(this.matchData.playerId, 'mutant');
 
         // Initial UI update
         setTimeout(() => {
@@ -574,7 +584,7 @@ export class Game {
      */
     private setupUnitPlacementUI(): void {
         this.uiManager.setupUnitPlacementButtons(
-            () => this.handleUnitButtonClick('sphere'),
+            () => this.handleUnitButtonClick('mutant'),
             () => this.handleUnitButtonClick('prisma'),
             () => this.handleUnitButtonClick('lance')
         );
@@ -607,7 +617,7 @@ export class Game {
     /**
      * Handle unit button click
      */
-    private handleUnitButtonClick(unitType: 'sphere' | 'prisma' | 'lance'): void {
+    private handleUnitButtonClick(unitType: 'mutant' | 'prisma' | 'lance'): void {
         // Allow switching to any unit type - affordability is checked when placing
         this.uiManager.setActiveUnitButton(unitType);
         this.formationGridSystem.enterPlacementMode(this.matchData.playerId, unitType);
@@ -634,12 +644,26 @@ export class Game {
         const deltaTime = this.engine.getDeltaTime() / 1000;
         this.combatSystem.updateTowerTurrets(deltaTime);
 
+        // Update MutantUnit animations based on movement state
+        this.updateMutantAnimations();
+
         // Interpolate visual positions for smooth movement between network ticks
         const alpha = this.lockstepManager.getInterpolationAlpha();
         this.interpolationSystem.interpolate(alpha);
 
         // Update health bars (billboarding and position updates)
         this.healthBarSystem.update();
+    }
+
+    /**
+     * Update animations for all MutantUnit entities
+     */
+    private updateMutantAnimations(): void {
+        for (const entity of this.entityManager.getAllEntities()) {
+            if (entity instanceof MutantUnit) {
+                entity.updateAnimation();
+            }
+        }
     }
 
     /**
@@ -698,6 +722,7 @@ export class Game {
         this.eventBus.clearAll();
         this.entityManager.clear();
         this.entityFactory.clear();
+        this.assetManager.dispose();
 
         // Dispose engine
         this.engine.dispose();

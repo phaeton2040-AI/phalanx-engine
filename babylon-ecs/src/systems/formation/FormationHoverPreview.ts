@@ -1,6 +1,7 @@
 import { Scene, Vector3, MeshBuilder, StandardMaterial, Color3, Mesh } from "@babylonjs/core";
 import { TeamTag } from "../../enums/TeamTag";
 import { arenaParams } from "../../config/constants";
+import { AssetManager, type ModelInstance } from "../../core/AssetManager";
 import type { FormationUnitType, FormationGrid } from "./FormationTypes";
 
 /**
@@ -18,6 +19,9 @@ export class FormationHoverPreview {
     // Hover unit preview mesh (shows transparent unit preview when hovering in placement mode)
     private hoverUnitPreview: Mesh | null = null;
     private hoverUnitPreviewType: FormationUnitType | null = null;
+
+    // Model instance for mutant hover preview
+    private mutantHoverInstance: ModelInstance | null = null;
 
     // Selected unit highlight (for update mode)
     private selectedUnitHighlight: Mesh | null = null;
@@ -134,6 +138,8 @@ export class FormationHoverPreview {
         if (!this.hoverUnitPreview) {
             if (unitType === 'sphere') {
                 this.hoverUnitPreview = this.createHoverSpherePreview(color);
+            } else if (unitType === 'mutant') {
+                this.hoverUnitPreview = this.createHoverMutantPreview(color, team);
             } else if (unitType === 'prisma') {
                 this.hoverUnitPreview = this.createHoverPrismaPreview(color);
             } else {
@@ -145,6 +151,83 @@ export class FormationHoverPreview {
         // Position the preview
         this.hoverUnitPreview.position = new Vector3(worldPos.x, 1.0, worldPos.z);
         this.hoverUnitPreview.setEnabled(true);
+    }
+
+    /**
+     * Create a transparent mutant preview for hover using preloaded model
+     * Sized for 2x2 grid cells
+     */
+    private createHoverMutantPreview(teamColor: Color3, team: TeamTag): Mesh {
+        const assetManager = AssetManager.getInstance();
+
+        if (assetManager) {
+            const instance = assetManager.createPreviewInstance("mutant", "hoverUnitPreview_mutant");
+            if (instance) {
+                // Store the instance for proper disposal
+                this.mutantHoverInstance = instance;
+
+                // Create a parent mesh to serve as the "hover preview mesh"
+                const parentMesh = new Mesh("hoverUnitPreview_mutant", this.scene);
+
+                // Parent the model to this mesh
+                instance.rootNode.parent = parentMesh;
+                instance.rootNode.position = Vector3.Zero();
+
+                // Scale for 2x2 grid size (same as MutantUnit)
+                instance.rootNode.scaling = new Vector3(0.06, 0.06, 0.06);
+
+                // GLB files use rotationQuaternion which overrides Euler angles
+                // Clear it so we can use rotation.y
+                instance.rootNode.rotationQuaternion = null;
+
+                // Rotate to face forward based on team
+                // The model faces along Z axis by default, but units move along X axis
+                // Team1 faces +X (rotate +90 degrees), Team2 faces -X (rotate -90 degrees)
+                if (team === TeamTag.Team1) {
+                    instance.rootNode.rotation.y = Math.PI / 2; // Face +X
+                } else {
+                    instance.rootNode.rotation.y = -Math.PI / 2; // Face -X
+                }
+
+                // Make meshes transparent for hover effect
+                for (const mesh of instance.meshes) {
+                    if (mesh.material) {
+                        const mat = mesh.material.clone(`${mesh.material.name}_hover`);
+                        if (mat && 'alpha' in mat) {
+                            (mat as StandardMaterial).alpha = 0.4;
+                            (mat as StandardMaterial).emissiveColor = teamColor.scale(0.2);
+                        }
+                        mesh.material = mat;
+                    }
+                    mesh.isPickable = false;
+                }
+
+                // Play idle animation
+                const idleAnim = instance.animationGroups.find(ag => ag.name.includes("Idle"));
+                if (idleAnim) {
+                    idleAnim.start(true, 1.0);
+                }
+
+                parentMesh.isPickable = false;
+                return parentMesh;
+            }
+        }
+
+        // Fallback to capsule (sized for 2x2)
+        const mesh = MeshBuilder.CreateCapsule(
+            "hoverUnitPreview_mutant",
+            { height: 4, radius: 1.0 },
+            this.scene
+        );
+
+        const material = new StandardMaterial("hoverUnitPreviewMat_mutant", this.scene);
+        material.diffuseColor = teamColor;
+        material.alpha = 0.4;
+        material.emissiveColor = teamColor.scale(0.2);
+        mesh.material = material;
+        mesh.isPickable = false;
+
+        return mesh;
     }
 
     /**
@@ -313,6 +396,12 @@ export class FormationHoverPreview {
      * Clear and dispose the hover unit preview
      */
     public clearHoverUnitPreview(): void {
+        // Dispose mutant model instance if exists
+        if (this.mutantHoverInstance) {
+            this.mutantHoverInstance.dispose();
+            this.mutantHoverInstance = null;
+        }
+
         if (this.hoverUnitPreview) {
             this.hoverUnitPreview.dispose();
             this.hoverUnitPreview = null;
