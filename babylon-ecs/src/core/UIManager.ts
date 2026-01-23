@@ -301,8 +301,9 @@ export class UIManager {
 
     /**
      * Set active unit button
+     * Accepts any FormationUnitType but only highlights known unit buttons
      */
-    public setActiveUnitButton(unitType: 'mutant' | 'prisma' | 'lance' | null): void {
+    public setActiveUnitButton(unitType: string | null): void {
         const mutantBtn = document.getElementById('mutant-btn');
         const prismaBtn = document.getElementById('prisma-btn');
         const lanceBtn = document.getElementById('lance-btn');

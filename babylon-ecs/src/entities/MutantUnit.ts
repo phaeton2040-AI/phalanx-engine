@@ -21,7 +21,6 @@ import {
 } from "../components";
 import { TeamTag } from "../enums/TeamTag";
 import { AssetManager } from "../core/AssetManager";
-import { GameRandom } from "../core/GameRandom";
 import { BloodEffect } from "../effects/BloodEffect";
 import type { IPhysicsIgnorable } from "../interfaces";
 import type { ICombatant, IDeathSequence, IAnimated } from "../interfaces";
@@ -95,7 +94,6 @@ export class MutantUnit extends Entity implements IPhysicsIgnorable, ICombatant,
 
     // Attack state (visual animation)
     private isAttacking: boolean = false;
-    private pendingDamageCallback: (() => void) | null = null;
     private lastAttackAnimIndex: number = -1; // Track last attack anim to alternate
 
     // Deterministic attack lock timer (for simulation - prevents movement during attack)
@@ -292,11 +290,15 @@ export class MutantUnit extends Entity implements IPhysicsIgnorable, ICombatant,
     /**
      * Play attack animation with crossfade
      * Chains attack animations when in combat (alternates between Attack1 and Attack2)
-     * Damage is dealt once per animation at the hit point (50% of animation)
-     * @param onDealDamage Callback to deal damage - called at animation hit point
+     *
+     * NOTE: This is purely VISUAL. Damage is applied deterministically in CombatSystem
+     * during the simulation tick, not at the animation hit point. This ensures
+     * all clients apply damage at the exact same simulation tick.
+     *
+     * @param _onDealDamage Deprecated - damage is now applied immediately in CombatSystem
      * @returns true if attack animation started
      */
-    public playAttackAnimation(onDealDamage?: () => void): boolean {
+    public playAttackAnimation(_onDealDamage?: () => void): boolean {
         if (!this.isModelLoaded) return false;
         if (this._isDying || this.currentAnimState === MutantAnimationState.Dying) return false;
 
@@ -304,21 +306,11 @@ export class MutantUnit extends Entity implements IPhysicsIgnorable, ICombatant,
         // This makes animation length act as natural cooldown
         if (this.isAttacking) return false;
 
-        // Alternate between attack animations for variety
+        // Alternate between attack animations for variety (purely visual)
+        // We don't use GameRandom here because animation choice doesn't affect game logic
+        // and we don't want to consume deterministic random values for visual effects
         const attackAnims = [MutantAnimations.Attack1, MutantAnimations.Attack2];
-        let animIndex: number;
-
-        if (GameRandom.isInitialized()) {
-            // Use deterministic random but try to alternate
-            if (this.lastAttackAnimIndex === -1) {
-                animIndex = GameRandom.intRange(0, attackAnims.length - 1);
-            } else {
-                // Alternate to the other animation
-                animIndex = (this.lastAttackAnimIndex + 1) % attackAnims.length;
-            }
-        } else {
-            animIndex = (this.lastAttackAnimIndex + 1) % attackAnims.length;
-        }
+        const animIndex = (this.lastAttackAnimIndex + 1) % attackAnims.length;
 
         this.lastAttackAnimIndex = animIndex;
         const attackAnimName = attackAnims[animIndex];
@@ -331,43 +323,11 @@ export class MutantUnit extends Entity implements IPhysicsIgnorable, ICombatant,
         this._isInCombat = true;
         this.currentAnimState = MutantAnimationState.Attacking;
 
-        // Store the damage callback
-        this.pendingDamageCallback = onDealDamage ?? null;
-
         // Use crossfade to smoothly transition to attack animation
         this.crossFadeToAnimation(anim, false, 1.2);
 
-        // Set up ONE-TIME damage at hit point (50% of animation)
-        const totalFrames = anim.to - anim.from;
-        const hitFrame = anim.from + (totalFrames * 0.5);
-        let damageDealt = false;
-
-        const checkHit = () => {
-            // Stop checking if animation stopped or damage already dealt or dying
-            if (!anim.isPlaying || damageDealt || this._isDying) {
-                return;
-            }
-
-            const currentFrame = anim.animatables[0]?.masterFrame ?? 0;
-            if (currentFrame >= hitFrame && !damageDealt) {
-                damageDealt = true;
-                // Call the damage callback NOW at hit point
-                if (this.pendingDamageCallback) {
-                    this.pendingDamageCallback();
-                    this.pendingDamageCallback = null;
-                }
-            }
-
-            if (anim.isPlaying && !damageDealt) {
-                requestAnimationFrame(checkHit);
-            }
-        };
-        requestAnimationFrame(checkHit);
-
         // On animation end, allow next attack or transition out
         anim.onAnimationGroupEndObservable.addOnce(() => {
-            // Clear pending callback if not used (e.g., target died before hit point)
-            this.pendingDamageCallback = null;
 
             // Don't transition if dying
             if (this._isDying || this.currentAnimState === MutantAnimationState.Dying) {
@@ -595,11 +555,16 @@ export class MutantUnit extends Entity implements IPhysicsIgnorable, ICombatant,
 
     /**
      * Check if the unit is currently attack-locked (deterministic for simulation)
-     * Uses timer for deterministic network sync, but also checks visual animation state
-     * to ensure smooth visuals (no movement during attack animation)
+     *
+     * IMPORTANT FOR DETERMINISM: This uses ONLY the attackLockTimer, not the visual
+     * animation state (isAttacking). The timer is updated with fixed timesteps in
+     * the simulation tick, ensuring all clients agree on attack lock state.
+     *
+     * The visual animation (isAttacking) may end at different times on different
+     * machines, but the simulation uses this deterministic timer.
      */
     public get isCurrentlyAttacking(): boolean {
-        return this.attackLockTimer > 0 || this.isAttacking;
+        return this.attackLockTimer > 0;
     }
 
     /**
