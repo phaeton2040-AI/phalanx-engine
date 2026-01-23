@@ -23,8 +23,8 @@ import { TeamTag } from "../enums/TeamTag";
 import { AssetManager } from "../core/AssetManager";
 import { GameRandom } from "../core/GameRandom";
 import { BloodEffect } from "../effects/BloodEffect";
-import { IPhysicsIgnorable } from "../interfaces/IPhysicsAware";
-import { ICombatant, IDeathSequence, IAnimated } from "../interfaces/ICombatant";
+import type { IPhysicsIgnorable } from "../interfaces";
+import type { ICombatant, IDeathSequence, IAnimated } from "../interfaces";
 
 /**
  * Animation names for the Mutant model
