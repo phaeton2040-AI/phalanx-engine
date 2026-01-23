@@ -73,6 +73,10 @@ export interface HealRequestedEvent extends GameEvent {
     amount: number;
 }
 
+export interface EntityDyingEvent extends GameEvent {
+    entityId: number;
+}
+
 export interface EntityDestroyedEvent extends GameEvent {
     entityId: number;
     position: Vector3;

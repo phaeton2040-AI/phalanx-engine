@@ -100,11 +100,11 @@ export const unitConfig = {
     },
     mutant: {
         cost: 100,
-        health: 60,
-        attackDamage: 12,
-        attackRange: 4,       // Small melee range
+        health: 120,
+        attackDamage: 18,
+        attackRange: 12,       // Melee range (increased to reduce stacking)
         detectionRange: 30,   // Large detection radius (like tower)
-        attackCooldown: 1.2,
+        attackCooldown: 0,    // No cooldown - animation length is natural cooldown
         moveSpeed: 8,
     },
 };
@@ -120,7 +120,7 @@ export const waveConfig = {
 
     // Wave 0 duration - initial preparation time before first deployment
     // Set to same as waveDuration by default, but can be customized
-    initialWaveDuration: 30,
+    initialWaveDuration: 12,
 
     // Whether Wave 0 deploys units (false = preparation wave only)
     deployOnWaveZero: false,

@@ -2,9 +2,23 @@ import { EntityManager } from "../core/EntityManager";
 import { EventBus } from "../core/EventBus";
 import { ComponentType, HealthComponent } from "../components";
 import { Entity } from "../entities/Entity";
-import { MutantUnit } from "../entities/MutantUnit";
 import { GameEvents, createEvent } from "../events";
-import type { DamageRequestedEvent, DamageAppliedEvent, HealRequestedEvent, EntityDestroyedEvent } from "../events";
+import type { DamageRequestedEvent, DamageAppliedEvent, HealRequestedEvent, EntityDyingEvent, EntityDestroyedEvent } from "../events";
+import { hasDeathSequence } from "../interfaces/ICombatant";
+
+/**
+ * Interface for entities that can show blood effects when damaged
+ */
+interface IBloodEffect {
+    showBloodEffect(): void;
+}
+
+/**
+ * Type guard for blood effect
+ */
+function hasBloodEffect(entity: Entity): entity is Entity & IBloodEffect {
+    return 'showBloodEffect' in entity && typeof (entity as any).showBloodEffect === 'function';
+}
 
 /**
  * HealthSystem - Manages entity health and destruction
@@ -52,9 +66,9 @@ export class HealthSystem {
 
         const wasDestroyed = health.takeDamage(amount);
 
-        // Show blood effect for MutantUnit when taking damage
-        if (entity instanceof MutantUnit) {
-            (entity as MutantUnit).showBloodEffect();
+        // Show blood effect for entities that support it
+        if (hasBloodEffect(entity)) {
+            entity.showBloodEffect();
         }
 
         // Emit damage applied event
@@ -68,19 +82,36 @@ export class HealthSystem {
         });
 
         if (wasDestroyed) {
-            // Play death animation for MutantUnit
-            if (entity instanceof MutantUnit) {
-                (entity as MutantUnit).playDeathAnimation();
+            // Handle death differently for entities with death sequences
+            if (hasDeathSequence(entity)) {
+                // Emit entity dying event immediately (for health bar removal, etc.)
+                this.eventBus.emit<EntityDyingEvent>(GameEvents.ENTITY_DYING, {
+                    ...createEvent(),
+                    entityId: entity.id,
+                });
+
+                // Start death sequence - unit will be destroyed when animation completes
+                entity.startDeathSequence(() => {
+                    // Emit entity destroyed event before destroying
+                    this.eventBus.emit<EntityDestroyedEvent>(GameEvents.ENTITY_DESTROYED, {
+                        ...createEvent(),
+                        entityId: entity.id,
+                        position: entity.position.clone(),
+                    });
+
+                    entity.destroy();
+                });
+            } else {
+                // For other entities, destroy immediately
+                // Emit entity destroyed event before destroying
+                this.eventBus.emit<EntityDestroyedEvent>(GameEvents.ENTITY_DESTROYED, {
+                    ...createEvent(),
+                    entityId: entity.id,
+                    position: entity.position.clone(),
+                });
+
+                entity.destroy();
             }
-
-            // Emit entity destroyed event before destroying
-            this.eventBus.emit<EntityDestroyedEvent>(GameEvents.ENTITY_DESTROYED, {
-                ...createEvent(),
-                entityId: entity.id,
-                position: entity.position.clone(),
-            });
-
-            entity.destroy();
         }
 
         return wasDestroyed;

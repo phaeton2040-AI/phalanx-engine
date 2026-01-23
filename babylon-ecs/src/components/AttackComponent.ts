@@ -2,12 +2,18 @@ import type { IComponent } from "./Component";
 import { ComponentType } from "./Component";
 import { Vector3 } from "@babylonjs/core";
 
+/**
+ * Attack type enum for distinguishing melee vs ranged attacks
+ */
+export type AttackType = 'melee' | 'ranged';
+
 export interface AttackConfig {
     range?: number;
     detectionRange?: number;
     cooldown?: number;
     damage?: number;
     projectileSpeed?: number;
+    attackType?: AttackType;
 }
 
 /**
@@ -21,6 +27,7 @@ export class AttackComponent implements IComponent {
     private _cooldown: number;
     private _damage: number;
     private _projectileSpeed: number;
+    private _attackType: AttackType;
     private _currentCooldown: number = 0;
     private _attackOriginOffset: Vector3;
 
@@ -30,6 +37,8 @@ export class AttackComponent implements IComponent {
         this._cooldown = config.cooldown ?? 1.0;
         this._damage = config.damage ?? 10;
         this._projectileSpeed = config.projectileSpeed ?? 40;
+        // Default to ranged if projectileSpeed > 0, otherwise melee
+        this._attackType = config.attackType ?? (config.projectileSpeed === 0 ? 'melee' : 'ranged');
         this._attackOriginOffset = Vector3.Zero();
     }
 
@@ -51,6 +60,24 @@ export class AttackComponent implements IComponent {
 
     public get projectileSpeed(): number {
         return this._projectileSpeed;
+    }
+
+    public get attackType(): AttackType {
+        return this._attackType;
+    }
+
+    /**
+     * Check if this is a melee attack
+     */
+    public get isMelee(): boolean {
+        return this._attackType === 'melee';
+    }
+
+    /**
+     * Check if this is a ranged attack
+     */
+    public get isRanged(): boolean {
+        return this._attackType === 'ranged';
     }
 
     public get currentCooldown(): number {
