@@ -1,6 +1,7 @@
 import { Vector3 } from "@babylonjs/core";
 import { EntityManager } from "../core/EntityManager";
 import { ComponentType, MovementComponent, TeamComponent } from "../components";
+import { isPhysicsIgnorable } from "../interfaces/IPhysicsAware";
 import { networkConfig } from "../config/constants";
 
 /**
@@ -251,6 +252,13 @@ export class PhysicsSystem {
 
             if (!movement || !body || body.isStatic) continue;
 
+            // Skip entities that should be ignored by physics (e.g., dying units)
+            if (isPhysicsIgnorable(entity) && entity.shouldIgnorePhysics()) {
+                body.velocity.x = 0;
+                body.velocity.z = 0;
+                continue;
+            }
+
             if (movement.isMoving) {
                 const target = movement.targetPosition;
                 const pos = entity.position;
@@ -482,7 +490,8 @@ export class PhysicsSystem {
 
     /**
      * Check if collision should be skipped between two entities
-     * Units don't collide with friendly buildings (bases, towers)
+     * - Entities implementing IPhysicsIgnorable can opt out of physics
+     * - Units don't collide with friendly buildings (bases, towers)
      */
     private shouldSkipCollision(
         entityA: import("../entities/Entity").Entity,
@@ -490,6 +499,14 @@ export class PhysicsSystem {
         bodyA: PhysicsBody,
         bodyB: PhysicsBody
     ): boolean {
+        // Skip collisions with entities that should be ignored (e.g., dying units)
+        if (isPhysicsIgnorable(entityA) && entityA.shouldIgnorePhysics()) {
+            return true;
+        }
+        if (isPhysicsIgnorable(entityB) && entityB.shouldIgnorePhysics()) {
+            return true;
+        }
+
         // If neither is static, they should collide (unit vs unit)
         if (!bodyA.isStatic && !bodyB.isStatic) {
             return false;

@@ -12,6 +12,7 @@ export const GameEvents = {
     DAMAGE_REQUESTED: 'health:damageRequested',
     DAMAGE_APPLIED: 'health:damageApplied',
     HEAL_REQUESTED: 'health:healRequested',
+    ENTITY_DYING: 'health:entityDying',
     ENTITY_DESTROYED: 'health:entityDestroyed',
 
     // Movement events

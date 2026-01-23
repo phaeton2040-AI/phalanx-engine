@@ -21,7 +21,7 @@ import { CameraController } from "../systems/CameraController";
 import { InterpolationSystem } from "../systems/InterpolationSystem";
 import { HealthBarSystem } from "../systems/HealthBarSystem";
 import { resetEntityIdCounter } from "../entities/Entity";
-import { MutantUnit } from "../entities/MutantUnit";
+import { isAnimated } from "../interfaces/ICombatant";
 import { AssetManager } from "./AssetManager";
 import { TeamTag } from "../enums/TeamTag";
 import { arenaParams } from "../config/constants";
@@ -644,8 +644,8 @@ export class Game {
         const deltaTime = this.engine.getDeltaTime() / 1000;
         this.combatSystem.updateTowerTurrets(deltaTime);
 
-        // Update MutantUnit animations based on movement state
-        this.updateMutantAnimations();
+        // Update MutantUnit animations and rotations based on movement state
+        this.updateEntityAnimations(deltaTime);
 
         // Interpolate visual positions for smooth movement between network ticks
         const alpha = this.lockstepManager.getInterpolationAlpha();
@@ -656,12 +656,13 @@ export class Game {
     }
 
     /**
-     * Update animations for all MutantUnit entities
+     * Update animations and rotations for all animated entities
      */
-    private updateMutantAnimations(): void {
+    private updateEntityAnimations(deltaTime: number): void {
         for (const entity of this.entityManager.getAllEntities()) {
-            if (entity instanceof MutantUnit) {
+            if (isAnimated(entity)) {
                 entity.updateAnimation();
+                entity.updateRotation(deltaTime);
             }
         }
     }

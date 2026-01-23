@@ -1,7 +1,6 @@
 import { Engine, Vector3 } from "@babylonjs/core";
 import { Entity } from "../entities/Entity";
 import { Tower } from "../entities/Tower";
-import { MutantUnit } from "../entities/MutantUnit";
 import { EntityManager } from "../core/EntityManager";
 import { EventBus } from "../core/EventBus";
 import { GameRandom } from "../core/GameRandom";
@@ -9,6 +8,7 @@ import { ComponentType, TeamComponent, HealthComponent, AttackComponent, Movemen
 import { GameEvents, createEvent } from "../events";
 import type { ProjectileSpawnedEvent, DamageAppliedEvent, DamageRequestedEvent } from "../events";
 import { networkConfig } from "../config/constants";
+import { isCombatant, hasDeathSequence } from "../interfaces/ICombatant";
 
 /**
  * Combat system configuration for deterministic simulation
@@ -160,11 +160,19 @@ export class CombatSystem {
             const health = attacker.getComponent<HealthComponent>(ComponentType.Health);
             if (health?.isDestroyed) continue;
 
+            // Skip dying entities - they shouldn't attack or be processed
+            if (hasDeathSequence(attacker) && attacker.isDying) continue;
+
             const attack = attacker.getComponent<AttackComponent>(ComponentType.Attack)!;
             const movement = attacker.getComponent<MovementComponent>(ComponentType.Movement);
 
             // Update attack cooldown with fixed timestep
             attack.updateCooldown(deltaTime);
+
+            // Update attack lock timer for combatants (deterministic)
+            if (isCombatant(attacker)) {
+                attacker.updateAttackLock(deltaTime);
+            }
 
             // Check for aggro target first (unit that attacked us)
             const aggroTargetId = this.aggroTargets.get(attacker.id);
@@ -205,32 +213,61 @@ export class CombatSystem {
                     (attacker as Tower).setTargetPosition(target.position);
                 }
 
+                // Check if combatant is currently attacking
+                const combatant = isCombatant(attacker) ? attacker : null;
+                const isAttackingCombatant = combatant?.isCurrentlyAttacking ?? false;
+
+                // Orient combatant units toward their target only when:
+                // 1. It's a new target, OR
+                // 2. Not currently in attack animation (to avoid jitter during attack)
+                if (combatant && !isAttackingCombatant) {
+                    combatant.orientToTarget(target.position);
+                }
+
                 if (inAttackRange) {
                     // Target is in attack range - stop and attack
                     if (movement?.isMoving) {
                         movement.stop();
                     }
 
-                    // Attack if ready (for towers, also check if turret is aimed)
+                    // Attack if ready
+                    // For combatants: only attack if not already in attack animation
+                    // (animation length is the natural cooldown for melee)
+                    // For towers: also check if turret is aimed
                     const canFire = isTower ? (attacker as Tower).isAimedAtTarget : true;
-                    if (attack.canAttack() && canFire) {
+                    const combatantCanAttack = !combatant || !isAttackingCombatant;
+
+                    if (attack.canAttack() && canFire && combatantCanAttack) {
                         this.performAttack(attacker, target);
                     }
                 } else if (movement) {
                     // Target detected but out of attack range - move toward target
-                    // Store original target if not already stored
-                    if (!this.storedMoveTargets.has(attacker.id)) {
+                    // But don't move if we're currently in an attack animation
+                    if (isAttackingCombatant) {
+                        // Don't move while attacking, but keep facing target
                         if (movement.isMoving) {
-                            this.storedMoveTargets.set(attacker.id, movement.targetPosition.clone());
-                        } else {
-                            this.storedMoveTargets.set(attacker.id, attacker.position.clone());
+                            movement.stop();
+                        }
+                    } else {
+                        // Store original target if not already stored
+                        if (!this.storedMoveTargets.has(attacker.id)) {
+                            if (movement.isMoving) {
+                                this.storedMoveTargets.set(attacker.id, movement.targetPosition.clone());
+                            } else {
+                                this.storedMoveTargets.set(attacker.id, attacker.position.clone());
+                            }
+                        }
+
+                        // Move towards the target (use callback for lockstep)
+                        this.requestMove(attacker.id, target.position.clone());
+
+                        // Notify combatant that movement started for animation sync
+                        if (combatant) {
+                            combatant.notifyMovementStarted();
                         }
                     }
-
-                    // Move towards the target (use callback for lockstep)
-                    this.requestMove(attacker.id, target.position.clone());
                 }
-                
+
                 // Clear aggro if we killed our aggro target
                 if (aggroTargetId === target.id) {
                     const targetHealth = target.getComponent<HealthComponent>(ComponentType.Health);
@@ -241,8 +278,12 @@ export class CombatSystem {
             } else if (aggroTarget && movement) {
                 // Aggro target exists but is out of range - move towards them
                 const distance = Vector3.Distance(attacker.position, aggroTarget.position);
-                
-                if (distance > attack.range) {
+
+                // Check if combatant is currently attacking
+                const combatant = isCombatant(attacker) ? attacker : null;
+                const isAttackingCombatant = combatant?.isCurrentlyAttacking ?? false;
+
+                if (distance > attack.range && !isAttackingCombatant) {
                     // Store original target if not already stored
                     if (!this.storedMoveTargets.has(attacker.id) && movement.isMoving) {
                         this.storedMoveTargets.set(attacker.id, movement.targetPosition.clone());
@@ -250,14 +291,22 @@ export class CombatSystem {
                         // If not moving, store current position as fallback
                         this.storedMoveTargets.set(attacker.id, attacker.position.clone());
                     }
-                    
+
                     // Move towards the aggro target (use callback for lockstep)
                     this.requestMove(attacker.id, aggroTarget.position.clone());
+
+                    // Notify combatant that movement started for animation sync
+                    if (combatant) {
+                        combatant.notifyMovementStarted();
+                    }
+                } else if (isAttackingCombatant && movement.isMoving) {
+                    // Stop movement if attacking
+                    movement.stop();
                 }
             } else {
                 // No target in range and no aggro target
+                // Clear current target tracking if we had one
                 if (previousTargetId !== undefined) {
-                    // We just lost our target - resume movement to original destination
                     this.currentTargets.delete(attacker.id);
 
                     // Clear tower target
@@ -265,11 +314,26 @@ export class CombatSystem {
                         (attacker as Tower).setTargetPosition(null);
                     }
 
-                    const storedTarget = this.storedMoveTargets.get(attacker.id);
-                    if (storedTarget && movement) {
-                        // Resume movement (use callback for lockstep)
-                        this.requestMove(attacker.id, storedTarget);
-                        this.storedMoveTargets.delete(attacker.id);
+                    // End combat mode for combatant so it can transition to idle/run
+                    if (isCombatant(attacker)) {
+                        attacker.endCombat();
+                    }
+                }
+
+                // Try to resume movement to original destination
+                const storedTarget = this.storedMoveTargets.get(attacker.id);
+                // Don't resume movement if combatant is still in attack animation
+                const combatant = isCombatant(attacker) ? attacker : null;
+                const isAttackingCombatant = combatant?.isCurrentlyAttacking ?? false;
+
+                if (storedTarget && movement && !isAttackingCombatant) {
+                    // Resume movement (use callback for lockstep)
+                    this.requestMove(attacker.id, storedTarget);
+                    this.storedMoveTargets.delete(attacker.id);
+
+                    // Orient combatant along movement direction
+                    if (combatant) {
+                        combatant.orientToMovementDirection();
                     }
                 }
             }
@@ -308,10 +372,12 @@ export class CombatSystem {
         // Use detectionRange for finding targets (defaults to attack range if not set)
         const detectionRange = attack.detectionRange;
 
-        // If we have an aggro target in attack range, prioritize it
+        // If we have an aggro target in attack range, prioritize it (unless dying)
         if (aggroTarget) {
+            // Skip dying entities as aggro targets
+            const isDying = hasDeathSequence(aggroTarget) && aggroTarget.isDying;
             const aggroHealth = aggroTarget.getComponent<HealthComponent>(ComponentType.Health);
-            if (!aggroHealth?.isDestroyed) {
+            if (!aggroHealth?.isDestroyed && !isDying) {
                 const aggroDistance = Vector3.Distance(attacker.position, aggroTarget.position);
                 if (aggroDistance <= attack.range) {
                     return aggroTarget;
@@ -327,6 +393,9 @@ export class CombatSystem {
 
             const health = potential.getComponent<HealthComponent>(ComponentType.Health);
             if (health?.isDestroyed) continue;
+
+            // Skip dying entities as potential targets
+            if (hasDeathSequence(potential) && potential.isDying) continue;
 
             const targetTeam = potential.getComponent<TeamComponent>(ComponentType.Team);
             if (!targetTeam || !attackerTeam.isHostileTo(targetTeam)) continue;
@@ -375,53 +444,85 @@ export class CombatSystem {
             }
         }
 
-        // Check if this is a melee attack (no projectile)
-        if (attack.projectileSpeed === 0) {
-            // Trigger attack animation for MutantUnit
-            if (attacker instanceof MutantUnit) {
-                (attacker as MutantUnit).playAttackAnimation();
-            }
+        // Handle attack based on attack type
+        if (attack.isMelee) {
+            this.performMeleeAttack(attacker, target, damage);
+        } else {
+            this.performRangedAttack(attacker, target, attack, team, damage);
+        }
 
-            // Melee attack - apply damage directly to target
+        // Reset cooldown
+        attack.onAttackPerformed();
+    }
+
+    /**
+     * Perform a melee attack
+     */
+    private performMeleeAttack(attacker: Entity, target: Entity, damage: number): void {
+        // For combatants: trigger attack animation with damage callback at hit point
+        if (isCombatant(attacker)) {
+            // Create damage callback to be called at animation hit point
+            const dealDamage = () => {
+                this.eventBus.emit<DamageRequestedEvent>(GameEvents.DAMAGE_REQUESTED, {
+                    ...createEvent(),
+                    entityId: target.id,
+                    amount: damage,
+                    sourceId: attacker.id,
+                });
+            };
+
+            // Start attack animation with damage callback
+            attacker.playAttackAnimation(dealDamage);
+            attacker.startAttackLock(); // Deterministic movement lock
+        } else {
+            // Non-combatant melee units - apply damage directly
             this.eventBus.emit<DamageRequestedEvent>(GameEvents.DAMAGE_REQUESTED, {
                 ...createEvent(),
                 entityId: target.id,
                 amount: damage,
                 sourceId: attacker.id,
             });
+        }
+    }
+
+    /**
+     * Perform a ranged attack by spawning a projectile
+     */
+    private performRangedAttack(
+        attacker: Entity,
+        target: Entity,
+        attack: AttackComponent,
+        team: TeamComponent,
+        damage: number
+    ): void {
+        // Calculate origin and direction (special handling for towers with rotating turrets)
+        let origin: Vector3;
+        let direction: Vector3;
+
+        if (attacker instanceof Tower) {
+            // Use barrel tip position for towers, but calculate direction to target
+            const tower = attacker as Tower;
+            origin = tower.getBarrelTipPosition();
+            // Calculate direction from barrel tip to target (not just horizontal barrel direction)
+            direction = target.position.subtract(origin).normalize();
         } else {
-            // Ranged attack - spawn projectile
-            // Calculate origin and direction (special handling for towers with rotating turrets)
-            let origin: Vector3;
-            let direction: Vector3;
-
-            if (attacker instanceof Tower) {
-                // Use barrel tip position for towers, but calculate direction to target
-                const tower = attacker as Tower;
-                origin = tower.getBarrelTipPosition();
-                // Calculate direction from barrel tip to target (not just horizontal barrel direction)
-                direction = target.position.subtract(origin).normalize();
-            } else {
-                // Standard attack origin for other entities
-                origin = attack.getAttackOrigin(attacker.position);
-                direction = target.position.subtract(origin).normalize();
-            }
-
-            // Emit projectile spawn event instead of calling ProjectileSystem directly
-            this.eventBus.emit<ProjectileSpawnedEvent>(GameEvents.PROJECTILE_SPAWNED, {
-                ...createEvent(),
-                origin: origin.clone(),
-                direction: direction.clone(),
-                damage: damage,
-                speed: attack.projectileSpeed,
-                team: team.team,
-                sourceId: attacker.id,
-            });
+            // Standard attack origin for other entities
+            origin = attack.getAttackOrigin(attacker.position);
+            direction = target.position.subtract(origin).normalize();
         }
 
-        // Reset cooldown
-        attack.onAttackPerformed();
+        // Emit projectile spawn event instead of calling ProjectileSystem directly
+        this.eventBus.emit<ProjectileSpawnedEvent>(GameEvents.PROJECTILE_SPAWNED, {
+            ...createEvent(),
+            origin: origin.clone(),
+            direction: direction.clone(),
+            damage: damage,
+            speed: attack.projectileSpeed,
+            team: team.team,
+            sourceId: attacker.id,
+        });
     }
+
 
     /**
      * Get the current target of an entity

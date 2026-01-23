@@ -59,6 +59,13 @@ export class HealthBarSystem {
             })
         );
 
+        // Listen for entity dying to remove health bar immediately (before death animation)
+        this.unsubscribers.push(
+            this.eventBus.on(GameEvents.ENTITY_DYING, (event: any) => {
+                this.removeHealthBar(event.entityId);
+            })
+        );
+
         // Listen for entity destruction to cleanup health bars
         this.unsubscribers.push(
             this.eventBus.on(GameEvents.ENTITY_DESTROYED, (event: any) => {
