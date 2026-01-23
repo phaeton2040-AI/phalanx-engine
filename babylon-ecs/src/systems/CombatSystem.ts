@@ -457,31 +457,26 @@ export class CombatSystem {
 
     /**
      * Perform a melee attack
+     *
+     * IMPORTANT FOR DETERMINISM: Damage is applied IMMEDIATELY during the simulation tick,
+     * not at the animation hit point. The animation is purely visual.
+     * This ensures all clients deal damage at exactly the same simulation tick.
      */
     private performMeleeAttack(attacker: Entity, target: Entity, damage: number): void {
-        // For combatants: trigger attack animation with damage callback at hit point
-        if (isCombatant(attacker)) {
-            // Create damage callback to be called at animation hit point
-            const dealDamage = () => {
-                this.eventBus.emit<DamageRequestedEvent>(GameEvents.DAMAGE_REQUESTED, {
-                    ...createEvent(),
-                    entityId: target.id,
-                    amount: damage,
-                    sourceId: attacker.id,
-                });
-            };
+        // Apply damage immediately for deterministic simulation
+        // All clients will apply damage at the exact same simulation tick
+        this.eventBus.emit<DamageRequestedEvent>(GameEvents.DAMAGE_REQUESTED, {
+            ...createEvent(),
+            entityId: target.id,
+            amount: damage,
+            sourceId: attacker.id,
+        });
 
-            // Start attack animation with damage callback
-            attacker.playAttackAnimation(dealDamage);
+        // For combatants: trigger attack animation (purely visual, no damage callback)
+        if (isCombatant(attacker)) {
+            // Start attack animation without damage callback - damage already applied above
+            attacker.playAttackAnimation();
             attacker.startAttackLock(); // Deterministic movement lock
-        } else {
-            // Non-combatant melee units - apply damage directly
-            this.eventBus.emit<DamageRequestedEvent>(GameEvents.DAMAGE_REQUESTED, {
-                ...createEvent(),
-                entityId: target.id,
-                amount: damage,
-                sourceId: attacker.id,
-            });
         }
     }
 
