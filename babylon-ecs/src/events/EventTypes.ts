@@ -4,7 +4,7 @@ import type { TeamTag } from "../enums/TeamTag";
 /**
  * Unit type for formation and unit events
  */
-export type FormationUnitType = 'sphere' | 'prisma' | 'lance';
+export type FormationUnitType = 'sphere' | 'mutant' | 'prisma' | 'lance';
 
 /**
  * Base interface for all game events
@@ -341,4 +341,3 @@ export interface WaveDeploymentEvent extends GameEvent {
     waveNumber: number;
     totalUnitsDeployed: number;
 }
-

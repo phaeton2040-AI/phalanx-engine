@@ -4,6 +4,7 @@ import { Vector3 } from "@babylonjs/core";
 
 export interface AttackConfig {
     range?: number;
+    detectionRange?: number;
     cooldown?: number;
     damage?: number;
     projectileSpeed?: number;
@@ -16,6 +17,7 @@ export class AttackComponent implements IComponent {
     public readonly type = ComponentType.Attack;
 
     private _range: number;
+    private _detectionRange: number;
     private _cooldown: number;
     private _damage: number;
     private _projectileSpeed: number;
@@ -24,14 +26,19 @@ export class AttackComponent implements IComponent {
 
     constructor(config: AttackConfig = {}) {
         this._range = config.range ?? 8;
+        this._detectionRange = config.detectionRange ?? config.range ?? 8;
         this._cooldown = config.cooldown ?? 1.0;
         this._damage = config.damage ?? 10;
-        this._projectileSpeed = config.projectileSpeed ?? 40; // 15% faster than original 30
+        this._projectileSpeed = config.projectileSpeed ?? 40;
         this._attackOriginOffset = Vector3.Zero();
     }
 
     public get range(): number {
         return this._range;
+    }
+
+    public get detectionRange(): number {
+        return this._detectionRange;
     }
 
     public get cooldown(): number {

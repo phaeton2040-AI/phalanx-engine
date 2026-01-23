@@ -218,6 +218,7 @@ export class FormationGridData {
 
         switch (unitType) {
             case 'sphere':
+            case 'mutant':
                 return { x: gridX, z: gridZ };
             case 'lance':
                 return this.findLanceOrigin(grid, gridX, gridZ);

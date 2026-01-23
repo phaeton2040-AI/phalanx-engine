@@ -2,6 +2,7 @@ import { EntityManager } from "../core/EntityManager";
 import { EventBus } from "../core/EventBus";
 import { ComponentType, HealthComponent } from "../components";
 import { Entity } from "../entities/Entity";
+import { MutantUnit } from "../entities/MutantUnit";
 import { GameEvents, createEvent } from "../events";
 import type { DamageRequestedEvent, DamageAppliedEvent, HealRequestedEvent, EntityDestroyedEvent } from "../events";
 
@@ -51,6 +52,11 @@ export class HealthSystem {
 
         const wasDestroyed = health.takeDamage(amount);
 
+        // Show blood effect for MutantUnit when taking damage
+        if (entity instanceof MutantUnit) {
+            (entity as MutantUnit).showBloodEffect();
+        }
+
         // Emit damage applied event
         this.eventBus.emit<DamageAppliedEvent>(GameEvents.DAMAGE_APPLIED, {
             ...createEvent(),
@@ -62,6 +68,11 @@ export class HealthSystem {
         });
 
         if (wasDestroyed) {
+            // Play death animation for MutantUnit
+            if (entity instanceof MutantUnit) {
+                (entity as MutantUnit).playDeathAnimation();
+            }
+
             // Emit entity destroyed event before destroying
             this.eventBus.emit<EntityDestroyedEvent>(GameEvents.ENTITY_DESTROYED, {
                 ...createEvent(),

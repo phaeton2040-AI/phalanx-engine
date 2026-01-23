@@ -17,6 +17,8 @@ import { PrismaUnit } from "../entities/PrismaUnit";
 import type { PrismaUnitConfig } from "../entities/PrismaUnit";
 import { LanceUnit } from "../entities/LanceUnit";
 import type { LanceUnitConfig } from "../entities/LanceUnit";
+import { MutantUnit } from "../entities/MutantUnit";
+import type { MutantUnitConfig } from "../entities/MutantUnit";
 import { Tower } from "../entities/Tower";
 import type { TowerConfig } from "../entities/Tower";
 import { Base } from "../entities/Base";
@@ -270,6 +272,14 @@ export class SceneManager {
     }
     public createLanceUnit(config: LanceUnitConfig = {}, position?: Vector3): LanceUnit {
         const unit = new LanceUnit(this.scene, config, position);
+        const unitMesh = unit.getMesh();
+        if (this.shadowGenerator && unitMesh) {
+            this.shadowGenerator.addShadowCaster(unitMesh);
+        }
+        return unit;
+    }
+    public createMutantUnit(config: MutantUnitConfig = {}, position?: Vector3): MutantUnit {
+        const unit = new MutantUnit(this.scene, config, position);
         const unitMesh = unit.getMesh();
         if (this.shadowGenerator && unitMesh) {
             this.shadowGenerator.addShadowCaster(unitMesh);

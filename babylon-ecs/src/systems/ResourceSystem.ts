@@ -185,7 +185,8 @@ export class ResourceSystem {
         let cost: number;
         switch (event.unitType) {
             case 'sphere':
-                cost = unitConfig.sphere.cost;
+            case 'mutant':
+                cost = unitConfig.mutant.cost;
                 break;
             case 'prisma':
                 cost = unitConfig.prisma.cost;
@@ -278,14 +279,15 @@ export class ResourceSystem {
     /**
      * Check if player can afford a unit
      */
-    public canAfford(playerId: string, unitType: 'sphere' | 'prisma' | 'lance'): boolean {
+    public canAfford(playerId: string, unitType: 'sphere' | 'mutant' | 'prisma' | 'lance'): boolean {
         const resources = this.playerResources.get(playerId);
         if (!resources) return false;
 
         let cost: number;
         switch (unitType) {
             case 'sphere':
-                cost = unitConfig.sphere.cost;
+            case 'mutant':
+                cost = unitConfig.mutant.cost;
                 break;
             case 'prisma':
                 cost = unitConfig.prisma.cost;

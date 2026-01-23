@@ -27,7 +27,7 @@ export interface NetworkMoveCommand extends PlayerCommand {
  * Place unit command data - places a unit on the formation grid
  */
 export interface PlaceUnitCommandData {
-    unitType: 'sphere' | 'prisma' | 'lance';
+    unitType: 'sphere' | 'mutant' | 'prisma' | 'lance';
     gridX: number;
     gridZ: number;
 }
