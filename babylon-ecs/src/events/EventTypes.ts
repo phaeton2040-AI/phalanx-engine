@@ -1,5 +1,5 @@
-import { Vector3 } from "@babylonjs/core";
-import type { TeamTag } from "../enums/TeamTag";
+import { Vector3 } from '@babylonjs/core';
+import type { TeamTag } from '../enums/TeamTag';
 
 /**
  * Unit type for formation and unit events
@@ -10,14 +10,14 @@ export type FormationUnitType = 'sphere' | 'mutant' | 'prisma' | 'lance';
  * Base interface for all game events
  */
 export interface GameEvent {
-    readonly timestamp: number;
+  readonly timestamp: number;
 }
 
 /**
  * Creates a base event with timestamp
  */
 export function createEvent(): GameEvent {
-    return { timestamp: performance.now() };
+  return { timestamp: performance.now() };
 }
 
 // ============================================
@@ -25,29 +25,29 @@ export function createEvent(): GameEvent {
 // ============================================
 
 export interface AttackRequestedEvent extends GameEvent {
-    attackerId: number;
-    targetId: number;
-    damage: number;
-    projectileSpeed: number;
-    attackOrigin: Vector3;
-    team: TeamTag;
+  attackerId: number;
+  targetId: number;
+  damage: number;
+  projectileSpeed: number;
+  attackOrigin: Vector3;
+  team: TeamTag;
 }
 
 export interface ProjectileSpawnedEvent extends GameEvent {
-    origin: Vector3;
-    direction: Vector3;
-    damage: number;
-    speed: number;
-    team: TeamTag;
-    sourceId: number; // ID of the entity that fired the projectile
+  origin: Vector3;
+  direction: Vector3;
+  damage: number;
+  speed: number;
+  team: TeamTag;
+  sourceId: number; // ID of the entity that fired the projectile
 }
 
 export interface ProjectileHitEvent extends GameEvent {
-    targetId: number;
-    damage: number;
-    position: Vector3;
-    team: TeamTag;
-    sourceId: number; // ID of the entity that fired the projectile
+  targetId: number;
+  damage: number;
+  position: Vector3;
+  team: TeamTag;
+  sourceId: number; // ID of the entity that fired the projectile
 }
 
 // ============================================
@@ -55,31 +55,31 @@ export interface ProjectileHitEvent extends GameEvent {
 // ============================================
 
 export interface DamageRequestedEvent extends GameEvent {
-    entityId: number;
-    amount: number;
-    sourceId?: number;
+  entityId: number;
+  amount: number;
+  sourceId?: number;
 }
 
 export interface DamageAppliedEvent extends GameEvent {
-    entityId: number;
-    amount: number;
-    newHealth: number;
-    maxHealth: number;
-    sourceId?: number; // ID of the entity that caused the damage
+  entityId: number;
+  amount: number;
+  newHealth: number;
+  maxHealth: number;
+  sourceId?: number; // ID of the entity that caused the damage
 }
 
 export interface HealRequestedEvent extends GameEvent {
-    entityId: number;
-    amount: number;
+  entityId: number;
+  amount: number;
 }
 
 export interface EntityDyingEvent extends GameEvent {
-    entityId: number;
+  entityId: number;
 }
 
 export interface EntityDestroyedEvent extends GameEvent {
-    entityId: number;
-    position: Vector3;
+  entityId: number;
+  position: Vector3;
 }
 
 // ============================================
@@ -87,22 +87,22 @@ export interface EntityDestroyedEvent extends GameEvent {
 // ============================================
 
 export interface MoveRequestedEvent extends GameEvent {
-    entityId: number;
-    target: Vector3;
+  entityId: number;
+  target: Vector3;
 }
 
 export interface MoveStartedEvent extends GameEvent {
-    entityId: number;
-    target: Vector3;
+  entityId: number;
+  target: Vector3;
 }
 
 export interface MoveCompletedEvent extends GameEvent {
-    entityId: number;
-    position: Vector3;
+  entityId: number;
+  position: Vector3;
 }
 
 export interface StopRequestedEvent extends GameEvent {
-    entityId: number;
+  entityId: number;
 }
 
 // ============================================
@@ -110,26 +110,26 @@ export interface StopRequestedEvent extends GameEvent {
 // ============================================
 
 export interface SelectEntityRequestedEvent extends GameEvent {
-    entityId: number;
-    exclusive?: boolean; // If true, deselect all others first
+  entityId: number;
+  exclusive?: boolean; // If true, deselect all others first
 }
 
 export interface DeselectEntityRequestedEvent extends GameEvent {
-    entityId: number;
+  entityId: number;
 }
 
 export interface DeselectAllRequestedEvent extends GameEvent {}
 
 export interface EntitySelectedEvent extends GameEvent {
-    entityId: number;
+  entityId: number;
 }
 
 export interface EntityDeselectedEvent extends GameEvent {
-    entityId: number;
+  entityId: number;
 }
 
 export interface SelectionClearedEvent extends GameEvent {
-    previouslySelectedIds: number[];
+  previouslySelectedIds: number[];
 }
 
 // ============================================
@@ -137,18 +137,18 @@ export interface SelectionClearedEvent extends GameEvent {
 // ============================================
 
 export interface LeftClickEvent extends GameEvent {
-    pickedMesh: any;
-    pickedPoint: Vector3 | null;
+  pickedMesh: any;
+  pickedPoint: Vector3 | null;
 }
 
 export interface RightClickEvent extends GameEvent {
-    pickedMesh: any;
-    pickedPoint: Vector3 | null;
+  pickedMesh: any;
+  pickedPoint: Vector3 | null;
 }
 
 export interface GroundClickedEvent extends GameEvent {
-    position: Vector3;
-    button: 'left' | 'right';
+  position: Vector3;
+  button: 'left' | 'right';
 }
 
 // ============================================
@@ -156,13 +156,13 @@ export interface GroundClickedEvent extends GameEvent {
 // ============================================
 
 export interface EntityCreatedEvent extends GameEvent {
-    entityId: number;
-    entityType: string;
-    position: Vector3;
+  entityId: number;
+  entityType: string;
+  position: Vector3;
 }
 
 export interface EntityDisposedEvent extends GameEvent {
-    entityId: number;
+  entityId: number;
 }
 
 // ============================================
@@ -170,7 +170,7 @@ export interface EntityDisposedEvent extends GameEvent {
 // ============================================
 
 export interface ShowDestinationMarkerEvent extends GameEvent {
-    position: Vector3;
+  position: Vector3;
 }
 
 export interface HideDestinationMarkerEvent extends GameEvent {}
@@ -180,40 +180,40 @@ export interface HideDestinationMarkerEvent extends GameEvent {}
 // ============================================
 
 export interface ResourcesChangedEvent extends GameEvent {
-    playerId: string;
-    team: TeamTag;
-    oldAmount: number;
-    newAmount: number;
+  playerId: string;
+  team: TeamTag;
+  oldAmount: number;
+  newAmount: number;
 }
 
 export interface ResourcesGeneratedEvent extends GameEvent {
-    playerId: string;
-    team: TeamTag;
-    amount: number;
-    currentTotal: number;
-    generationRate: number;
+  playerId: string;
+  team: TeamTag;
+  amount: number;
+  currentTotal: number;
+  generationRate: number;
 }
 
 export interface UnitPurchaseRequestedEvent extends GameEvent {
-    playerId: string;
-    team: TeamTag;
-    unitType: FormationUnitType;
-    gridPosition: { x: number; z: number };
+  playerId: string;
+  team: TeamTag;
+  unitType: FormationUnitType;
+  gridPosition: { x: number; z: number };
 }
 
 export interface UnitPurchaseCompletedEvent extends GameEvent {
-    playerId: string;
-    team: TeamTag;
-    unitType: FormationUnitType;
-    entityId: number;
-    cost: number;
+  playerId: string;
+  team: TeamTag;
+  unitType: FormationUnitType;
+  entityId: number;
+  cost: number;
 }
 
 export interface UnitPurchaseFailedEvent extends GameEvent {
-    playerId: string;
-    team: TeamTag;
-    unitType: FormationUnitType;
-    reason: 'insufficient_resources' | 'invalid_position' | 'grid_occupied';
+  playerId: string;
+  team: TeamTag;
+  unitType: FormationUnitType;
+  reason: 'insufficient_resources' | 'invalid_position' | 'grid_occupied';
 }
 
 // ============================================
@@ -221,18 +221,18 @@ export interface UnitPurchaseFailedEvent extends GameEvent {
 // ============================================
 
 export interface TerritoryChangedEvent extends GameEvent {
-    team: TeamTag;
-    averagePosition: number; // X position of team's units
-    onEnemyTerritory: boolean;
+  team: TeamTag;
+  averagePosition: number; // X position of team's units
+  onEnemyTerritory: boolean;
 }
 
 export interface AggressionBonusActivatedEvent extends GameEvent {
-    team: TeamTag;
-    bonusMultiplier: number;
+  team: TeamTag;
+  bonusMultiplier: number;
 }
 
 export interface AggressionBonusDeactivatedEvent extends GameEvent {
-    team: TeamTag;
+  team: TeamTag;
 }
 
 // ============================================
@@ -240,25 +240,25 @@ export interface AggressionBonusDeactivatedEvent extends GameEvent {
 // ============================================
 
 export interface GameStartedEvent extends GameEvent {
-    team1PlayerId: string;
-    team2PlayerId: string;
+  team1PlayerId: string;
+  team2PlayerId: string;
 }
 
 export interface GameOverEvent extends GameEvent {
-    winnerTeam: TeamTag;
-    winnerPlayerId: string;
-    reason: 'base_destroyed' | 'disconnect' | 'forfeit';
+  winnerTeam: TeamTag;
+  winnerPlayerId: string;
+  reason: 'base_destroyed' | 'disconnect' | 'forfeit';
 }
 
 export interface BaseDestroyedEvent extends GameEvent {
-    team: TeamTag;
-    entityId: number;
+  team: TeamTag;
+  entityId: number;
 }
 
 export interface TowerDestroyedEvent extends GameEvent {
-    team: TeamTag;
-    entityId: number;
-    resourceBonus: number;
+  team: TeamTag;
+  entityId: number;
+  resourceBonus: number;
 }
 
 // ============================================
@@ -266,64 +266,64 @@ export interface TowerDestroyedEvent extends GameEvent {
 // ============================================
 
 export interface FormationModeEnteredEvent extends GameEvent {
-    playerId: string;
-    unitType: FormationUnitType;
+  playerId: string;
+  unitType: FormationUnitType;
 }
 
 export interface FormationModeExitedEvent extends GameEvent {
-    playerId: string;
+  playerId: string;
 }
 
 export interface FormationUnitPlacedEvent extends GameEvent {
-    playerId: string;
-    unitType: FormationUnitType;
-    gridX: number;
-    gridZ: number;
+  playerId: string;
+  unitType: FormationUnitType;
+  gridX: number;
+  gridZ: number;
 }
 
 export interface FormationPlacementFailedEvent extends GameEvent {
-    playerId: string;
-    unitType: FormationUnitType;
-    reason: 'insufficient_resources' | 'invalid_position';
+  playerId: string;
+  unitType: FormationUnitType;
+  reason: 'insufficient_resources' | 'invalid_position';
 }
 
 export interface FormationUnitRemovedEvent extends GameEvent {
-    playerId: string;
-    gridX: number;
-    gridZ: number;
+  playerId: string;
+  gridX: number;
+  gridZ: number;
 }
 
 export interface FormationCommittedEvent extends GameEvent {
-    playerId: string;
-    unitCount: number;
+  playerId: string;
+  unitCount: number;
 }
 
 export interface FormationUpdateModeEnteredEvent extends GameEvent {
-    playerId: string;
-    gridX: number;
-    gridZ: number;
-    unitType: FormationUnitType;
+  playerId: string;
+  gridX: number;
+  gridZ: number;
+  unitType: FormationUnitType;
 }
 
 export interface FormationUpdateModeExitedEvent extends GameEvent {
-    playerId: string;
+  playerId: string;
 }
 
 export interface FormationUnitMoveRequestedEvent extends GameEvent {
-    playerId: string;
-    fromGridX: number;
-    fromGridZ: number;
-    toGridX: number;
-    toGridZ: number;
+  playerId: string;
+  fromGridX: number;
+  fromGridZ: number;
+  toGridX: number;
+  toGridZ: number;
 }
 
 export interface FormationUnitMovedEvent extends GameEvent {
-    playerId: string;
-    unitType: FormationUnitType;
-    fromGridX: number;
-    fromGridZ: number;
-    toGridX: number;
-    toGridZ: number;
+  playerId: string;
+  unitType: FormationUnitType;
+  fromGridX: number;
+  fromGridZ: number;
+  toGridX: number;
+  toGridZ: number;
 }
 
 // ============================================
@@ -331,17 +331,17 @@ export interface FormationUnitMovedEvent extends GameEvent {
 // ============================================
 
 export interface WaveStartedEvent extends GameEvent {
-    waveNumber: number;
-    isPreparationWave: boolean;
+  waveNumber: number;
+  isPreparationWave: boolean;
 }
 
 export interface WaveCountdownEvent extends GameEvent {
-    waveNumber: number;
-    secondsRemaining: number;
-    ticksRemaining: number;
+  waveNumber: number;
+  secondsRemaining: number;
+  ticksRemaining: number;
 }
 
 export interface WaveDeploymentEvent extends GameEvent {
-    waveNumber: number;
-    totalUnitsDeployed: number;
+  waveNumber: number;
+  totalUnitsDeployed: number;
 }

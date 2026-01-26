@@ -26,7 +26,7 @@ describe('MATCH-2: Player Can Leave the Matchmaking Queue', () => {
     }
     clients = [];
     // Small delay to allow disconnect events to process
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, 50));
     await server.stop();
   });
 
@@ -102,7 +102,7 @@ describe('MATCH-2: Player Can Leave the Matchmaking Queue', () => {
     client.emit('queue-leave');
 
     // Wait a bit to ensure no error is emitted
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise((resolve) => setTimeout(resolve, 100));
     expect(errorReceived).toBe(false);
     expect(server.getQueueSize()).toBe(0);
   });
@@ -123,7 +123,7 @@ describe('MATCH-2: Player Can Leave the Matchmaking Queue', () => {
     client.disconnect();
 
     // Wait for disconnect to be processed
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise((resolve) => setTimeout(resolve, 100));
     expect(server.getQueueSize()).toBe(0);
   });
 
@@ -191,7 +191,7 @@ describe('MATCH-2: Player Can Leave the Matchmaking Queue', () => {
     });
 
     client.emit('queue-leave');
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise((resolve) => setTimeout(resolve, 100));
 
     expect(errorReceived).toBe(false);
     expect(server.getQueueSize()).toBe(0);

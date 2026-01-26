@@ -33,12 +33,12 @@ describe('LOCKSTEP-5: Server Detects Unresponsive Players via Activity Tracking'
     socket2 = io(SERVER_URL, { forceNew: true });
 
     await Promise.all([
-      new Promise<void>(resolve => socket1.on('connect', resolve)),
-      new Promise<void>(resolve => socket2.on('connect', resolve)),
+      new Promise<void>((resolve) => socket1.on('connect', resolve)),
+      new Promise<void>((resolve) => socket2.on('connect', resolve)),
     ]);
 
     // Join queue and wait for match
-    const matchPromise = new Promise<void>(resolve => {
+    const matchPromise = new Promise<void>((resolve) => {
       socket1.once('match-found', () => resolve());
     });
 
@@ -48,7 +48,7 @@ describe('LOCKSTEP-5: Server Detects Unresponsive Players via Activity Tracking'
     await matchPromise;
 
     // Wait for game to start
-    await new Promise<void>(resolve => {
+    await new Promise<void>((resolve) => {
       socket1.once('game-start', () => resolve());
     });
   });
@@ -61,7 +61,7 @@ describe('LOCKSTEP-5: Server Detects Unresponsive Players via Activity Tracking'
 
   it('should track activity when commands are submitted', async () => {
     // Submit commands to update activity
-    const currentTick = await new Promise<number>(resolve => {
+    const currentTick = await new Promise<number>((resolve) => {
       socket1.once('tick-sync', (data) => resolve(data.tick));
     });
 
@@ -71,7 +71,7 @@ describe('LOCKSTEP-5: Server Detects Unresponsive Players via Activity Tracking'
     });
 
     // Wait for ack - if accepted, activity was tracked
-    const ack = await new Promise<{ accepted: boolean }>(resolve => {
+    const ack = await new Promise<{ accepted: boolean }>((resolve) => {
       socket1.once('submit-commands-ack', resolve);
     });
 
@@ -83,7 +83,7 @@ describe('LOCKSTEP-5: Server Detects Unresponsive Players via Activity Tracking'
     socket1.emit('ping-test', { timestamp: Date.now() });
 
     // Wait a bit
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise((resolve) => setTimeout(resolve, 100));
 
     // Player 1 should not be lagging since they just sent a message
     // We verify by checking that no lagging event is received for player1
@@ -94,13 +94,16 @@ describe('LOCKSTEP-5: Server Detects Unresponsive Players via Activity Tracking'
       }
     });
 
-    await new Promise(resolve => setTimeout(resolve, 300));
+    await new Promise((resolve) => setTimeout(resolve, 300));
     expect(player1Lagging).toBe(false);
   });
 
   it('should emit player-lagging when player has no activity', async () => {
     // Setup listener BEFORE player stops sending messages
-    const laggingPromise = new Promise<{ playerId: string; msSinceLastMessage: number }>(resolve => {
+    const laggingPromise = new Promise<{
+      playerId: string;
+      msSinceLastMessage: number;
+    }>((resolve) => {
       socket1.on('player-lagging', (data) => {
         if (data.playerId === 'player2') {
           resolve(data);
@@ -116,7 +119,12 @@ describe('LOCKSTEP-5: Server Detects Unresponsive Players via Activity Tracking'
     // Wait for player 2 to be detected as lagging (timeout after 3 sec)
     const lagging = await Promise.race([
       laggingPromise,
-      new Promise<null>((_, reject) => setTimeout(() => reject(new Error('Timeout waiting for player-lagging')), 3000))
+      new Promise<null>((_, reject) =>
+        setTimeout(
+          () => reject(new Error('Timeout waiting for player-lagging')),
+          3000
+        )
+      ),
     ]);
     clearInterval(keepAlive);
 
@@ -126,7 +134,10 @@ describe('LOCKSTEP-5: Server Detects Unresponsive Players via Activity Tracking'
   }, 10000);
 
   it('should emit player-timeout when player has no activity for disconnect threshold', async () => {
-    const timeoutPromise = new Promise<{ playerId: string; msSinceLastMessage: number }>(resolve => {
+    const timeoutPromise = new Promise<{
+      playerId: string;
+      msSinceLastMessage: number;
+    }>((resolve) => {
       socket1.on('player-timeout', (data) => {
         if (data.playerId === 'player2') {
           resolve(data);
@@ -165,7 +176,7 @@ describe('LOCKSTEP-5: Server Detects Unresponsive Players via Activity Tracking'
     }, 100);
 
     // Wait longer than timeout period
-    await new Promise(resolve => setTimeout(resolve, 800));
+    await new Promise((resolve) => setTimeout(resolve, 800));
 
     clearInterval(keepAlive1);
     clearInterval(keepAlive2);

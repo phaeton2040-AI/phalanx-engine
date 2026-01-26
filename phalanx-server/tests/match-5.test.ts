@@ -28,7 +28,7 @@ describe('MATCH-5: Server Sends Match Found Notification to Players', () => {
       }
     }
     clients = [];
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, 50));
     await server.stop();
   });
 
@@ -146,17 +146,17 @@ describe('MATCH-5: Server Sends Match Found Notification to Players', () => {
     await connectClient(client2);
 
     client1.emit('queue-join', { playerId: 'player1', username: 'alice' });
-    
+
     // Disconnect client1 immediately before match is formed
     client1.disconnect();
-    
+
     // Wait a bit and then add client2
-    await new Promise(resolve => setTimeout(resolve, 50));
-    
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
     client2.emit('queue-join', { playerId: 'player2', username: 'bob' });
 
     // Wait for matchmaking cycle - should not crash
-    await new Promise(resolve => setTimeout(resolve, 200));
+    await new Promise((resolve) => setTimeout(resolve, 200));
 
     // Server should still be running
     expect(server.getQueueSize()).toBeDefined();
@@ -185,7 +185,7 @@ describe('MATCH-5: Teammates and Opponents in 2v2', () => {
       }
     }
     clients = [];
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, 50));
     await server.stop();
   });
 
@@ -259,7 +259,7 @@ describe('MATCH-5: Teammates and Opponents in 2v2', () => {
     const match = await matchPromise;
 
     // Self should not be in teammates
-    const teammateIds = match.teammates.map(t => t.playerId);
+    const teammateIds = match.teammates.map((t) => t.playerId);
     expect(teammateIds).not.toContain(match.playerId);
   });
 
@@ -277,9 +277,10 @@ describe('MATCH-5: Teammates and Opponents in 2v2', () => {
     ]);
 
     const matchPromises = [client1, client2, client3, client4].map(
-      client => new Promise<MatchFoundEvent>((resolve) => {
-        client.on('match-found', (data: MatchFoundEvent) => resolve(data));
-      })
+      (client) =>
+        new Promise<MatchFoundEvent>((resolve) => {
+          client.on('match-found', (data: MatchFoundEvent) => resolve(data));
+        })
     );
 
     client1.emit('queue-join', { playerId: 'p1', username: 'alice' });
@@ -290,13 +291,13 @@ describe('MATCH-5: Teammates and Opponents in 2v2', () => {
     const matches = await Promise.all(matchPromises);
 
     // Get team 0 players
-    const team0 = matches.filter(m => m.teamId === 0);
-    const team1 = matches.filter(m => m.teamId === 1);
+    const team0 = matches.filter((m) => m.teamId === 0);
+    const team1 = matches.filter((m) => m.teamId === 1);
 
     // Team 0 player's opponents should be team 1 players
-    const team0OpponentIds = team0[0].opponents.map(o => o.playerId);
-    const team1PlayerIds = team1.map(m => m.playerId);
-    
+    const team0OpponentIds = team0[0].opponents.map((o) => o.playerId);
+    const team1PlayerIds = team1.map((m) => m.playerId);
+
     expect(team0OpponentIds.sort()).toEqual(team1PlayerIds.sort());
   });
 });
@@ -323,7 +324,7 @@ describe('MATCH-5: 3v3 Match Found Format', () => {
       }
     }
     clients = [];
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, 50));
     await server.stop();
   });
 
@@ -358,7 +359,10 @@ describe('MATCH-5: 3v3 Match Found Format', () => {
     // Join 6 players for 3v3
     const usernames = ['alice', 'bob', 'carol', 'dave', 'eve', 'frank'];
     for (let i = 0; i < 6; i++) {
-      clientsArr[i].emit('queue-join', { playerId: `p${i}`, username: usernames[i] });
+      clientsArr[i].emit('queue-join', {
+        playerId: `p${i}`,
+        username: usernames[i],
+      });
     }
 
     const match = await matchPromise;
@@ -368,9 +372,9 @@ describe('MATCH-5: 3v3 Match Found Format', () => {
     expect(match.opponents.length).toBe(3);
 
     // As per story example format check
-    const teammateUsernames = match.teammates.map(t => t.username);
-    const opponentUsernames = match.opponents.map(o => o.username);
-    
+    const teammateUsernames = match.teammates.map((t) => t.username);
+    const opponentUsernames = match.opponents.map((o) => o.username);
+
     expect(teammateUsernames.length).toBe(2);
     expect(opponentUsernames.length).toBe(3);
   });

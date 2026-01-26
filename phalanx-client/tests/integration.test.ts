@@ -1,7 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Phalanx } from '../../phalanx-server/src/index.js';
 import { PhalanxClient } from '../src/PhalanxClient.js';
-import type { MatchFoundEvent, CountdownEvent, TickSyncEvent } from '../src/types.js';
+import type {
+  MatchFoundEvent,
+  CountdownEvent,
+  TickSyncEvent,
+} from '../src/types.js';
 
 /**
  * Integration tests for PhalanxClient with real Phalanx server
@@ -285,7 +289,7 @@ describe('PhalanxClient Integration Tests', () => {
       });
 
       // Wait for a few ticks
-      await new Promise(resolve => setTimeout(resolve, 300));
+      await new Promise((resolve) => setTimeout(resolve, 300));
 
       expect(tickEvents.length).toBeGreaterThan(0);
       expect(client1.getCurrentTick()).toBeGreaterThan(0);
@@ -324,7 +328,7 @@ describe('PhalanxClient Integration Tests', () => {
       await client1.waitForGameStart();
 
       // Wait for a tick
-      await new Promise<void>(resolve => {
+      await new Promise<void>((resolve) => {
         client1.once('tick', () => resolve());
       });
 

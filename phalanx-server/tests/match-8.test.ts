@@ -35,12 +35,12 @@ describe('LOCKSTEP-2: Server Collects Commands from All Players for Each Tick', 
     socket2 = io(SERVER_URL, { forceNew: true });
 
     await Promise.all([
-      new Promise<void>(resolve => socket1.on('connect', resolve)),
-      new Promise<void>(resolve => socket2.on('connect', resolve)),
+      new Promise<void>((resolve) => socket1.on('connect', resolve)),
+      new Promise<void>((resolve) => socket2.on('connect', resolve)),
     ]);
 
     // Join queue and wait for match
-    const matchPromise = new Promise<string>(resolve => {
+    const matchPromise = new Promise<string>((resolve) => {
       socket1.once('match-found', (data) => {
         matchId = data.matchId;
         resolve(data.matchId);
@@ -53,12 +53,12 @@ describe('LOCKSTEP-2: Server Collects Commands from All Players for Each Tick', 
     matchId = await matchPromise;
 
     // Wait for game to start
-    await new Promise<void>(resolve => {
+    await new Promise<void>((resolve) => {
       socket1.once('game-start', () => resolve());
     });
 
     // Wait a tick to ensure game is running
-    await new Promise<void>(resolve => {
+    await new Promise<void>((resolve) => {
       socket1.once('tick-sync', () => resolve());
     });
   });
@@ -70,9 +70,11 @@ describe('LOCKSTEP-2: Server Collects Commands from All Players for Each Tick', 
   });
 
   it('should accept submit-commands with tick and commands array', async () => {
-    const ackPromise = new Promise<{ tick: number; accepted: boolean }>(resolve => {
-      socket1.once('submit-commands-ack', resolve);
-    });
+    const ackPromise = new Promise<{ tick: number; accepted: boolean }>(
+      (resolve) => {
+        socket1.once('submit-commands-ack', resolve);
+      }
+    );
 
     socket1.emit('submit-commands', {
       tick: 5,
@@ -85,9 +87,11 @@ describe('LOCKSTEP-2: Server Collects Commands from All Players for Each Tick', 
   });
 
   it('should accept empty command arrays (no actions for this tick)', async () => {
-    const ackPromise = new Promise<{ tick: number; accepted: boolean }>(resolve => {
-      socket1.once('submit-commands-ack', resolve);
-    });
+    const ackPromise = new Promise<{ tick: number; accepted: boolean }>(
+      (resolve) => {
+        socket1.once('submit-commands-ack', resolve);
+      }
+    );
 
     // Player has no commands for this tick (e.g., unit is moving)
     socket1.emit('submit-commands', {
@@ -101,12 +105,16 @@ describe('LOCKSTEP-2: Server Collects Commands from All Players for Each Tick', 
   });
 
   it('should accept commands from both players for the same tick', async () => {
-    const ack1Promise = new Promise<{ tick: number; accepted: boolean }>(resolve => {
-      socket1.once('submit-commands-ack', resolve);
-    });
-    const ack2Promise = new Promise<{ tick: number; accepted: boolean }>(resolve => {
-      socket2.once('submit-commands-ack', resolve);
-    });
+    const ack1Promise = new Promise<{ tick: number; accepted: boolean }>(
+      (resolve) => {
+        socket1.once('submit-commands-ack', resolve);
+      }
+    );
+    const ack2Promise = new Promise<{ tick: number; accepted: boolean }>(
+      (resolve) => {
+        socket2.once('submit-commands-ack', resolve);
+      }
+    );
 
     socket1.emit('submit-commands', {
       tick: 5,
@@ -124,7 +132,7 @@ describe('LOCKSTEP-2: Server Collects Commands from All Players for Each Tick', 
 
   it('should handle out-of-order tick submissions (tick 2 before tick 1)', async () => {
     // Wait for a tick-sync to know the current tick
-    const currentTick = await new Promise<number>(resolve => {
+    const currentTick = await new Promise<number>((resolve) => {
       socket1.once('tick-sync', (data) => resolve(data.tick));
     });
 
@@ -133,16 +141,20 @@ describe('LOCKSTEP-2: Server Collects Commands from All Players for Each Tick', 
 
     const ackPromises: Promise<{ tick: number; accepted: boolean }>[] = [];
 
-    ackPromises.push(new Promise(resolve => {
-      socket1.on('submit-commands-ack', (ack) => {
-        if (ack.tick === tick2) resolve(ack);
-      });
-    }));
-    ackPromises.push(new Promise(resolve => {
-      socket1.on('submit-commands-ack', (ack) => {
-        if (ack.tick === tick1) resolve(ack);
-      });
-    }));
+    ackPromises.push(
+      new Promise((resolve) => {
+        socket1.on('submit-commands-ack', (ack) => {
+          if (ack.tick === tick2) resolve(ack);
+        });
+      })
+    );
+    ackPromises.push(
+      new Promise((resolve) => {
+        socket1.on('submit-commands-ack', (ack) => {
+          if (ack.tick === tick1) resolve(ack);
+        });
+      })
+    );
 
     // Submit tick2 first (out of order)
     socket1.emit('submit-commands', {
@@ -162,9 +174,11 @@ describe('LOCKSTEP-2: Server Collects Commands from All Players for Each Tick', 
   });
 
   it('should handle duplicate tick submission from same player (overwrite)', async () => {
-    const ack1Promise = new Promise<{ tick: number; accepted: boolean }>(resolve => {
-      socket1.once('submit-commands-ack', (ack) => resolve(ack));
-    });
+    const ack1Promise = new Promise<{ tick: number; accepted: boolean }>(
+      (resolve) => {
+        socket1.once('submit-commands-ack', (ack) => resolve(ack));
+      }
+    );
 
     socket1.emit('submit-commands', {
       tick: 5,
@@ -174,9 +188,11 @@ describe('LOCKSTEP-2: Server Collects Commands from All Players for Each Tick', 
     await ack1Promise;
 
     // Second submission for same tick should also be accepted (overwrite)
-    const ack2Promise = new Promise<{ tick: number; accepted: boolean }>(resolve => {
-      socket1.once('submit-commands-ack', (ack) => resolve(ack));
-    });
+    const ack2Promise = new Promise<{ tick: number; accepted: boolean }>(
+      (resolve) => {
+        socket1.once('submit-commands-ack', (ack) => resolve(ack));
+      }
+    );
 
     socket1.emit('submit-commands', {
       tick: 5,
@@ -189,9 +205,11 @@ describe('LOCKSTEP-2: Server Collects Commands from All Players for Each Tick', 
   });
 
   it('should reject commands for ticks too far in the future', async () => {
-    const ackPromise = new Promise<{ tick: number; accepted: boolean }>(resolve => {
-      socket1.once('submit-commands-ack', resolve);
-    });
+    const ackPromise = new Promise<{ tick: number; accepted: boolean }>(
+      (resolve) => {
+        socket1.once('submit-commands-ack', resolve);
+      }
+    );
 
     // Submit for tick 1000, way ahead of current tick
     socket1.emit('submit-commands', {
@@ -205,7 +223,7 @@ describe('LOCKSTEP-2: Server Collects Commands from All Players for Each Tick', 
 
   it('should broadcast commands in commands-batch event', async () => {
     // Wait for a tick-sync to know the current tick
-    const currentTick = await new Promise<number>(resolve => {
+    const currentTick = await new Promise<number>((resolve) => {
       socket1.once('tick-sync', (data) => resolve(data.tick));
     });
 
@@ -218,11 +236,13 @@ describe('LOCKSTEP-2: Server Collects Commands from All Players for Each Tick', 
     });
 
     // Wait for the commands-batch for that tick
-    const batch = await new Promise<{ tick: number; commands: unknown[] }>(resolve => {
-      socket1.on('commands-batch', (data) => {
-        if (data.tick === targetTick) resolve(data);
-      });
-    });
+    const batch = await new Promise<{ tick: number; commands: unknown[] }>(
+      (resolve) => {
+        socket1.on('commands-batch', (data) => {
+          if (data.tick === targetTick) resolve(data);
+        });
+      }
+    );
 
     expect(batch.tick).toBe(targetTick);
     expect(batch.commands.length).toBeGreaterThanOrEqual(1);
@@ -230,7 +250,7 @@ describe('LOCKSTEP-2: Server Collects Commands from All Players for Each Tick', 
 
   it('should include player commands in commands-batch even if one player sends no commands', async () => {
     // Wait for a tick-sync to know the current tick
-    const currentTick = await new Promise<number>(resolve => {
+    const currentTick = await new Promise<number>((resolve) => {
       socket1.once('tick-sync', (data) => resolve(data.tick));
     });
 
@@ -245,11 +265,13 @@ describe('LOCKSTEP-2: Server Collects Commands from All Players for Each Tick', 
     // Player2 doesn't submit anything - this is valid (e.g., unit is auto-moving)
 
     // Wait for the commands-batch for that tick
-    const batch = await new Promise<{ tick: number; commands: unknown[] }>(resolve => {
-      socket1.on('commands-batch', (data) => {
-        if (data.tick === targetTick) resolve(data);
-      });
-    });
+    const batch = await new Promise<{ tick: number; commands: unknown[] }>(
+      (resolve) => {
+        socket1.on('commands-batch', (data) => {
+          if (data.tick === targetTick) resolve(data);
+        });
+      }
+    );
 
     expect(batch.tick).toBe(targetTick);
     // Should have player1's command

@@ -24,14 +24,18 @@ This test game demonstrates the **deterministic lockstep** multiplayer architect
 ### 1. **Client-Server Architecture**
 
 #### Server Setup (`src/server/main.ts`)
+
 The Phalanx server is configured for 1v1 matchmaking:
+
 - **Port**: 3000
 - **Game Mode**: '1v1'
 - **Tick Rate**: 20 ticks/second
 - **Countdown**: 5 seconds before game starts
 
 #### Client Connection (`LobbyScene.ts`)
+
 The `PhalanxClient` handles:
+
 - **Connection**: Connects to the server with unique player ID and username
 - **Matchmaking**: Joins the queue and waits for an opponent
 - **Match Events**: Listens for `match-found` and `countdown` events
@@ -41,17 +45,22 @@ The `PhalanxClient` handles:
 The game uses Phalanx Engine's lockstep system to ensure all clients see the same game state:
 
 #### Command Submission (`GameScene.ts`)
+
 When a player clicks on the ground:
+
 1. A `MoveCommand` is created with target coordinates
 2. Command is submitted to the server via `client.submitCommand()`
 3. Command is queued locally in `pendingLocalCommands`
 
 #### Command Batch Processing
+
 Every tick, the server broadcasts a `commands-batch` event containing:
+
 - Commands from ALL players for that tick
 - Tick number for synchronization
 
 #### Deterministic Simulation (`GameSimulation.ts`)
+
 - Receives commands from `commands-batch` event
 - Applies commands in a deterministic order (sorted by player ID)
 - Updates game state identically on all clients
@@ -64,7 +73,7 @@ The `GameLoop.ts` implements the **accumulator algorithm**:
 ```
 Frame Time Accumulation:
   accumulator += deltaTime
-  
+
 Fixed Updates (50ms per tick):
   while (accumulator >= FIXED_TIMESTEP)
     - Apply network commands
@@ -77,6 +86,7 @@ Rendering with Interpolation:
 ```
 
 This ensures:
+
 - ✅ Simulation runs at consistent 20 ticks/sec regardless of FPS
 - ✅ Smooth visual rendering even if frame rate varies
 - ✅ Network and simulation stay in sync
@@ -84,7 +94,7 @@ This ensures:
 ### 4. **Network Event Flow**
 
 ```
-Player Action (Click) 
+Player Action (Click)
   ↓
 Submit Command to Server
   ↓
@@ -103,22 +113,23 @@ Game State Synchronized Across All Clients
 
 The client listens to Phalanx Engine events:
 
-| Event | Handler | Purpose |
-|-------|---------|---------|
-| `match-found` | LobbyScene | Match details and player list |
-| `countdown` | LobbyScene | Countdown before game starts |
-| `game-start` | LobbyScene → GameScene | Transition to game |
-| `commands-batch` | GameScene | Tick commands from all players |
-| `player-disconnected` | GameScene | Handle opponent leaving |
+| Event                 | Handler                | Purpose                        |
+| --------------------- | ---------------------- | ------------------------------ |
+| `match-found`         | LobbyScene             | Match details and player list  |
+| `countdown`           | LobbyScene             | Countdown before game starts   |
+| `game-start`          | LobbyScene → GameScene | Transition to game             |
+| `commands-batch`      | GameScene              | Tick commands from all players |
+| `player-disconnected` | GameScene              | Handle opponent leaving        |
 
 ### 6. **Key Integration Points**
 
 #### Connection Flow
+
 ```typescript
 const client = new PhalanxClient({
   serverUrl: SERVER_URL,
   playerId: uniqueId,
-  username: playerName
+  username: playerName,
 });
 
 await client.connect();
@@ -126,15 +137,17 @@ const match = await client.joinQueueAndWaitForMatch();
 ```
 
 #### Command Submission
+
 ```typescript
 client.submitCommand({
   type: 'move',
   targetX: x,
-  targetZ: z
+  targetZ: z,
 });
 ```
 
 #### Receiving Synchronized Commands
+
 ```typescript
 client.on('commands-batch', (data: CommandsBatchEvent) => {
   // All players' commands for this tick
@@ -145,15 +158,18 @@ client.on('commands-batch', (data: CommandsBatchEvent) => {
 ### 7. **Why This Architecture Works**
 
 **Traditional Approach (Server Authority):**
+
 - Client sends input → Server simulates → Server sends positions
 - High latency, server bottleneck, bandwidth intensive
 
 **Phalanx Lockstep Approach:**
+
 - Client sends input → Server broadcasts input → All clients simulate
 - Low latency, minimal bandwidth, scalable
 - Perfect for RTS, turn-based, and strategy games
 
 **Trade-offs:**
+
 - ✅ Minimal network traffic (only commands, not game state)
 - ✅ No server-side simulation needed
 - ✅ Clients can predict and rollback if needed
@@ -163,6 +179,7 @@ client.on('commands-batch', (data: CommandsBatchEvent) => {
 ## Setup
 
 1. Build the Phalanx packages first:
+
    ```bash
    # From the root phalanx-engine folder
    pnpm install
@@ -178,11 +195,13 @@ client.on('commands-batch', (data: CommandsBatchEvent) => {
 ## Running
 
 Start the server:
+
 ```bash
 pnpm run server
 ```
 
 In a separate terminal, start the client:
+
 ```bash
 pnpm run dev
 ```
@@ -190,12 +209,14 @@ pnpm run dev
 Open two browser windows at `http://localhost:3001` to test multiplayer.
 
 **Or use the root commands:**
+
 ```bash
 # From the root phalanx-engine folder
 pnpm dev:game    # Starts the Vite dev server
 ```
 
 Then run the server separately:
+
 ```bash
 pnpm --filter game-test server
 ```

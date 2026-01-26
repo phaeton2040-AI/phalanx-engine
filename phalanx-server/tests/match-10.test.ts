@@ -33,12 +33,12 @@ describe('NET-1: Server Validates Incoming Player Commands', () => {
     socket2 = io(SERVER_URL, { forceNew: true });
 
     await Promise.all([
-      new Promise<void>(resolve => socket1.on('connect', resolve)),
-      new Promise<void>(resolve => socket2.on('connect', resolve)),
+      new Promise<void>((resolve) => socket1.on('connect', resolve)),
+      new Promise<void>((resolve) => socket2.on('connect', resolve)),
     ]);
 
     // Join queue and wait for match
-    const matchPromise = new Promise<void>(resolve => {
+    const matchPromise = new Promise<void>((resolve) => {
       socket1.once('match-found', () => resolve());
     });
 
@@ -48,12 +48,12 @@ describe('NET-1: Server Validates Incoming Player Commands', () => {
     await matchPromise;
 
     // Wait for game to start
-    await new Promise<void>(resolve => {
+    await new Promise<void>((resolve) => {
       socket1.once('game-start', () => resolve());
     });
 
     // Wait a tick
-    await new Promise<void>(resolve => {
+    await new Promise<void>((resolve) => {
       socket1.once('tick-sync', () => resolve());
     });
   });
@@ -65,9 +65,11 @@ describe('NET-1: Server Validates Incoming Player Commands', () => {
   });
 
   it('should accept valid commands with type and data', async () => {
-    const ackPromise = new Promise<{ tick: number; accepted: boolean }>(resolve => {
-      socket1.once('submit-commands-ack', resolve);
-    });
+    const ackPromise = new Promise<{ tick: number; accepted: boolean }>(
+      (resolve) => {
+        socket1.once('submit-commands-ack', resolve);
+      }
+    );
 
     socket1.emit('submit-commands', {
       tick: 3,
@@ -79,9 +81,11 @@ describe('NET-1: Server Validates Incoming Player Commands', () => {
   });
 
   it('should reject commands with missing type field', async () => {
-    const rejectedPromise = new Promise<{ reason: string; tick: number }>(resolve => {
-      socket1.once('command-rejected', resolve);
-    });
+    const rejectedPromise = new Promise<{ reason: string; tick: number }>(
+      (resolve) => {
+        socket1.once('command-rejected', resolve);
+      }
+    );
 
     socket1.emit('submit-commands', {
       tick: 3,
@@ -93,9 +97,11 @@ describe('NET-1: Server Validates Incoming Player Commands', () => {
   });
 
   it('should reject commands with missing data field', async () => {
-    const rejectedPromise = new Promise<{ reason: string; tick: number }>(resolve => {
-      socket1.once('command-rejected', resolve);
-    });
+    const rejectedPromise = new Promise<{ reason: string; tick: number }>(
+      (resolve) => {
+        socket1.once('command-rejected', resolve);
+      }
+    );
 
     socket1.emit('submit-commands', {
       tick: 3,
@@ -107,9 +113,11 @@ describe('NET-1: Server Validates Incoming Player Commands', () => {
   });
 
   it('should reject commands for ticks too far in the future', async () => {
-    const ackPromise = new Promise<{ tick: number; accepted: boolean }>(resolve => {
-      socket1.once('submit-commands-ack', resolve);
-    });
+    const ackPromise = new Promise<{ tick: number; accepted: boolean }>(
+      (resolve) => {
+        socket1.once('submit-commands-ack', resolve);
+      }
+    );
 
     // Submit for tick 1000 - way beyond maxTickAhead
     socket1.emit('submit-commands', {
@@ -122,9 +130,11 @@ describe('NET-1: Server Validates Incoming Player Commands', () => {
   });
 
   it('should accept commands with data set to null (valid empty payload)', async () => {
-    const ackPromise = new Promise<{ tick: number; accepted: boolean }>(resolve => {
-      socket1.once('submit-commands-ack', resolve);
-    });
+    const ackPromise = new Promise<{ tick: number; accepted: boolean }>(
+      (resolve) => {
+        socket1.once('submit-commands-ack', resolve);
+      }
+    );
 
     socket1.emit('submit-commands', {
       tick: 3,
@@ -136,9 +146,11 @@ describe('NET-1: Server Validates Incoming Player Commands', () => {
   });
 
   it('should accept empty commands array (player idle)', async () => {
-    const ackPromise = new Promise<{ tick: number; accepted: boolean }>(resolve => {
-      socket1.once('submit-commands-ack', resolve);
-    });
+    const ackPromise = new Promise<{ tick: number; accepted: boolean }>(
+      (resolve) => {
+        socket1.once('submit-commands-ack', resolve);
+      }
+    );
 
     socket1.emit('submit-commands', {
       tick: 3,

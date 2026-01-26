@@ -39,23 +39,23 @@ import { Phalanx, PhalanxConfig } from 'phalanx-server';
 
 const config: Partial<PhalanxConfig> = {
   // === Server ===
-  port: 3000,                 // Server port (default: 3000)
-  cors: { origin: '*' },      // CORS configuration
+  port: 3000, // Server port (default: 3000)
+  cors: { origin: '*' }, // CORS configuration
 
   // === Tick System ===
-  tickRate: 20,               // Ticks per second (default: 20)
-  tickDeadlineMs: 50,         // Max wait for commands per tick
+  tickRate: 20, // Ticks per second (default: 20)
+  tickDeadlineMs: 50, // Max wait for commands per tick
 
   // === Matchmaking ===
-  gameMode: '3v3',            // Preset: '1v1' | '2v2' | '3v3' | '4v4' | 'FFA4'
+  gameMode: '3v3', // Preset: '1v1' | '2v2' | '3v3' | '4v4' | 'FFA4'
   // OR custom:
   // gameMode: { playersPerMatch: 6, teamsCount: 2 },
   matchmakingIntervalMs: 1000,
   countdownSeconds: 5,
 
   // === Timeouts ===
-  timeoutTicks: 40,           // Ticks before "lagging" warning
-  disconnectTicks: 100,       // Ticks before disconnect
+  timeoutTicks: 40, // Ticks before "lagging" warning
+  disconnectTicks: 100, // Ticks before disconnect
   reconnectGracePeriodMs: 30000,
 
   // === Command Validation ===
@@ -102,15 +102,15 @@ app.on('player-reconnected', (playerId, matchId) => {
 ```typescript
 class Phalanx {
   constructor(config?: Partial<PhalanxConfig>);
-  
+
   // Lifecycle
   start(): Promise<void>;
   stop(): Promise<void>;
-  
+
   // Events
   on(event: PhalanxEvent, handler: Function): this;
   off(event: PhalanxEvent, handler: Function): this;
-  
+
   // Runtime info
   getActiveMatches(): MatchInfo[];
   getQueueSize(): number;
@@ -120,24 +120,24 @@ class Phalanx {
 
 ### Client Events
 
-| Event | Emit | Receive | Description |
-|-------|------|---------|-------------|
-| `queue-join` | ✅ | | Join matchmaking queue |
-| `queue-leave` | ✅ | | Leave matchmaking queue |
-| `queue-status` | | ✅ | Queue join/leave confirmation |
-| `match-found` | | ✅ | Match created, countdown starting |
-| `game-start` | | ✅ | Match gameplay begins |
-| `match-end` | | ✅ | Match has ended |
-| `submit-commands` | ✅ | | Send game commands |
-| `submit-commands-ack` | | ✅ | Command acknowledgment |
-| `commands-batch` | | ✅ | All commands for a tick |
-| `tick-sync` | | ✅ | Periodic tick synchronization |
-| `countdown` | | ✅ | Countdown before game starts |
-| `reconnect-match` | ✅ | | Attempt to rejoin a match |
-| `reconnect-status` | | ✅ | Reconnection result |
-| `reconnect-state` | | ✅ | Game state for reconnection |
-| `player-disconnected` | | ✅ | Another player disconnected |
-| `player-reconnected` | | ✅ | Another player reconnected |
+| Event                 | Emit | Receive | Description                       |
+| --------------------- | ---- | ------- | --------------------------------- |
+| `queue-join`          | ✅   |         | Join matchmaking queue            |
+| `queue-leave`         | ✅   |         | Leave matchmaking queue           |
+| `queue-status`        |      | ✅      | Queue join/leave confirmation     |
+| `match-found`         |      | ✅      | Match created, countdown starting |
+| `game-start`          |      | ✅      | Match gameplay begins             |
+| `match-end`           |      | ✅      | Match has ended                   |
+| `submit-commands`     | ✅   |         | Send game commands                |
+| `submit-commands-ack` |      | ✅      | Command acknowledgment            |
+| `commands-batch`      |      | ✅      | All commands for a tick           |
+| `tick-sync`           |      | ✅      | Periodic tick synchronization     |
+| `countdown`           |      | ✅      | Countdown before game starts      |
+| `reconnect-match`     | ✅   |         | Attempt to rejoin a match         |
+| `reconnect-status`    |      | ✅      | Reconnection result               |
+| `reconnect-state`     |      | ✅      | Game state for reconnection       |
+| `player-disconnected` |      | ✅      | Another player disconnected       |
+| `player-reconnected`  |      | ✅      | Another player reconnected        |
 
 ## Game Modes
 

@@ -34,12 +34,12 @@ describe('NET-2: Server Handles Player Reconnection', () => {
     socket2 = io(SERVER_URL, { forceNew: true });
 
     await Promise.all([
-      new Promise<void>(resolve => socket1.on('connect', resolve)),
-      new Promise<void>(resolve => socket2.on('connect', resolve)),
+      new Promise<void>((resolve) => socket1.on('connect', resolve)),
+      new Promise<void>((resolve) => socket2.on('connect', resolve)),
     ]);
 
     // Join queue and wait for match
-    const matchPromise = new Promise<string>(resolve => {
+    const matchPromise = new Promise<string>((resolve) => {
       socket1.once('match-found', (data) => {
         matchId = data.matchId;
         resolve(data.matchId);
@@ -52,12 +52,12 @@ describe('NET-2: Server Handles Player Reconnection', () => {
     matchId = await matchPromise;
 
     // Wait for game to start
-    await new Promise<void>(resolve => {
+    await new Promise<void>((resolve) => {
       socket1.once('game-start', () => resolve());
     });
 
     // Wait a tick
-    await new Promise<void>(resolve => {
+    await new Promise<void>((resolve) => {
       socket1.once('tick-sync', () => resolve());
     });
   });
@@ -69,7 +69,10 @@ describe('NET-2: Server Handles Player Reconnection', () => {
   });
 
   it('should notify other players when a player disconnects', async () => {
-    const disconnectPromise = new Promise<{ playerId: string; gracePeriodMs: number }>(resolve => {
+    const disconnectPromise = new Promise<{
+      playerId: string;
+      gracePeriodMs: number;
+    }>((resolve) => {
       socket1.once('player-disconnected', resolve);
     });
 
@@ -86,15 +89,15 @@ describe('NET-2: Server Handles Player Reconnection', () => {
     socket2.disconnect();
 
     // Wait for disconnect to be processed
-    await new Promise<void>(resolve => {
+    await new Promise<void>((resolve) => {
       socket1.once('player-disconnected', () => resolve());
     });
 
     // Player 2 reconnects with new socket
     const newSocket = io(SERVER_URL, { forceNew: true });
-    await new Promise<void>(resolve => newSocket.on('connect', resolve));
+    await new Promise<void>((resolve) => newSocket.on('connect', resolve));
 
-    const reconnectPromise = new Promise<{ success: boolean }>(resolve => {
+    const reconnectPromise = new Promise<{ success: boolean }>((resolve) => {
       newSocket.once('reconnect-status', resolve);
     });
 
@@ -113,25 +116,25 @@ describe('NET-2: Server Handles Player Reconnection', () => {
       commands: [{ type: 'move', data: { x: 10 } }],
     });
 
-    await new Promise(resolve => setTimeout(resolve, 200)); // Let some ticks pass
+    await new Promise((resolve) => setTimeout(resolve, 200)); // Let some ticks pass
 
     // Player 2 disconnects
     socket2.disconnect();
 
-    await new Promise<void>(resolve => {
+    await new Promise<void>((resolve) => {
       socket1.once('player-disconnected', () => resolve());
     });
 
     // Player 2 reconnects
     const newSocket = io(SERVER_URL, { forceNew: true });
-    await new Promise<void>(resolve => newSocket.on('connect', resolve));
+    await new Promise<void>((resolve) => newSocket.on('connect', resolve));
 
     const statePromise = new Promise<{
       matchId: string;
       currentTick: number;
       state: string;
       recentCommands: { tick: number; commands: PlayerCommand[] }[];
-    }>(resolve => {
+    }>((resolve) => {
       newSocket.once('reconnect-state', resolve);
     });
 
@@ -150,15 +153,15 @@ describe('NET-2: Server Handles Player Reconnection', () => {
     // Player 2 disconnects
     socket2.disconnect();
 
-    await new Promise<void>(resolve => {
+    await new Promise<void>((resolve) => {
       socket1.once('player-disconnected', () => resolve());
     });
 
     // Player 2 reconnects
     const newSocket = io(SERVER_URL, { forceNew: true });
-    await new Promise<void>(resolve => newSocket.on('connect', resolve));
+    await new Promise<void>((resolve) => newSocket.on('connect', resolve));
 
-    const reconnectedPromise = new Promise<{ playerId: string }>(resolve => {
+    const reconnectedPromise = new Promise<{ playerId: string }>((resolve) => {
       socket1.once('player-reconnected', resolve);
     });
 
@@ -174,19 +177,24 @@ describe('NET-2: Server Handles Player Reconnection', () => {
     // Player 2 disconnects
     socket2.disconnect();
 
-    await new Promise<void>(resolve => {
+    await new Promise<void>((resolve) => {
       socket1.once('player-disconnected', () => resolve());
     });
 
     // Try to reconnect with wrong matchId
     const newSocket = io(SERVER_URL, { forceNew: true });
-    await new Promise<void>(resolve => newSocket.on('connect', resolve));
+    await new Promise<void>((resolve) => newSocket.on('connect', resolve));
 
-    const reconnectPromise = new Promise<{ success: boolean; reason?: string }>(resolve => {
-      newSocket.once('reconnect-status', resolve);
+    const reconnectPromise = new Promise<{ success: boolean; reason?: string }>(
+      (resolve) => {
+        newSocket.once('reconnect-status', resolve);
+      }
+    );
+
+    newSocket.emit('reconnect-match', {
+      playerId: 'player2',
+      matchId: 'wrong-match-id',
     });
-
-    newSocket.emit('reconnect-match', { playerId: 'player2', matchId: 'wrong-match-id' });
 
     const status = await reconnectPromise;
     expect(status.success).toBe(false);
@@ -199,15 +207,15 @@ describe('NET-2: Server Handles Player Reconnection', () => {
     // Player 2 disconnects
     socket2.disconnect();
 
-    await new Promise<void>(resolve => {
+    await new Promise<void>((resolve) => {
       socket1.once('player-disconnected', () => resolve());
     });
 
     // Player 2 reconnects
     const newSocket = io(SERVER_URL, { forceNew: true });
-    await new Promise<void>(resolve => newSocket.on('connect', resolve));
+    await new Promise<void>((resolve) => newSocket.on('connect', resolve));
 
-    await new Promise<void>(resolve => {
+    await new Promise<void>((resolve) => {
       newSocket.once('reconnect-status', (data) => {
         if (data.success) resolve();
       });
@@ -215,12 +223,12 @@ describe('NET-2: Server Handles Player Reconnection', () => {
     });
 
     // Wait for a tick
-    const currentTick = await new Promise<number>(resolve => {
+    const currentTick = await new Promise<number>((resolve) => {
       newSocket.once('tick-sync', (data) => resolve(data.tick));
     });
 
     // Submit command with reconnected socket
-    const ackPromise = new Promise<{ accepted: boolean }>(resolve => {
+    const ackPromise = new Promise<{ accepted: boolean }>((resolve) => {
       newSocket.once('submit-commands-ack', resolve);
     });
 

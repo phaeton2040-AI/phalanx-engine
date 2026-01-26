@@ -138,7 +138,9 @@ export class PhalanxClient {
    * Check if client is connected to the server
    */
   isConnected(): boolean {
-    return this.connectionState === 'connected' && this.socket?.connected === true;
+    return (
+      this.connectionState === 'connected' && this.socket?.connected === true
+    );
   }
 
   /**
@@ -464,7 +466,7 @@ export class PhalanxClient {
     handler: EventHandler<K>
   ): void {
     const wrapper = ((...args: Parameters<EventHandler<K>>) => {
-      this.off(event, wrapper as EventHandler<K>);
+      this.off(event, wrapper);
       (handler as (...args: Parameters<EventHandler<K>>) => void)(...args);
     }) as EventHandler<K>;
 

@@ -31,8 +31,8 @@ console.log(`Queue position: ${queueStatus.position}`);
 const match = await client.waitForMatch();
 console.log(`Match found: ${match.matchId}`);
 console.log(`Your team: ${match.teamId}`);
-console.log(`Teammates: ${match.teammates.map(t => t.username).join(', ')}`);
-console.log(`Opponents: ${match.opponents.map(o => o.username).join(', ')}`);
+console.log(`Teammates: ${match.teammates.map((t) => t.username).join(', ')}`);
+console.log(`Opponents: ${match.opponents.map((o) => o.username).join(', ')}`);
 
 // Wait for countdown
 await client.waitForCountdown((countdown) => {
@@ -67,12 +67,12 @@ client.disconnect();
 
 ```typescript
 interface PhalanxClientConfig {
-  serverUrl: string;          // Server URL (e.g., 'http://localhost:3000')
-  playerId: string;           // Unique player identifier
-  username: string;           // Display name
-  autoReconnect?: boolean;    // Auto-reconnect on disconnect (default: true)
+  serverUrl: string; // Server URL (e.g., 'http://localhost:3000')
+  playerId: string; // Unique player identifier
+  username: string; // Display name
+  autoReconnect?: boolean; // Auto-reconnect on disconnect (default: true)
   maxReconnectAttempts?: number; // Max reconnection attempts (default: 5)
-  reconnectDelayMs?: number;  // Delay between attempts (default: 1000)
+  reconnectDelayMs?: number; // Delay between attempts (default: 1000)
   connectionTimeoutMs?: number; // Connection timeout (default: 10000)
 }
 ```
@@ -158,34 +158,34 @@ const clientState = client.getClientState();
 
 ```typescript
 // Connection events
-client.on('connected', () => { });
-client.on('disconnected', () => { });
-client.on('reconnecting', (attempt) => { });
-client.on('reconnectFailed', () => { });
-client.on('error', (error) => { });
+client.on('connected', () => {});
+client.on('disconnected', () => {});
+client.on('reconnecting', (attempt) => {});
+client.on('reconnectFailed', () => {});
+client.on('error', (error) => {});
 
 // Queue events
-client.on('queueJoined', (status) => { });
-client.on('queueLeft', () => { });
-client.on('queueError', (error) => { });
+client.on('queueJoined', (status) => {});
+client.on('queueLeft', () => {});
+client.on('queueError', (error) => {});
 
 // Match events
-client.on('matchFound', (event) => { });
-client.on('countdown', (event) => { });
-client.on('gameStart', (event) => { });
-client.on('matchEnd', (event) => { });
+client.on('matchFound', (event) => {});
+client.on('countdown', (event) => {});
+client.on('gameStart', (event) => {});
+client.on('matchEnd', (event) => {});
 
 // Tick events
-client.on('tick', (event) => { });
-client.on('commands', (event) => { });
+client.on('tick', (event) => {});
+client.on('commands', (event) => {});
 
 // Player events
-client.on('playerDisconnected', (event) => { });
-client.on('playerReconnected', (event) => { });
+client.on('playerDisconnected', (event) => {});
+client.on('playerReconnected', (event) => {});
 
 // Reconnection events
-client.on('reconnectState', (event) => { });
-client.on('reconnectStatus', (event) => { });
+client.on('reconnectState', (event) => {});
+client.on('reconnectStatus', (event) => {});
 
 // Unsubscribe
 const unsubscribe = client.on('tick', handler);
@@ -202,15 +202,15 @@ client.removeAllListeners();
 
 The client tracks its lifecycle state:
 
-| State | Description |
-|-------|-------------|
-| `idle` | Not in queue or match |
-| `in-queue` | Waiting in matchmaking queue |
-| `match-found` | Match found, waiting for countdown |
-| `countdown` | Countdown in progress |
-| `playing` | Game is active |
-| `reconnecting` | Attempting to reconnect to match |
-| `finished` | Match has ended |
+| State          | Description                        |
+| -------------- | ---------------------------------- |
+| `idle`         | Not in queue or match              |
+| `in-queue`     | Waiting in matchmaking queue       |
+| `match-found`  | Match found, waiting for countdown |
+| `countdown`    | Countdown in progress              |
+| `playing`      | Game is active                     |
+| `reconnecting` | Attempting to reconnect to match   |
+| `finished`     | Match has ended                    |
 
 ## TickSimulation
 
@@ -241,7 +241,7 @@ simulation.onSimulationTick((tick, commands) => {
       moveEntity(cmd.data.entityId, cmd.data.target);
     }
   }
-  
+
   // Run deterministic simulation
   physics.update();
   combat.update();
@@ -252,10 +252,10 @@ function renderLoop() {
   // Get interpolation alpha for smooth visuals (0 to 1)
   const alpha = simulation.getInterpolationAlpha();
   interpolationSystem.interpolate(alpha);
-  
+
   // Flush any pending commands
   simulation.flushCommands();
-  
+
   renderer.render();
   requestAnimationFrame(renderLoop);
 }
@@ -292,25 +292,25 @@ interpolationSystem.interpolate(alpha);
 
 ```typescript
 interface TickSimulationConfig {
-  tickRate?: number;   // Ticks per second (default: 20)
-  debug?: boolean;     // Enable debug logging (default: false)
+  tickRate?: number; // Ticks per second (default: 20)
+  debug?: boolean; // Enable debug logging (default: false)
 }
 
 // Create simulation manager
 const simulation = new TickSimulation(client, config);
 
 // Register callbacks
-simulation.onSimulationTick((tick, commands) => { });
-simulation.onBeforeTick(() => { });
-simulation.onAfterTick(() => { });
+simulation.onSimulationTick((tick, commands) => {});
+simulation.onBeforeTick(() => {});
+simulation.onAfterTick(() => {});
 
 // Command management
-simulation.queueCommand(command);      // Queue command to send
-simulation.flushCommands();            // Send queued commands
-simulation.clearPendingCommands();     // Clear without sending
+simulation.queueCommand(command); // Queue command to send
+simulation.flushCommands(); // Send queued commands
+simulation.clearPendingCommands(); // Clear without sending
 
 // Interpolation
-const alpha = simulation.getInterpolationAlpha();  // 0 to 1
+const alpha = simulation.getInterpolationAlpha(); // 0 to 1
 const tickDuration = simulation.getTickDurationMs();
 
 // State
@@ -319,7 +319,7 @@ const pendingCount = simulation.getPendingTickCount();
 const isBehind = simulation.isSimulationBehind();
 
 // Lifecycle
-simulation.reset();   // Reset for new match
+simulation.reset(); // Reset for new match
 simulation.dispose(); // Cleanup
 ```
 
@@ -366,7 +366,10 @@ class GameClient {
     }
   }
 
-  private handleCommands(event: { tick: number; commands: PlayerCommand[] }): void {
+  private handleCommands(event: {
+    tick: number;
+    commands: PlayerCommand[];
+  }): void {
     // Process commands from all players for deterministic simulation
     for (const command of event.commands) {
       this.processCommand(command);

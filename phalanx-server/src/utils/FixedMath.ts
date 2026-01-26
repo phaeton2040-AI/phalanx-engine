@@ -52,7 +52,10 @@ export const Fixed = {
    * @param value - String representation (e.g., "10.5")
    * @param precision - Decimal precision (default: 18)
    */
-  fromString: (value: string, precision: number = DEFAULT_PRECISION): FixedPoint => {
+  fromString: (
+    value: string,
+    precision: number = DEFAULT_PRECISION
+  ): FixedPoint => {
     return fpFromDecimal(value, precision);
   },
 
@@ -61,7 +64,10 @@ export const Fixed = {
    * @param value - Integer value
    * @param precision - Decimal precision (default: 18)
    */
-  fromInt: (value: number | bigint, precision: number = DEFAULT_PRECISION): FixedPoint => {
+  fromInt: (
+    value: number | bigint,
+    precision: number = DEFAULT_PRECISION
+  ): FixedPoint => {
     return fpFromInt(BigInt(value), 0, precision);
   },
 
@@ -190,7 +196,12 @@ export const FixedMath = {
   /**
    * Calculate distance between two points
    */
-  distance: (x1: FixedPoint, y1: FixedPoint, x2: FixedPoint, y2: FixedPoint): FixedPoint => {
+  distance: (
+    x1: FixedPoint,
+    y1: FixedPoint,
+    x2: FixedPoint,
+    y2: FixedPoint
+  ): FixedPoint => {
     const dx = x2.sub(x1);
     const dy = y2.sub(y1);
     return dx.mul(dx).add(dy.mul(dy)).sqrt();
@@ -209,7 +220,11 @@ export const FixedMath = {
   /**
    * Clamp a value between min and max
    */
-  clamp: (value: FixedPoint, minVal: FixedPoint, maxVal: FixedPoint): FixedPoint => {
+  clamp: (
+    value: FixedPoint,
+    minVal: FixedPoint,
+    maxVal: FixedPoint
+  ): FixedPoint => {
     return FixedPoint.min(FixedPoint.max(value, minVal), maxVal);
   },
 
@@ -241,10 +256,7 @@ export const FixedMath = {
     const fact5 = Fixed.fromInt(120);
     const fact7 = Fixed.fromInt(5040);
 
-    return normalized
-      .sub(x3.div(fact3))
-      .add(x5.div(fact5))
-      .sub(x7.div(fact7));
+    return normalized.sub(x3.div(fact3)).add(x5.div(fact5)).sub(x7.div(fact7));
   },
 
   /**
@@ -290,7 +302,9 @@ export const FixedMath = {
       const t2 = ratio.mul(ratio);
       const t3 = t2.mul(ratio);
       const t5 = t3.mul(t2);
-      angle = halfPi.sub(ratio.sub(t3.div(Fixed.fromInt(3))).add(t5.div(Fixed.fromInt(5))));
+      angle = halfPi.sub(
+        ratio.sub(t3.div(Fixed.fromInt(3))).add(t5.div(Fixed.fromInt(5)))
+      );
     }
 
     // Adjust for quadrant

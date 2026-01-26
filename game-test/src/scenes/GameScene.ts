@@ -17,7 +17,12 @@ import {
   PointerInfo,
   AbstractMesh,
 } from '@babylonjs/core';
-import { PhalanxClient, MatchFoundEvent, CommandsBatchEvent, PlayerCommand } from 'phalanx-client';
+import {
+  PhalanxClient,
+  MatchFoundEvent,
+  CommandsBatchEvent,
+  PlayerCommand,
+} from 'phalanx-client';
 import { GameLoop } from '../game/GameLoop';
 import { GameSimulation } from '../game/GameSimulation';
 import { GROUND_WIDTH, GROUND_DEPTH, UNIT_RADIUS } from '../game/constants';
@@ -46,7 +51,9 @@ export class GameScene {
   private pendingLocalCommands: MoveCommand[] = [];
   private receivedCommands: PlayerCommand[] = [];
   private notificationTimeout: number | null = null;
-  private beforeUnloadHandler: ((e: BeforeUnloadEvent) => string | undefined) | null = null;
+  private beforeUnloadHandler:
+    | ((e: BeforeUnloadEvent) => string | undefined)
+    | null = null;
 
   // Callbacks
   private onExit: (() => void) | null = null;
@@ -157,7 +164,10 @@ export class GameScene {
   private createUnits(): void {
     // Collect all players and sort by playerId for deterministic ordering
     const allPlayers = [
-      { playerId: this.matchData.playerId, username: this.client.getUsername() },
+      {
+        playerId: this.matchData.playerId,
+        username: this.client.getUsername(),
+      },
       ...this.matchData.teammates,
       ...this.matchData.opponents,
     ].sort((a, b) => a.playerId.localeCompare(b.playerId));
@@ -184,7 +194,9 @@ export class GameScene {
   /**
    * Calculate starting positions for players
    */
-  private calculateStartPositions(playerCount: number): { x: number; z: number }[] {
+  private calculateStartPositions(
+    playerCount: number
+  ): { x: number; z: number }[] {
     const positions: { x: number; z: number }[] = [];
     const halfDepth = GROUND_DEPTH / 2 - 0.5;
 
@@ -238,7 +250,12 @@ export class GameScene {
   /**
    * Create a mesh for a unit
    */
-  private createUnitMesh(playerId: string, x: number, z: number, color: string): void {
+  private createUnitMesh(
+    playerId: string,
+    x: number,
+    z: number,
+    color: string
+  ): void {
     const mesh = MeshBuilder.CreateSphere(
       `unit_${playerId}`,
       { diameter: UNIT_RADIUS * 2 },
@@ -274,9 +291,9 @@ export class GameScene {
     const hue2rgb = (p: number, q: number, t: number) => {
       if (t < 0) t += 1;
       if (t > 1) t -= 1;
-      if (t < 1/6) return p + (q - p) * 6 * t;
-      if (t < 1/2) return q;
-      if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+      if (t < 1 / 6) return p + (q - p) * 6 * t;
+      if (t < 1 / 2) return q;
+      if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
       return p;
     };
 
@@ -286,9 +303,9 @@ export class GameScene {
     } else {
       const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
       const p = 2 * l - q;
-      r = hue2rgb(p, q, h + 1/3);
+      r = hue2rgb(p, q, h + 1 / 3);
       g = hue2rgb(p, q, h);
-      b = hue2rgb(p, q, h - 1/3);
+      b = hue2rgb(p, q, h - 1 / 3);
     }
 
     const toHex = (x: number) => {
@@ -346,7 +363,8 @@ export class GameScene {
   private setupInput(): void {
     this.scene.onPointerObservable.add((pointerInfo: PointerInfo) => {
       if (pointerInfo.type === PointerEventTypes.POINTERDOWN) {
-        if (pointerInfo.event.button === 0) { // Left click
+        if (pointerInfo.event.button === 0) {
+          // Left click
           const pickResult = this.scene.pick(
             this.scene.pointerX,
             this.scene.pointerY,
@@ -389,9 +407,10 @@ export class GameScene {
 
     // Process received commands
     if (this.receivedCommands.length > 0) {
-      const commandsWithPlayer = this.receivedCommands.map(cmd => ({
+      const commandsWithPlayer = this.receivedCommands.map((cmd) => ({
         ...cmd,
-        playerId: (cmd as PlayerCommand & { playerId?: string }).playerId || cmd.type,
+        playerId:
+          (cmd as PlayerCommand & { playerId?: string }).playerId || cmd.type,
       }));
       this.simulation.queueCommands(commandsWithPlayer as MoveCommand[]);
       this.receivedCommands = [];
@@ -492,7 +511,10 @@ export class GameScene {
   /**
    * Show a notification message
    */
-  private showNotification(message: string, type: 'info' | 'warning' = 'info'): void {
+  private showNotification(
+    message: string,
+    type: 'info' | 'warning' = 'info'
+  ): void {
     const notification = document.getElementById('notification');
     if (!notification) return;
 

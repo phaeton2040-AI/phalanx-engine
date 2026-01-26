@@ -102,12 +102,12 @@ This ensures all clients see the exact same game state at all times.
 
 ### Key Components
 
-| Component | Location | Purpose |
-|-----------|----------|---------|
-| `PhalanxClient` | phalanx-client | Network connection, matchmaking, events |
-| `TickSimulation` | phalanx-client | Tick timing, interpolation, command queue |
-| `LockstepManager` | babylon-ecs | Game-specific command execution, simulation |
-| `InterpolationSystem` | babylon-ecs | Smooth visual movement between ticks |
+| Component             | Location       | Purpose                                     |
+| --------------------- | -------------- | ------------------------------------------- |
+| `PhalanxClient`       | phalanx-client | Network connection, matchmaking, events     |
+| `TickSimulation`      | phalanx-client | Tick timing, interpolation, command queue   |
+| `LockstepManager`     | babylon-ecs    | Game-specific command execution, simulation |
+| `InterpolationSystem` | babylon-ecs    | Smooth visual movement between ticks        |
 
 ### TickSimulation (from phalanx-client)
 
@@ -143,7 +143,7 @@ The `LockstepManager` wraps `TickSimulation` and handles game-specific logic:
 // LockstepManager uses TickSimulation internally
 constructor(client: PhalanxClient, systems: LockstepSystems, callbacks: LockstepCallbacks) {
     this.tickSimulation = new TickSimulation(client, { tickRate: networkConfig.tickRate });
-    
+
     this.tickSimulation.onSimulationTick((tick, commands) => {
         this.executeTickCommands(commands);  // Execute move, placeUnit, etc.
         this.simulateTick();                  // Physics, combat, projectiles
@@ -160,14 +160,15 @@ To achieve smooth visuals at 60 FPS while simulating at 20 ticks/sec:
 ```
 Simulation: |---Tick 0---|---Tick 1---|---Tick 2---|
                  50ms        50ms        50ms
-                 
+
 Rendering:  |.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|.|
              16ms each (60 FPS)
-             
+
 Interpolation: Blends between tick positions based on alpha (0-1)
 ```
 
 **Entity Position Architecture:**
+
 - `entity.position` - Authoritative simulation position (deterministic)
 - `entity.mesh.position` - Visual position (interpolated for smooth rendering)
 
@@ -190,6 +191,7 @@ public setVisualPosition(value: Vector3): void {
 ### Command Flow
 
 **Movement Commands (Networked):**
+
 ```
 Player Right-Click → InputManager → EventBus (MOVE_REQUESTED)
                                           ↓
@@ -209,6 +211,7 @@ Player Right-Click → InputManager → EventBus (MOVE_REQUESTED)
 ```
 
 **Unit Placement Commands (Networked):**
+
 ```
 Player clicks unit button → FormationGridSystem
                                     ↓
@@ -222,6 +225,7 @@ Player clicks unit button → FormationGridSystem
 ```
 
 **Combat (Local, Deterministic):**
+
 ```
 CombatSystem.simulateTick()
         ↓
@@ -245,20 +249,20 @@ Network commands are defined in `src/core/NetworkCommands.ts`:
 ```typescript
 // Move command
 interface NetworkMoveCommand extends PlayerCommand {
-    type: 'move';
-    data: { entityId: number; targetX: number; targetY: number; targetZ: number };
+  type: 'move';
+  data: { entityId: number; targetX: number; targetY: number; targetZ: number };
 }
 
 // Place unit command
 interface NetworkPlaceUnitCommand extends PlayerCommand {
-    type: 'placeUnit';
-    data: { unitType: 'sphere' | 'prisma'; gridX: number; gridZ: number };
+  type: 'placeUnit';
+  data: { unitType: 'sphere' | 'prisma'; gridX: number; gridZ: number };
 }
 
 // Deploy units command
 interface NetworkDeployUnitsCommand extends PlayerCommand {
-    type: 'deployUnits';
-    data: { playerId: string };
+  type: 'deployUnits';
+  data: { playerId: string };
 }
 ```
 
@@ -268,28 +272,31 @@ interface NetworkDeployUnitsCommand extends PlayerCommand {
 
 ```typescript
 export interface AttackCommandData {
-    attackerId: number;
-    targetId: number;
+  attackerId: number;
+  targetId: number;
 }
 
 export interface NetworkAttackCommand extends PlayerCommand {
-    type: 'attack';
-    data: AttackCommandData;
+  type: 'attack';
+  data: AttackCommandData;
 }
 
 // Add to union type
-export type NetworkCommand = NetworkMoveCommand | NetworkPlaceUnitCommand | NetworkAttackCommand;
+export type NetworkCommand =
+  | NetworkMoveCommand
+  | NetworkPlaceUnitCommand
+  | NetworkAttackCommand;
 ```
 
 2. **Handle in LockstepManager.executeTickCommands()**:
 
 ```typescript
 if (cmd.type === 'attack') {
-    const attackCmd = cmd as NetworkAttackCommand;
-    this.systems.combatSystem.executeAttack(
-        attackCmd.data.attackerId,
-        attackCmd.data.targetId
-    );
+  const attackCmd = cmd as NetworkAttackCommand;
+  this.systems.combatSystem.executeAttack(
+    attackCmd.data.attackerId,
+    attackCmd.data.targetId
+  );
 }
 ```
 
@@ -297,8 +304,8 @@ if (cmd.type === 'attack') {
 
 ```typescript
 this.lockstepManager.queueCommand({
-    type: 'attack',
-    data: { attackerId: unit.id, targetId: enemy.id }
+  type: 'attack',
+  data: { attackerId: unit.id, targetId: enemy.id },
 });
 ```
 
@@ -319,18 +326,19 @@ this.lockstepManager.queueCommand({
 
 ### Key Files
 
-| File | Purpose |
-|------|---------|
-| `src/scenes/LobbyScene.ts` | Matchmaking UI and server connection |
-| `src/config/constants.ts` | Server URL, tick rate, spawn positions |
-| `src/core/Game.ts` | Network command handling and entity ownership |
-| `src/core/LockstepManager.ts` | Lockstep synchronization and command execution |
-| `src/core/NetworkCommands.ts` | Network command type definitions |
-| `src/systems/InterpolationSystem.ts` | Smooth visual interpolation |
+| File                                 | Purpose                                        |
+| ------------------------------------ | ---------------------------------------------- |
+| `src/scenes/LobbyScene.ts`           | Matchmaking UI and server connection           |
+| `src/config/constants.ts`            | Server URL, tick rate, spawn positions         |
+| `src/core/Game.ts`                   | Network command handling and entity ownership  |
+| `src/core/LockstepManager.ts`        | Lockstep synchronization and command execution |
+| `src/core/NetworkCommands.ts`        | Network command type definitions               |
+| `src/systems/InterpolationSystem.ts` | Smooth visual interpolation                    |
 
 ### Configuration
 
 Edit `src/config/constants.ts` to change:
+
 - `SERVER_URL` - Phalanx server address
 - `networkConfig.tickRate` - Simulation tick rate (must match server)
 - `arenaParams` - Starting positions for bases and towers
@@ -342,6 +350,7 @@ Edit `src/config/constants.ts` to change:
 ### Entities
 
 Entities are containers for components. They have:
+
 - A unique `id`
 - A reference to the Babylon.js `Scene`
 - A visual `Mesh`
@@ -351,21 +360,22 @@ Entities are containers for components. They have:
 
 ```typescript
 export abstract class Entity {
-    public readonly id: number;
-    protected scene: Scene;
-    protected mesh: Mesh | null = null;
-    protected components: Map<symbol, IComponent> = new Map();
-    
-    // Component management
-    addComponent<T extends IComponent>(component: T): T
-    getComponent<T extends IComponent>(type: symbol): T | undefined
-    hasComponent(type: symbol): boolean
-    hasComponents(...types: symbol[]): boolean
-    removeComponent(type: symbol): boolean
+  public readonly id: number;
+  protected scene: Scene;
+  protected mesh: Mesh | null = null;
+  protected components: Map<symbol, IComponent> = new Map();
+
+  // Component management
+  addComponent<T extends IComponent>(component: T): T;
+  getComponent<T extends IComponent>(type: symbol): T | undefined;
+  hasComponent(type: symbol): boolean;
+  hasComponents(...types: symbol[]): boolean;
+  removeComponent(type: symbol): boolean;
 }
 ```
 
 **Existing Entities**:
+
 - `Unit` - Movable combat unit with health, attack, movement, and team
 - `Tower` - Stationary defense structure with health, attack, and team
 - `Projectile` - Temporary entity for visual attack effects
@@ -380,62 +390,63 @@ Components are pure data containers that implement `IComponent`. Each component 
 
 ```typescript
 export interface IComponent {
-    readonly type: symbol;
+  readonly type: symbol;
 }
 
 export const ComponentType = {
-    Team: Symbol('Team'),
-    Health: Symbol('Health'),
-    Attack: Symbol('Attack'),
-    Movement: Symbol('Movement'),
-    Selectable: Symbol('Selectable'),
-    Renderable: Symbol('Renderable'),
+  Team: Symbol('Team'),
+  Health: Symbol('Health'),
+  Attack: Symbol('Attack'),
+  Movement: Symbol('Movement'),
+  Selectable: Symbol('Selectable'),
+  Renderable: Symbol('Renderable'),
 } as const;
 ```
 
 **Existing Components**:
 
-| Component | Purpose | Key Properties |
-|-----------|---------|----------------|
-| `TeamComponent` | Team affiliation | `team: TeamTag`, `isHostileTo()` |
-| `HealthComponent` | Health management | `health`, `maxHealth`, `takeDamage()` |
-| `AttackComponent` | Attack capabilities | `range`, `damage`, `cooldown`, `canAttack()` |
-| `MovementComponent` | Movement capabilities | `speed`, `targetPosition`, `moveTo()` |
+| Component           | Purpose               | Key Properties                               |
+| ------------------- | --------------------- | -------------------------------------------- |
+| `TeamComponent`     | Team affiliation      | `team: TeamTag`, `isHostileTo()`             |
+| `HealthComponent`   | Health management     | `health`, `maxHealth`, `takeDamage()`        |
+| `AttackComponent`   | Attack capabilities   | `range`, `damage`, `cooldown`, `canAttack()` |
+| `MovementComponent` | Movement capabilities | `speed`, `targetPosition`, `moveTo()`        |
 
 ---
 
 ### Systems
 
 Systems contain game logic and operate on entities with specific component combinations. They:
+
 - Query entities through `EntityManager`
 - Communicate through `EventBus`
 - Have an `update()` method called each frame
 
 **Existing Systems**:
 
-| System | Responsibility | Required Components |
-|--------|---------------|---------------------|
-| `CombatSystem` | Target detection, attack logic | Attack, Team, Health |
-| `MovementSystem` | Entity movement commands | Movement |
-| `HealthSystem` | Damage processing, entity destruction | Health |
-| `PhysicsSystem` | Deterministic physics, collision | - |
-| `ProjectileSystem` | Projectile movement and collision | - |
-| `SelectionSystem` | Entity selection management | - |
-| `InputManager` | User input handling | - |
-| `InterpolationSystem` | Smooth visual movement between ticks | - |
-| `ResourceSystem` | Resource generation and spending | - |
-| `TerritorySystem` | Territory control and aggression bonus | Team |
-| `FormationGridSystem` | Unit placement grid | - |
-| `WaveSystem` | Wave-based unit deployment | - |
-| `VictorySystem` | Win/lose conditions | - |
+| System                | Responsibility                         | Required Components  |
+| --------------------- | -------------------------------------- | -------------------- |
+| `CombatSystem`        | Target detection, attack logic         | Attack, Team, Health |
+| `MovementSystem`      | Entity movement commands               | Movement             |
+| `HealthSystem`        | Damage processing, entity destruction  | Health               |
+| `PhysicsSystem`       | Deterministic physics, collision       | -                    |
+| `ProjectileSystem`    | Projectile movement and collision      | -                    |
+| `SelectionSystem`     | Entity selection management            | -                    |
+| `InputManager`        | User input handling                    | -                    |
+| `InterpolationSystem` | Smooth visual movement between ticks   | -                    |
+| `ResourceSystem`      | Resource generation and spending       | -                    |
+| `TerritorySystem`     | Territory control and aggression bonus | Team                 |
+| `FormationGridSystem` | Unit placement grid                    | -                    |
+| `WaveSystem`          | Wave-based unit deployment             | -                    |
+| `VictorySystem`       | Win/lose conditions                    | -                    |
 
 **Core Managers**:
 
-| Manager | Responsibility |
-|---------|----------------|
+| Manager           | Responsibility                                 |
+| ----------------- | ---------------------------------------------- |
 | `LockstepManager` | Deterministic lockstep sync via TickSimulation |
-| `EntityFactory` | Entity creation with ownership tracking |
-| `UIManager` | UI updates and notifications |
+| `EntityFactory`   | Entity creation with ownership tracking        |
+| `UIManager`       | UI updates and notifications                   |
 
 ---
 
@@ -448,17 +459,17 @@ The `EventBus` enables decoupled communication between systems using a publish-s
 ```typescript
 // Subscribe to an event
 const unsubscribe = eventBus.on<MoveRequestedEvent>(
-    GameEvents.MOVE_REQUESTED, 
-    (event) => {
-        console.log(`Move to: ${event.target}`);
-    }
+  GameEvents.MOVE_REQUESTED,
+  (event) => {
+    console.log(`Move to: ${event.target}`);
+  }
 );
 
 // Emit an event
 eventBus.emit<MoveRequestedEvent>(GameEvents.MOVE_REQUESTED, {
-    ...createEvent(),
-    entityId: 1,
-    target: new Vector3(10, 0, 5),
+  ...createEvent(),
+  entityId: 1,
+  target: new Vector3(10, 0, 5),
 });
 
 // Unsubscribe when done
@@ -466,6 +477,7 @@ unsubscribe();
 ```
 
 **Event Categories** (defined in `src/events/GameEvents.ts`):
+
 - **Combat**: `ATTACK_REQUESTED`, `PROJECTILE_SPAWNED`, `PROJECTILE_HIT`
 - **Health**: `DAMAGE_REQUESTED`, `DAMAGE_APPLIED`, `ENTITY_DESTROYED`
 - **Movement**: `MOVE_REQUESTED`, `MOVE_STARTED`, `MOVE_COMPLETED`
@@ -488,8 +500,8 @@ entityManager.removeEntity(entity);
 
 // Query entities by components
 const combatants = entityManager.queryEntities(
-    ComponentType.Attack,
-    ComponentType.Health
+  ComponentType.Attack,
+  ComponentType.Health
 );
 
 // Get all entities
@@ -509,25 +521,25 @@ const entity = entityManager.getEntity(id);
 
 ```typescript
 // src/components/ArmorComponent.ts
-import type { IComponent } from "./Component";
-import { ComponentType } from "./Component";
+import type { IComponent } from './Component';
+import { ComponentType } from './Component';
 
 export class ArmorComponent implements IComponent {
-    public readonly type = ComponentType.Armor;
-    
-    private _armor: number;
-    
-    constructor(armor: number = 10) {
-        this._armor = armor;
-    }
-    
-    public get armor(): number {
-        return this._armor;
-    }
-    
-    public reducesDamage(incomingDamage: number): number {
-        return Math.max(0, incomingDamage - this._armor);
-    }
+  public readonly type = ComponentType.Armor;
+
+  private _armor: number;
+
+  constructor(armor: number = 10) {
+    this._armor = armor;
+  }
+
+  public get armor(): number {
+    return this._armor;
+  }
+
+  public reducesDamage(incomingDamage: number): number {
+    return Math.max(0, incomingDamage - this._armor);
+  }
 }
 ```
 
@@ -535,15 +547,15 @@ export class ArmorComponent implements IComponent {
 
 ```typescript
 export const ComponentType = {
-    // ...existing types
-    Armor: Symbol('Armor'),  // Add new type
+  // ...existing types
+  Armor: Symbol('Armor'), // Add new type
 } as const;
 ```
 
 3. **Export from index** in `src/components/index.ts`:
 
 ```typescript
-export * from "./ArmorComponent";
+export * from './ArmorComponent';
 ```
 
 4. **Add to entities** that need it:
@@ -561,42 +573,53 @@ this.addComponent(new ArmorComponent(5));
 
 ```typescript
 // src/entities/Building.ts
-import { Scene, Vector3, Mesh, MeshBuilder, StandardMaterial, Color3 } from "@babylonjs/core";
-import { Entity } from "./Entity";
-import { ComponentType, TeamComponent, HealthComponent } from "../components";
-import { TeamTag } from "../enums/TeamTag";
+import {
+  Scene,
+  Vector3,
+  Mesh,
+  MeshBuilder,
+  StandardMaterial,
+  Color3,
+} from '@babylonjs/core';
+import { Entity } from './Entity';
+import { ComponentType, TeamComponent, HealthComponent } from '../components';
+import { TeamTag } from '../enums/TeamTag';
 
 export interface BuildingConfig {
-    team: TeamTag;
-    health?: number;
-    color?: Color3;
+  team: TeamTag;
+  health?: number;
+  color?: Color3;
 }
 
 export class Building extends Entity {
-    constructor(scene: Scene, config: BuildingConfig, position: Vector3) {
-        super(scene);
-        
-        // Create visual mesh
-        this.mesh = this.createMesh(config.color ?? new Color3(0.5, 0.5, 0.5));
-        this.mesh.position = position;
-        
-        // Add components
-        this.addComponent(new TeamComponent(config.team));
-        this.addComponent(new HealthComponent(config.health ?? 200));
-    }
-    
-    private createMesh(color: Color3): Mesh {
-        const mesh = MeshBuilder.CreateBox(`building_${this.id}`, { size: 3 }, this.scene);
-        const material = new StandardMaterial(`buildingMat_${this.id}`, this.scene);
-        material.diffuseColor = color;
-        mesh.material = material;
-        return mesh;
-    }
-    
-    public dispose(): void {
-        this.mesh?.dispose();
-        super.dispose();
-    }
+  constructor(scene: Scene, config: BuildingConfig, position: Vector3) {
+    super(scene);
+
+    // Create visual mesh
+    this.mesh = this.createMesh(config.color ?? new Color3(0.5, 0.5, 0.5));
+    this.mesh.position = position;
+
+    // Add components
+    this.addComponent(new TeamComponent(config.team));
+    this.addComponent(new HealthComponent(config.health ?? 200));
+  }
+
+  private createMesh(color: Color3): Mesh {
+    const mesh = MeshBuilder.CreateBox(
+      `building_${this.id}`,
+      { size: 3 },
+      this.scene
+    );
+    const material = new StandardMaterial(`buildingMat_${this.id}`, this.scene);
+    material.diffuseColor = color;
+    mesh.material = material;
+    return mesh;
+  }
+
+  public dispose(): void {
+    this.mesh?.dispose();
+    super.dispose();
+  }
 }
 ```
 
@@ -626,51 +649,55 @@ private createBuilding(config: BuildingConfig, position: Vector3): Building {
 
 ```typescript
 // src/systems/ResourceSystem.ts
-import { Engine } from "@babylonjs/core";
-import { EntityManager } from "../core/EntityManager";
-import { EventBus } from "../core/EventBus";
-import { ComponentType } from "../components";
-import { GameEvents, createEvent } from "../events";
+import { Engine } from '@babylonjs/core';
+import { EntityManager } from '../core/EntityManager';
+import { EventBus } from '../core/EventBus';
+import { ComponentType } from '../components';
+import { GameEvents, createEvent } from '../events';
 
 export class ResourceSystem {
-    private engine: Engine;
-    private entityManager: EntityManager;
-    private eventBus: EventBus;
-    private unsubscribers: (() => void)[] = [];
-    
-    constructor(engine: Engine, entityManager: EntityManager, eventBus: EventBus) {
-        this.engine = engine;
-        this.entityManager = entityManager;
-        this.eventBus = eventBus;
-        
-        this.setupEventListeners();
+  private engine: Engine;
+  private entityManager: EntityManager;
+  private eventBus: EventBus;
+  private unsubscribers: (() => void)[] = [];
+
+  constructor(
+    engine: Engine,
+    entityManager: EntityManager,
+    eventBus: EventBus
+  ) {
+    this.engine = engine;
+    this.entityManager = entityManager;
+    this.eventBus = eventBus;
+
+    this.setupEventListeners();
+  }
+
+  private setupEventListeners(): void {
+    // Subscribe to relevant events
+    this.unsubscribers.push(
+      this.eventBus.on(GameEvents.ENTITY_DESTROYED, (event) => {
+        // Handle resource drops, etc.
+      })
+    );
+  }
+
+  public update(): void {
+    const deltaTime = this.engine.getDeltaTime() / 1000;
+
+    // Query entities with Resource component
+    const resourceEntities = this.entityManager.queryEntities(
+      ComponentType.Resource
+    );
+
+    for (const entity of resourceEntities) {
+      // Process resource logic
     }
-    
-    private setupEventListeners(): void {
-        // Subscribe to relevant events
-        this.unsubscribers.push(
-            this.eventBus.on(GameEvents.ENTITY_DESTROYED, (event) => {
-                // Handle resource drops, etc.
-            })
-        );
-    }
-    
-    public update(): void {
-        const deltaTime = this.engine.getDeltaTime() / 1000;
-        
-        // Query entities with Resource component
-        const resourceEntities = this.entityManager.queryEntities(
-            ComponentType.Resource
-        );
-        
-        for (const entity of resourceEntities) {
-            // Process resource logic
-        }
-    }
-    
-    public dispose(): void {
-        this.unsubscribers.forEach(unsub => unsub());
-    }
+  }
+
+  public dispose(): void {
+    this.unsubscribers.forEach((unsub) => unsub());
+  }
 }
 ```
 
@@ -678,7 +705,11 @@ export class ResourceSystem {
 
 ```typescript
 // In constructor
-this.resourceSystem = new ResourceSystem(this.engine, this.entityManager, this.eventBus);
+this.resourceSystem = new ResourceSystem(
+  this.engine,
+  this.entityManager,
+  this.eventBus
+);
 
 // In game loop (start method)
 this.resourceSystem.update();
@@ -692,9 +723,9 @@ this.resourceSystem.update();
 
 ```typescript
 export interface ResourceCollectedEvent extends GameEvent {
-    entityId: number;
-    resourceType: string;
-    amount: number;
+  entityId: number;
+  resourceType: string;
+  amount: number;
 }
 ```
 
@@ -702,15 +733,15 @@ export interface ResourceCollectedEvent extends GameEvent {
 
 ```typescript
 export const GameEvents = {
-    // ...existing events
-    RESOURCE_COLLECTED: 'resource:collected',
+  // ...existing events
+  RESOURCE_COLLECTED: 'resource:collected',
 } as const;
 ```
 
 3. **Export from index** in `src/events/index.ts`:
 
 ```typescript
-export type { ResourceCollectedEvent } from "./EventTypes";
+export type { ResourceCollectedEvent } from './EventTypes';
 ```
 
 4. **Use in systems**:
@@ -718,16 +749,19 @@ export type { ResourceCollectedEvent } from "./EventTypes";
 ```typescript
 // Emit
 this.eventBus.emit<ResourceCollectedEvent>(GameEvents.RESOURCE_COLLECTED, {
-    ...createEvent(),
-    entityId: entity.id,
-    resourceType: 'gold',
-    amount: 50,
+  ...createEvent(),
+  entityId: entity.id,
+  resourceType: 'gold',
+  amount: 50,
 });
 
 // Subscribe
-this.eventBus.on<ResourceCollectedEvent>(GameEvents.RESOURCE_COLLECTED, (event) => {
+this.eventBus.on<ResourceCollectedEvent>(
+  GameEvents.RESOURCE_COLLECTED,
+  (event) => {
     console.log(`Collected ${event.amount} ${event.resourceType}`);
-});
+  }
+);
 ```
 
 ---
@@ -872,4 +906,3 @@ src/
     ├── ISelectable.ts
     └── ITeamMember.ts
 ```
-

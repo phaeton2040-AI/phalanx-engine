@@ -31,7 +31,7 @@ describe('MATCH-3: Server Detects When Enough Players Are Ready for a Match', ()
     }
     clients = [];
     // Small delay to allow disconnect events to process
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, 50));
     await server.stop();
   });
 
@@ -117,7 +117,7 @@ describe('MATCH-3: Server Detects When Enough Players Are Ready for a Match', ()
     client1.emit('queue-join', { playerId: 'player1', username: 'alice' });
 
     // Wait for a matchmaking cycle
-    await new Promise(resolve => setTimeout(resolve, 200));
+    await new Promise((resolve) => setTimeout(resolve, 200));
 
     expect(matchCreated).toBe(false);
     expect(server.getQueueSize()).toBe(1);
@@ -144,7 +144,7 @@ describe('MATCH-3: Server Detects When Enough Players Are Ready for a Match', ()
 
   it('should handle empty queue without errors', async () => {
     // Just wait for a matchmaking cycle with empty queue
-    await new Promise(resolve => setTimeout(resolve, 200));
+    await new Promise((resolve) => setTimeout(resolve, 200));
 
     // Should not throw and queue size should be 0
     expect(server.getQueueSize()).toBe(0);
@@ -180,7 +180,7 @@ describe('MATCH-3: Game Mode Configuration', () => {
       }
     }
     clients = [];
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, 50));
     if (server) {
       await server.stop();
     }
@@ -217,25 +217,29 @@ describe('MATCH-3: Game Mode Configuration', () => {
       clientsArr.push(client);
     }
 
-    const matchPromises = clientsArr.map(client =>
-      new Promise<MatchFoundEvent>((resolve) => {
-        client.on('match-found', (data: MatchFoundEvent) => resolve(data));
-      })
+    const matchPromises = clientsArr.map(
+      (client) =>
+        new Promise<MatchFoundEvent>((resolve) => {
+          client.on('match-found', (data: MatchFoundEvent) => resolve(data));
+        })
     );
 
     for (let i = 0; i < 4; i++) {
-      clientsArr[i].emit('queue-join', { playerId: `player${i}`, username: `user${i}` });
+      clientsArr[i].emit('queue-join', {
+        playerId: `player${i}`,
+        username: `user${i}`,
+      });
     }
 
     const matches = await Promise.all(matchPromises);
 
     // All players should be in the same match
-    const matchIds = new Set(matches.map(m => m.matchId));
+    const matchIds = new Set(matches.map((m) => m.matchId));
     expect(matchIds.size).toBe(1);
 
     // Check team distribution: 2 players per team (teamId 0 and 1)
-    const team0 = matches.filter(m => m.teamId === 0);
-    const team1 = matches.filter(m => m.teamId === 1);
+    const team0 = matches.filter((m) => m.teamId === 0);
+    const team1 = matches.filter((m) => m.teamId === 1);
     expect(team0.length).toBe(2);
     expect(team1.length).toBe(2);
 
@@ -259,24 +263,28 @@ describe('MATCH-3: Game Mode Configuration', () => {
       clientsArr.push(client);
     }
 
-    const matchPromises = clientsArr.map(client =>
-      new Promise<MatchFoundEvent>((resolve) => {
-        client.on('match-found', (data: MatchFoundEvent) => resolve(data));
-      })
+    const matchPromises = clientsArr.map(
+      (client) =>
+        new Promise<MatchFoundEvent>((resolve) => {
+          client.on('match-found', (data: MatchFoundEvent) => resolve(data));
+        })
     );
 
     for (let i = 0; i < 4; i++) {
-      clientsArr[i].emit('queue-join', { playerId: `player${i}`, username: `user${i}` });
+      clientsArr[i].emit('queue-join', {
+        playerId: `player${i}`,
+        username: `user${i}`,
+      });
     }
 
     const matches = await Promise.all(matchPromises);
 
     // All players should be in the same match
-    const matchIds = new Set(matches.map(m => m.matchId));
+    const matchIds = new Set(matches.map((m) => m.matchId));
     expect(matchIds.size).toBe(1);
 
     // Check team distribution: 1 player per team (FFA) - 4 different teams
-    const teams = new Set(matches.map(m => m.teamId));
+    const teams = new Set(matches.map((m) => m.teamId));
     expect(teams.size).toBe(4);
 
     // In FFA, each player has 0 teammates and 3 opponents

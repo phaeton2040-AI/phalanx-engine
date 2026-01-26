@@ -221,9 +221,16 @@ export interface PhalanxEventHandlers {
   'match-created': (match: MatchInfo) => void;
   'match-started': (match: MatchInfo) => void;
   'match-ended': (matchId: string, reason: string) => void;
-  'player-command': (playerId: string, command: PlayerCommand) => boolean | void;
+  'player-command': (
+    playerId: string,
+    command: PlayerCommand
+  ) => boolean | void;
   'player-timeout': (playerId: string, matchId: string) => void;
   'player-reconnected': (playerId: string, matchId: string) => void;
   'player-disconnected': (playerId: string, matchId: string) => void;
-  'desync-detected': (matchId: string, tick: number, hashes: { [playerId: string]: string }) => void;
+  'desync-detected': (
+    matchId: string,
+    tick: number,
+    hashes: { [playerId: string]: string }
+  ) => void;
 }

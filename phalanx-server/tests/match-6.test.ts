@@ -1,7 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { io, Socket } from 'socket.io-client';
 import { Phalanx } from '../src/Phalanx.js';
-import type { CountdownEvent, GameStartEvent, MatchFoundEvent } from '../src/types/index.js';
+import type {
+  CountdownEvent,
+  GameStartEvent,
+  MatchFoundEvent,
+} from '../src/types/index.js';
 
 /**
  * Tests for Story 6 (MATCH-6): Server Sends Game Start Countdown
@@ -29,7 +33,7 @@ describe('MATCH-6: Server Sends Game Start Countdown', () => {
       }
     }
     clients = [];
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, 50));
     await server.stop();
   });
 
@@ -74,7 +78,7 @@ describe('MATCH-6: Server Sends Game Start Countdown', () => {
     client2.emit('queue-join', { playerId: 'player2', username: 'bob' });
 
     // Wait for match-found and first countdown
-    await new Promise(resolve => setTimeout(resolve, 300));
+    await new Promise((resolve) => setTimeout(resolve, 300));
 
     expect(matchFoundTime).not.toBeNull();
     expect(firstCountdownTime).not.toBeNull();
@@ -99,7 +103,7 @@ describe('MATCH-6: Server Sends Game Start Countdown', () => {
     client2.emit('queue-join', { playerId: 'player2', username: 'bob' });
 
     // Wait for all countdown events (3, 2, 1, 0 = 4 events over ~3 seconds)
-    await new Promise(resolve => setTimeout(resolve, 3500));
+    await new Promise((resolve) => setTimeout(resolve, 3500));
 
     // Should have multiple countdown events
     expect(countdownTimestamps.length).toBeGreaterThanOrEqual(3);
@@ -128,7 +132,7 @@ describe('MATCH-6: Server Sends Game Start Countdown', () => {
     client2.emit('queue-join', { playerId: 'player2', username: 'bob' });
 
     // Wait for all countdown events
-    await new Promise(resolve => setTimeout(resolve, 4000));
+    await new Promise((resolve) => setTimeout(resolve, 4000));
 
     // Should have countdown from 3 to 0
     expect(countdownValues).toEqual([3, 2, 1, 0]);
@@ -154,12 +158,14 @@ describe('MATCH-6: Server Sends Game Start Countdown', () => {
     client2.emit('queue-join', { playerId: 'player2', username: 'bob' });
 
     // Wait for all countdown events
-    await new Promise(resolve => setTimeout(resolve, 4000));
+    await new Promise((resolve) => setTimeout(resolve, 4000));
 
     // Both players should receive the same countdown
     expect(countdownEvents1.length).toBe(4); // 3, 2, 1, 0
     expect(countdownEvents2.length).toBe(4);
-    expect(countdownEvents1.map(e => e.seconds)).toEqual(countdownEvents2.map(e => e.seconds));
+    expect(countdownEvents1.map((e) => e.seconds)).toEqual(
+      countdownEvents2.map((e) => e.seconds)
+    );
   });
 
   it('should emit game-start event after countdown reaches 0', async () => {
@@ -226,7 +232,10 @@ describe('MATCH-6: Server Sends Game Start Countdown', () => {
     client1.emit('queue-join', { playerId: 'player1', username: 'alice' });
     client2.emit('queue-join', { playerId: 'player2', username: 'bob' });
 
-    const [gameStart1, gameStart2] = await Promise.all([gameStartPromise1, gameStartPromise2]);
+    const [gameStart1, gameStart2] = await Promise.all([
+      gameStartPromise1,
+      gameStartPromise2,
+    ]);
 
     expect(gameStart1.matchId).toBe(gameStart2.matchId);
   });
@@ -255,7 +264,7 @@ describe('MATCH-6: Countdown with 5-second default', () => {
       }
     }
     clients = [];
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, 50));
     await server.stop();
   });
 
@@ -291,7 +300,7 @@ describe('MATCH-6: Countdown with 5-second default', () => {
     client2.emit('queue-join', { playerId: 'player2', username: 'bob' });
 
     // Wait for all countdown events (5, 4, 3, 2, 1, 0)
-    await new Promise(resolve => setTimeout(resolve, 6500));
+    await new Promise((resolve) => setTimeout(resolve, 6500));
 
     expect(countdownValues).toEqual([5, 4, 3, 2, 1, 0]);
   });

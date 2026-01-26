@@ -3,7 +3,7 @@
  * Components are data containers that can be attached to entities
  */
 export interface IComponent {
-    readonly type: symbol;
+  readonly type: symbol;
 }
 
 /**
@@ -11,15 +11,14 @@ export interface IComponent {
  * Using symbols ensures uniqueness and good performance for Map keys
  */
 export const ComponentType = {
-    Team: Symbol('Team'),
-    Health: Symbol('Health'),
-    Attack: Symbol('Attack'),
-    Movement: Symbol('Movement'),
-    Selectable: Symbol('Selectable'),
-    Renderable: Symbol('Renderable'),
-    UnitType: Symbol('UnitType'),
-    Resource: Symbol('Resource'),
+  Team: Symbol('Team'),
+  Health: Symbol('Health'),
+  Attack: Symbol('Attack'),
+  Movement: Symbol('Movement'),
+  Selectable: Symbol('Selectable'),
+  Renderable: Symbol('Renderable'),
+  UnitType: Symbol('UnitType'),
+  Resource: Symbol('Resource'),
 } as const;
 
 export type ComponentTypeKey = keyof typeof ComponentType;
-

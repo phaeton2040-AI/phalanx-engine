@@ -1,32 +1,41 @@
-import { Scene, Vector3, Mesh } from "@babylonjs/core";
-import { EntityManager } from "../core/EntityManager";
-import { EventBus } from "../core/EventBus";
-import { GameEvents, createEvent } from "../events";
-import { TeamTag } from "../enums/TeamTag";
+import { Scene, Vector3, Mesh } from '@babylonjs/core';
+import { EntityManager } from '../core/EntityManager';
+import { EventBus } from '../core/EventBus';
+import { GameEvents, createEvent } from '../events';
+import { TeamTag } from '../enums/TeamTag';
 import {
-    FormationGridData,
-    FormationGridRenderer,
-    FormationHoverPreview,
-    FormationInputHandler,
-    FormationDeployer,
-    type FormationUnitType,
-    type FormationGrid,
-    type CreateUnitCallback,
-    type MoveUnitCallback,
-    type CanAffordCallback,
-    type PlacedUnit,
-    type GridCoords,
-    type GridCell,
-} from "./formation";
+  FormationGridData,
+  FormationGridRenderer,
+  FormationHoverPreview,
+  FormationInputHandler,
+  FormationDeployer,
+  type FormationUnitType,
+  type FormationGrid,
+  type CreateUnitCallback,
+  type MoveUnitCallback,
+  type CanAffordCallback,
+  type PlacedUnit,
+  type GridCoords,
+  type GridCell,
+} from './formation';
 import type {
-    UnitPurchaseCompletedEvent,
-    FormationUnitPlacedEvent,
-    FormationUnitRemovedEvent,
-    FormationUnitMovedEvent,
-} from "../events";
+  UnitPurchaseCompletedEvent,
+  FormationUnitPlacedEvent,
+  FormationUnitRemovedEvent,
+  FormationUnitMovedEvent,
+} from '../events';
 
 // Re-export types for backward compatibility
-export type { FormationUnitType, CreateUnitCallback, MoveUnitCallback, CanAffordCallback, FormationGrid, PlacedUnit, GridCoords, GridCell };
+export type {
+  FormationUnitType,
+  CreateUnitCallback,
+  MoveUnitCallback,
+  CanAffordCallback,
+  FormationGrid,
+  PlacedUnit,
+  GridCoords,
+  GridCell,
+};
 
 /**
  * FormationGridSystem - Main facade for the formation grid functionality
@@ -39,351 +48,432 @@ export type { FormationUnitType, CreateUnitCallback, MoveUnitCallback, CanAfford
  * - FormationDeployer: Unit deployment
  */
 export class FormationGridSystem {
-    private eventBus: EventBus;
-    private unsubscribers: (() => void)[] = [];
+  private eventBus: EventBus;
+  private unsubscribers: (() => void)[] = [];
 
-    // Composed components
-    private gridData: FormationGridData;
-    private renderer: FormationGridRenderer;
-    private hoverPreview: FormationHoverPreview;
-    private inputHandler: FormationInputHandler;
-    private deployer: FormationDeployer;
+  // Composed components
+  private gridData: FormationGridData;
+  private renderer: FormationGridRenderer;
+  private hoverPreview: FormationHoverPreview;
+  private inputHandler: FormationInputHandler;
+  private deployer: FormationDeployer;
 
-    // Legacy: preview mesh for compatibility
-    private previewMesh: Mesh | null = null;
+  // Legacy: preview mesh for compatibility
+  private previewMesh: Mesh | null = null;
 
-    constructor(scene: Scene, _entityManager: EntityManager, eventBus: EventBus) {
-        this.eventBus = eventBus;
+  constructor(scene: Scene, _entityManager: EntityManager, eventBus: EventBus) {
+    this.eventBus = eventBus;
 
-        // Initialize components
-        this.gridData = new FormationGridData();
-        this.renderer = new FormationGridRenderer(scene);
-        this.hoverPreview = new FormationHoverPreview(scene);
-        this.inputHandler = new FormationInputHandler(
-            scene,
-            eventBus,
-            this.gridData,
-            this.renderer,
-            this.hoverPreview
+    // Initialize components
+    this.gridData = new FormationGridData();
+    this.renderer = new FormationGridRenderer(scene);
+    this.hoverPreview = new FormationHoverPreview(scene);
+    this.inputHandler = new FormationInputHandler(
+      scene,
+      eventBus,
+      this.gridData,
+      this.renderer,
+      this.hoverPreview
+    );
+    this.deployer = new FormationDeployer(eventBus, this.gridData);
+
+    this.setupEventListeners();
+  }
+
+  /**
+   * Set the callback for creating units
+   */
+  public setCreateUnitCallback(callback: CreateUnitCallback): void {
+    this.deployer.setCreateUnitCallback(callback);
+  }
+
+  /**
+   * Set the callback for moving units (for lockstep simulation)
+   */
+  public setMoveUnitCallback(callback: MoveUnitCallback): void {
+    this.deployer.setMoveUnitCallback(callback);
+  }
+
+  /**
+   * Set the callback for checking affordability
+   */
+  public setCanAffordCallback(callback: CanAffordCallback): void {
+    this.inputHandler.setCanAffordCallback(callback);
+  }
+
+  /**
+   * Setup event listeners
+   */
+  private setupEventListeners(): void {
+    this.unsubscribers.push(
+      this.eventBus.on<UnitPurchaseCompletedEvent>(
+        GameEvents.UNIT_PURCHASE_COMPLETED,
+        (_event) => {
+          // Unit is queued for placement, actual spawn happens on commit
+        }
+      )
+    );
+  }
+
+  /**
+   * Initialize formation grid for a player
+   */
+  public initializeGrid(playerId: string, team: TeamTag): void {
+    const grid = this.gridData.initializeGrid(playerId, team);
+    this.renderer.createGridVisualization(playerId, grid);
+    this.renderer.createGridGroundPlane(playerId, grid);
+
+    console.log(
+      `[FormationGridSystem] Initialized grid for player ${playerId}, team ${team}`
+    );
+  }
+
+  /**
+   * Enter placement mode for a unit type
+   */
+  public enterPlacementMode(
+    playerId: string,
+    unitType: FormationUnitType
+  ): void {
+    this.inputHandler.enterPlacementMode(playerId, unitType);
+  }
+
+  /**
+   * Exit placement mode
+   */
+  public exitPlacementMode(playerId: string): void {
+    this.inputHandler.exitPlacementMode(playerId);
+    this.clearPreviewMesh();
+  }
+
+  /**
+   * Enter update mode for repositioning an existing unit
+   */
+  public enterUpdateMode(
+    playerId: string,
+    gridX: number,
+    gridZ: number,
+    unitType: FormationUnitType
+  ): void {
+    this.inputHandler.enterUpdateMode(playerId, gridX, gridZ, unitType);
+  }
+
+  /**
+   * Exit update mode
+   */
+  public exitUpdateMode(playerId: string): void {
+    this.inputHandler.exitUpdateMode(playerId);
+  }
+
+  /**
+   * Check if we're currently in update mode
+   */
+  public isInUpdateMode(playerId: string): boolean {
+    return this.inputHandler.isInUpdateMode(playerId);
+  }
+
+  /**
+   * Check if we're currently in placement mode
+   */
+  public isInPlacementMode(playerId: string): boolean {
+    return this.inputHandler.isInPlacementMode(playerId);
+  }
+
+  // ============================================
+  // TOUCH DRAG METHODS (Mobile unit placement)
+  // ============================================
+
+  /**
+   * Start touch drag for unit placement
+   */
+  public startTouchDrag(playerId: string, unitType: FormationUnitType): void {
+    this.inputHandler.startTouchDrag(playerId, unitType);
+  }
+
+  /**
+   * Update touch drag position
+   */
+  public updateTouchDrag(screenX: number, screenY: number): void {
+    this.inputHandler.updateTouchDrag(screenX, screenY);
+  }
+
+  /**
+   * End touch drag - attempt to place unit
+   */
+  public endTouchDrag(screenX: number, screenY: number): boolean {
+    return this.inputHandler.endTouchDrag(screenX, screenY);
+  }
+
+  /**
+   * Cancel touch drag
+   */
+  public cancelTouchDrag(): void {
+    this.inputHandler.cancelTouchDrag();
+  }
+
+  /**
+   * Check if touch drag is active
+   */
+  public isTouchDragActive(): boolean {
+    return this.inputHandler.isTouchDragActive();
+  }
+
+  /**
+   * Convert world position to grid coordinates
+   */
+  public worldToGrid(playerId: string, worldPos: Vector3): GridCoords | null {
+    return this.gridData.worldToGrid(playerId, worldPos);
+  }
+
+  /**
+   * Convert grid coordinates to world position
+   */
+  public gridToWorld(
+    playerId: string,
+    gridX: number,
+    gridZ: number
+  ): Vector3 | null {
+    return this.gridData.gridToWorld(playerId, gridX, gridZ);
+  }
+
+  /**
+   * Check if a position is valid for placing a unit
+   */
+  public canPlaceUnit(
+    playerId: string,
+    gridX: number,
+    gridZ: number,
+    unitType: FormationUnitType
+  ): boolean {
+    return this.gridData.canPlaceUnit(playerId, gridX, gridZ, unitType);
+  }
+
+  /**
+   * Check if a unit can be moved from one position to another
+   */
+  public canMoveUnit(
+    playerId: string,
+    fromGridX: number,
+    fromGridZ: number,
+    toGridX: number,
+    toGridZ: number,
+    unitType: FormationUnitType
+  ): boolean {
+    return this.gridData.canMoveUnit(
+      playerId,
+      fromGridX,
+      fromGridZ,
+      toGridX,
+      toGridZ,
+      unitType
+    );
+  }
+
+  /**
+   * Find the origin cell of a unit at a given position
+   */
+  public findUnitOrigin(
+    playerId: string,
+    gridX: number,
+    gridZ: number
+  ): GridCoords | null {
+    return this.gridData.findUnitOrigin(playerId, gridX, gridZ);
+  }
+
+  /**
+   * Move a unit from one grid position to another
+   */
+  public moveUnit(
+    playerId: string,
+    fromGridX: number,
+    fromGridZ: number,
+    toGridX: number,
+    toGridZ: number
+  ): boolean {
+    const result = this.gridData.moveUnit(
+      playerId,
+      fromGridX,
+      fromGridZ,
+      toGridX,
+      toGridZ
+    );
+
+    if (result.success && result.unitType) {
+      const grid = this.gridData.getGrid(playerId);
+      if (grid) {
+        // Create new preview mesh
+        const worldPos = this.gridData.getWorldPosWithOffset(
+          playerId,
+          toGridX,
+          toGridZ,
+          result.unitType
         );
-        this.deployer = new FormationDeployer(eventBus, this.gridData);
+        if (worldPos) {
+          const mesh = this.renderer.createUnitPreview(
+            playerId,
+            toGridX,
+            toGridZ,
+            result.unitType,
+            grid,
+            worldPos
+          );
+          this.gridData.setCellPreviewMesh(playerId, toGridX, toGridZ, mesh);
+        }
+      }
 
-        this.setupEventListeners();
+      this.eventBus.emit<FormationUnitMovedEvent>(
+        GameEvents.FORMATION_UNIT_MOVED,
+        {
+          ...createEvent(),
+          playerId,
+          unitType: result.unitType,
+          fromGridX,
+          fromGridZ,
+          toGridX,
+          toGridZ,
+        }
+      );
+
+      console.log(
+        `[FormationGridSystem] Moved ${result.unitType} from (${fromGridX}, ${fromGridZ}) to (${toGridX}, ${toGridZ})`
+      );
     }
 
-    /**
-     * Set the callback for creating units
-     */
-    public setCreateUnitCallback(callback: CreateUnitCallback): void {
-        this.deployer.setCreateUnitCallback(callback);
-    }
+    return result.success;
+  }
 
-    /**
-     * Set the callback for moving units (for lockstep simulation)
-     */
-    public setMoveUnitCallback(callback: MoveUnitCallback): void {
-        this.deployer.setMoveUnitCallback(callback);
-    }
+  /**
+   * Place a unit on the formation grid
+   */
+  public placeUnit(
+    playerId: string,
+    gridX: number,
+    gridZ: number,
+    unitType: FormationUnitType
+  ): boolean {
+    const success = this.gridData.placeUnit(playerId, gridX, gridZ, unitType);
 
-    /**
-     * Set the callback for checking affordability
-     */
-    public setCanAffordCallback(callback: CanAffordCallback): void {
-        this.inputHandler.setCanAffordCallback(callback);
-    }
-
-    /**
-     * Setup event listeners
-     */
-    private setupEventListeners(): void {
-        this.unsubscribers.push(
-            this.eventBus.on<UnitPurchaseCompletedEvent>(GameEvents.UNIT_PURCHASE_COMPLETED, (_event) => {
-                // Unit is queued for placement, actual spawn happens on commit
-            })
+    if (success) {
+      const grid = this.gridData.getGrid(playerId);
+      if (grid) {
+        // Create preview mesh
+        const worldPos = this.gridData.getWorldPosWithOffset(
+          playerId,
+          gridX,
+          gridZ,
+          unitType
         );
-    }
-
-    /**
-     * Initialize formation grid for a player
-     */
-    public initializeGrid(playerId: string, team: TeamTag): void {
-        const grid = this.gridData.initializeGrid(playerId, team);
-        this.renderer.createGridVisualization(playerId, grid);
-        this.renderer.createGridGroundPlane(playerId, grid);
-
-        console.log(`[FormationGridSystem] Initialized grid for player ${playerId}, team ${team}`);
-    }
-
-    /**
-     * Enter placement mode for a unit type
-     */
-    public enterPlacementMode(playerId: string, unitType: FormationUnitType): void {
-        this.inputHandler.enterPlacementMode(playerId, unitType);
-    }
-
-    /**
-     * Exit placement mode
-     */
-    public exitPlacementMode(playerId: string): void {
-        this.inputHandler.exitPlacementMode(playerId);
-        this.clearPreviewMesh();
-    }
-
-    /**
-     * Enter update mode for repositioning an existing unit
-     */
-    public enterUpdateMode(playerId: string, gridX: number, gridZ: number, unitType: FormationUnitType): void {
-        this.inputHandler.enterUpdateMode(playerId, gridX, gridZ, unitType);
-    }
-
-    /**
-     * Exit update mode
-     */
-    public exitUpdateMode(playerId: string): void {
-        this.inputHandler.exitUpdateMode(playerId);
-    }
-
-    /**
-     * Check if we're currently in update mode
-     */
-    public isInUpdateMode(playerId: string): boolean {
-        return this.inputHandler.isInUpdateMode(playerId);
-    }
-
-    /**
-     * Check if we're currently in placement mode
-     */
-    public isInPlacementMode(playerId: string): boolean {
-        return this.inputHandler.isInPlacementMode(playerId);
-    }
-
-    // ============================================
-    // TOUCH DRAG METHODS (Mobile unit placement)
-    // ============================================
-
-    /**
-     * Start touch drag for unit placement
-     */
-    public startTouchDrag(playerId: string, unitType: FormationUnitType): void {
-        this.inputHandler.startTouchDrag(playerId, unitType);
-    }
-
-    /**
-     * Update touch drag position
-     */
-    public updateTouchDrag(screenX: number, screenY: number): void {
-        this.inputHandler.updateTouchDrag(screenX, screenY);
-    }
-
-    /**
-     * End touch drag - attempt to place unit
-     */
-    public endTouchDrag(screenX: number, screenY: number): boolean {
-        return this.inputHandler.endTouchDrag(screenX, screenY);
-    }
-
-    /**
-     * Cancel touch drag
-     */
-    public cancelTouchDrag(): void {
-        this.inputHandler.cancelTouchDrag();
-    }
-
-    /**
-     * Check if touch drag is active
-     */
-    public isTouchDragActive(): boolean {
-        return this.inputHandler.isTouchDragActive();
-    }
-
-    /**
-     * Convert world position to grid coordinates
-     */
-    public worldToGrid(playerId: string, worldPos: Vector3): GridCoords | null {
-        return this.gridData.worldToGrid(playerId, worldPos);
-    }
-
-    /**
-     * Convert grid coordinates to world position
-     */
-    public gridToWorld(playerId: string, gridX: number, gridZ: number): Vector3 | null {
-        return this.gridData.gridToWorld(playerId, gridX, gridZ);
-    }
-
-    /**
-     * Check if a position is valid for placing a unit
-     */
-    public canPlaceUnit(playerId: string, gridX: number, gridZ: number, unitType: FormationUnitType): boolean {
-        return this.gridData.canPlaceUnit(playerId, gridX, gridZ, unitType);
-    }
-
-    /**
-     * Check if a unit can be moved from one position to another
-     */
-    public canMoveUnit(
-        playerId: string,
-        fromGridX: number,
-        fromGridZ: number,
-        toGridX: number,
-        toGridZ: number,
-        unitType: FormationUnitType
-    ): boolean {
-        return this.gridData.canMoveUnit(playerId, fromGridX, fromGridZ, toGridX, toGridZ, unitType);
-    }
-
-    /**
-     * Find the origin cell of a unit at a given position
-     */
-    public findUnitOrigin(playerId: string, gridX: number, gridZ: number): GridCoords | null {
-        return this.gridData.findUnitOrigin(playerId, gridX, gridZ);
-    }
-
-    /**
-     * Move a unit from one grid position to another
-     */
-    public moveUnit(
-        playerId: string,
-        fromGridX: number,
-        fromGridZ: number,
-        toGridX: number,
-        toGridZ: number
-    ): boolean {
-        const result = this.gridData.moveUnit(playerId, fromGridX, fromGridZ, toGridX, toGridZ);
-
-        if (result.success && result.unitType) {
-            const grid = this.gridData.getGrid(playerId);
-            if (grid) {
-                // Create new preview mesh
-                const worldPos = this.gridData.getWorldPosWithOffset(playerId, toGridX, toGridZ, result.unitType);
-                if (worldPos) {
-                    const mesh = this.renderer.createUnitPreview(playerId, toGridX, toGridZ, result.unitType, grid, worldPos);
-                    this.gridData.setCellPreviewMesh(playerId, toGridX, toGridZ, mesh);
-                }
-            }
-
-            this.eventBus.emit<FormationUnitMovedEvent>(GameEvents.FORMATION_UNIT_MOVED, {
-                ...createEvent(),
-                playerId,
-                unitType: result.unitType,
-                fromGridX,
-                fromGridZ,
-                toGridX,
-                toGridZ,
-            });
-
-            console.log(`[FormationGridSystem] Moved ${result.unitType} from (${fromGridX}, ${fromGridZ}) to (${toGridX}, ${toGridZ})`);
+        if (worldPos) {
+          const mesh = this.renderer.createUnitPreview(
+            playerId,
+            gridX,
+            gridZ,
+            unitType,
+            grid,
+            worldPos
+          );
+          this.gridData.setCellPreviewMesh(playerId, gridX, gridZ, mesh);
         }
+      }
 
-        return result.success;
-    }
-
-    /**
-     * Place a unit on the formation grid
-     */
-    public placeUnit(playerId: string, gridX: number, gridZ: number, unitType: FormationUnitType): boolean {
-        const success = this.gridData.placeUnit(playerId, gridX, gridZ, unitType);
-
-        if (success) {
-            const grid = this.gridData.getGrid(playerId);
-            if (grid) {
-                // Create preview mesh
-                const worldPos = this.gridData.getWorldPosWithOffset(playerId, gridX, gridZ, unitType);
-                if (worldPos) {
-                    const mesh = this.renderer.createUnitPreview(playerId, gridX, gridZ, unitType, grid, worldPos);
-                    this.gridData.setCellPreviewMesh(playerId, gridX, gridZ, mesh);
-                }
-            }
-
-            this.eventBus.emit<FormationUnitPlacedEvent>(GameEvents.FORMATION_UNIT_PLACED, {
-                ...createEvent(),
-                playerId,
-                unitType,
-                gridX,
-                gridZ,
-            });
-
-            console.log(`[FormationGridSystem] Placed ${unitType} at (${gridX}, ${gridZ})`);
+      this.eventBus.emit<FormationUnitPlacedEvent>(
+        GameEvents.FORMATION_UNIT_PLACED,
+        {
+          ...createEvent(),
+          playerId,
+          unitType,
+          gridX,
+          gridZ,
         }
+      );
 
-        return success;
+      console.log(
+        `[FormationGridSystem] Placed ${unitType} at (${gridX}, ${gridZ})`
+      );
     }
 
-    /**
-     * Remove a unit from the formation grid
-     */
-    public removeUnit(playerId: string, gridX: number, gridZ: number): boolean {
-        const result = this.gridData.removeUnit(playerId, gridX, gridZ);
+    return success;
+  }
 
-        if (result.success) {
-            this.eventBus.emit<FormationUnitRemovedEvent>(GameEvents.FORMATION_UNIT_REMOVED, {
-                ...createEvent(),
-                playerId,
-                gridX: result.originX,
-                gridZ: result.originZ,
-            });
+  /**
+   * Remove a unit from the formation grid
+   */
+  public removeUnit(playerId: string, gridX: number, gridZ: number): boolean {
+    const result = this.gridData.removeUnit(playerId, gridX, gridZ);
+
+    if (result.success) {
+      this.eventBus.emit<FormationUnitRemovedEvent>(
+        GameEvents.FORMATION_UNIT_REMOVED,
+        {
+          ...createEvent(),
+          playerId,
+          gridX: result.originX,
+          gridZ: result.originZ,
         }
-
-        return result.success;
+      );
     }
 
-    /**
-     * Commit all pending units to the battlefield
-     */
-    public commitFormation(playerId: string): number {
-        return this.deployer.commitFormation(playerId);
+    return result.success;
+  }
+
+  /**
+   * Commit all pending units to the battlefield
+   */
+  public commitFormation(playerId: string): number {
+    return this.deployer.commitFormation(playerId);
+  }
+
+  /**
+   * Get the pending units for a player
+   */
+  public getPendingUnits(playerId: string): PlacedUnit[] {
+    return this.gridData.getPendingUnits(playerId);
+  }
+
+  /**
+   * Get all placed units for a player
+   */
+  public getPlacedUnits(playerId: string): PlacedUnit[] {
+    return this.gridData.getPlacedUnits(playerId);
+  }
+
+  /**
+   * Get the count of placed units for a player
+   */
+  public getPlacedUnitCount(playerId: string): number {
+    return this.gridData.getPlacedUnitCount(playerId);
+  }
+
+  /**
+   * Get the grid for a player
+   */
+  public getGrid(playerId: string): FormationGrid | undefined {
+    return this.gridData.getGrid(playerId);
+  }
+
+  /**
+   * Clear the active preview mesh
+   */
+  private clearPreviewMesh(): void {
+    if (this.previewMesh) {
+      this.previewMesh.dispose();
+      this.previewMesh = null;
     }
+  }
 
-    /**
-     * Get the pending units for a player
-     */
-    public getPendingUnits(playerId: string): PlacedUnit[] {
-        return this.gridData.getPendingUnits(playerId);
-    }
+  /**
+   * Cleanup
+   */
+  public dispose(): void {
+    this.unsubscribers.forEach((unsub) => unsub());
+    this.unsubscribers = [];
 
-    /**
-     * Get all placed units for a player
-     */
-    public getPlacedUnits(playerId: string): PlacedUnit[] {
-        return this.gridData.getPlacedUnits(playerId);
-    }
+    this.inputHandler.dispose();
+    this.deployer.dispose();
+    this.hoverPreview.dispose();
+    this.renderer.dispose();
+    this.gridData.dispose();
 
-    /**
-     * Get the count of placed units for a player
-     */
-    public getPlacedUnitCount(playerId: string): number {
-        return this.gridData.getPlacedUnitCount(playerId);
-    }
-
-    /**
-     * Get the grid for a player
-     */
-    public getGrid(playerId: string): FormationGrid | undefined {
-        return this.gridData.getGrid(playerId);
-    }
-
-    /**
-     * Clear the active preview mesh
-     */
-    private clearPreviewMesh(): void {
-        if (this.previewMesh) {
-            this.previewMesh.dispose();
-            this.previewMesh = null;
-        }
-    }
-
-    /**
-     * Cleanup
-     */
-    public dispose(): void {
-        this.unsubscribers.forEach(unsub => unsub());
-        this.unsubscribers = [];
-
-        this.inputHandler.dispose();
-        this.deployer.dispose();
-        this.hoverPreview.dispose();
-        this.renderer.dispose();
-        this.gridData.dispose();
-
-        this.clearPreviewMesh();
-    }
+    this.clearPreviewMesh();
+  }
 }

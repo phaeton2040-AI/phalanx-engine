@@ -1,5 +1,10 @@
 import type { Server as SocketIOServer, Socket } from 'socket.io';
-import type { PhalanxConfig, QueuedPlayer, MatchInfo, QueueStatusEvent } from '../types/index.js';
+import type {
+  PhalanxConfig,
+  QueuedPlayer,
+  MatchInfo,
+  QueueStatusEvent,
+} from '../types/index.js';
 import { resolveGameMode } from '../config/validation.js';
 import { GameRoom } from './GameRoom.js';
 
@@ -13,7 +18,10 @@ export class MatchmakingService {
   private matchmakingInterval: NodeJS.Timeout | null = null;
   private readonly config: PhalanxConfig;
   private readonly io: SocketIOServer;
-  private readonly eventEmitter: (event: string, ...args: unknown[]) => boolean | void;
+  private readonly eventEmitter: (
+    event: string,
+    ...args: unknown[]
+  ) => boolean | void;
 
   constructor(
     io: SocketIOServer,
@@ -107,9 +115,10 @@ export class MatchmakingService {
 
     this.queue.delete(playerId);
     socket.emit('queue-left');
-    console.log(`[QUEUE] ${player.username} left. Queue size: ${this.queue.size}`);
+    console.log(
+      `[QUEUE] ${player.username} left. Queue size: ${this.queue.size}`
+    );
   }
-
 
   /**
    * Try to create a match from queued players
@@ -137,9 +146,11 @@ export class MatchmakingService {
     }
 
     // Safe check: ensure no duplicate players (players not matched with themselves)
-    const playerIds = new Set(players.map(p => p.playerId));
+    const playerIds = new Set(players.map((p) => p.playerId));
     if (playerIds.size !== players.length) {
-      console.warn('[MATCH] Duplicate player detected, skipping match creation');
+      console.warn(
+        '[MATCH] Duplicate player detected, skipping match creation'
+      );
       return;
     }
 
@@ -195,8 +206,8 @@ export class MatchmakingService {
    * Log match creation with team composition
    */
   private logMatchCreation(teams: QueuedPlayer[][], matchId: string): void {
-    const teamNames = teams.map((team, i) =>
-      `Team${i + 1}: [${team.map(p => p.username).join(', ')}]`
+    const teamNames = teams.map(
+      (team, i) => `Team${i + 1}: [${team.map((p) => p.username).join(', ')}]`
     );
     console.log(`[MATCH] ${teamNames.join(' vs ')} (${matchId})`);
   }
@@ -223,7 +234,7 @@ export class MatchmakingService {
    * Get all active matches info
    */
   getActiveMatches(): MatchInfo[] {
-    return Array.from(this.matches.values()).map(m => m.getMatchInfo());
+    return Array.from(this.matches.values()).map((m) => m.getMatchInfo());
   }
 
   /**
@@ -241,7 +252,9 @@ export class MatchmakingService {
     for (const [playerId, player] of this.queue.entries()) {
       if (player.socketId === socketId) {
         this.queue.delete(playerId);
-        console.log(`[QUEUE] ${player.username} disconnected. Queue size: ${this.queue.size}`);
+        console.log(
+          `[QUEUE] ${player.username} disconnected. Queue size: ${this.queue.size}`
+        );
         break;
       }
     }

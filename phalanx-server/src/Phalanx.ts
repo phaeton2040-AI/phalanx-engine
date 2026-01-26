@@ -1,6 +1,11 @@
 import { EventEmitter } from 'events';
 import { Server as SocketIOServer, Socket } from 'socket.io';
-import { createServer, Server as HttpServer, IncomingMessage, ServerResponse } from 'http';
+import {
+  createServer,
+  Server as HttpServer,
+  IncomingMessage,
+  ServerResponse,
+} from 'http';
 import type {
   PhalanxConfig,
   MatchInfo,
@@ -37,15 +42,22 @@ export class Phalanx extends EventEmitter {
     }
 
     // Create HTTP server with health check endpoint
-    this.httpServer = createServer((req: IncomingMessage, res: ServerResponse) => {
-      if (req.url === '/' || req.url === '/health') {
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ status: 'ok', timestamp: new Date().toISOString() }));
-      } else {
-        res.writeHead(404, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Not found' }));
+    this.httpServer = createServer(
+      (req: IncomingMessage, res: ServerResponse) => {
+        if (req.url === '/' || req.url === '/health') {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(
+            JSON.stringify({
+              status: 'ok',
+              timestamp: new Date().toISOString(),
+            })
+          );
+        } else {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Not found' }));
+        }
       }
-    });
+    );
 
     // Create Socket.IO server
     this.io = new SocketIOServer(this.httpServer, {
@@ -131,11 +143,14 @@ export class Phalanx extends EventEmitter {
       });
 
       // Handle join queue (MATCH-1)
-      socket.on('queue-join', (data: { playerId: string; username?: string }) => {
-        playerId = data.playerId;
-        const username = data.username ?? data.playerId;
-        this.matchmaking!.joinQueue(playerId, username, socket);
-      });
+      socket.on(
+        'queue-join',
+        (data: { playerId: string; username?: string }) => {
+          playerId = data.playerId;
+          const username = data.username ?? data.playerId;
+          this.matchmaking!.joinQueue(playerId, username, socket);
+        }
+      );
 
       // Handle leave queue (MATCH-2)
       socket.on('queue-leave', () => {
@@ -154,7 +169,10 @@ export class Phalanx extends EventEmitter {
           if (gameRoom) {
             const accepted = gameRoom.handleCommand(playerId, command);
             if (accepted) {
-              socket.emit('command-ack', { tick: command.tick, accepted: true });
+              socket.emit('command-ack', {
+                tick: command.tick,
+                accepted: true,
+              });
               return;
             }
           }
@@ -172,20 +190,32 @@ export class Phalanx extends EventEmitter {
 
         // Validate input
         if (typeof tick !== 'number' || !Array.isArray(commands)) {
-          socket.emit('submit-commands-ack', { tick, accepted: false, reason: 'Invalid data' });
+          socket.emit('submit-commands-ack', {
+            tick,
+            accepted: false,
+            reason: 'Invalid data',
+          });
           return;
         }
 
         // Find the match this player is in via socket.data
         const matchId = socket.data.matchId;
         if (!matchId) {
-          socket.emit('submit-commands-ack', { tick, accepted: false, reason: 'Not in a match' });
+          socket.emit('submit-commands-ack', {
+            tick,
+            accepted: false,
+            reason: 'Not in a match',
+          });
           return;
         }
 
         const gameRoom = this.matchmaking!.getMatch(matchId);
         if (!gameRoom) {
-          socket.emit('submit-commands-ack', { tick, accepted: false, reason: 'Match not found' });
+          socket.emit('submit-commands-ack', {
+            tick,
+            accepted: false,
+            reason: 'Match not found',
+          });
           return;
         }
 
@@ -199,7 +229,9 @@ export class Phalanx extends EventEmitter {
               tick,
               type: cmd.type,
             });
-            console.log(`[NET] Rejected command from ${playerId}: Missing required fields`);
+            console.log(
+              `[NET] Rejected command from ${playerId}: Missing required fields`
+            );
             continue;
           }
 
@@ -207,7 +239,7 @@ export class Phalanx extends EventEmitter {
           const enrichedCommand: PlayerCommand = {
             type: cmd.type,
             data: cmd.data,
-            playerId: playerId!,
+            playerId: playerId,
             tick,
             ...(cmd.sequence !== undefined && { sequence: cmd.sequence }),
           };
@@ -215,11 +247,17 @@ export class Phalanx extends EventEmitter {
           validCommands.push(enrichedCommand);
         }
 
-        const result = gameRoom.receivePlayerCommands(playerId, tick, validCommands);
+        const result = gameRoom.receivePlayerCommands(
+          playerId,
+          tick,
+          validCommands
+        );
         socket.emit('submit-commands-ack', {
           tick,
           accepted: result.accepted,
-          ...(result.invalidCommands && { rejectedCount: result.invalidCommands.length })
+          ...(result.invalidCommands && {
+            rejectedCount: result.invalidCommands.length,
+          }),
         });
       });
 
@@ -247,16 +285,22 @@ export class Phalanx extends EventEmitter {
       // Any message from client (including Socket.IO ping) = player is alive
 
       // Handle reconnection
-      socket.on('reconnect-match', (data: { playerId: string; matchId: string }) => {
-        playerId = data.playerId;
-        const gameRoom = this.matchmaking!.getMatch(data.matchId);
-        if (gameRoom) {
-          const success = gameRoom.handleReconnect(playerId, socket.id);
-          socket.emit('reconnect-status', { success });
-        } else {
-          socket.emit('reconnect-status', { success: false, reason: 'Match not found' });
+      socket.on(
+        'reconnect-match',
+        (data: { playerId: string; matchId: string }) => {
+          playerId = data.playerId;
+          const gameRoom = this.matchmaking!.getMatch(data.matchId);
+          if (gameRoom) {
+            const success = gameRoom.handleReconnect(playerId, socket.id);
+            socket.emit('reconnect-status', { success });
+          } else {
+            socket.emit('reconnect-status', {
+              success: false,
+              reason: 'Match not found',
+            });
+          }
         }
-      });
+      );
 
       // Handle disconnect
       socket.on('disconnect', () => {

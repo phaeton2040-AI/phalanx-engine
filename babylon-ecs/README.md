@@ -49,6 +49,7 @@ The dev server is configured to be accessible from your local network. After run
 ```
 
 Use the **Network** URL to access the game from your mobile device. Make sure:
+
 1. Your mobile device is on the same WiFi network as your development machine
 2. Your firewall allows incoming connections on port 5173
 3. You use the IP address shown in the terminal output
@@ -69,8 +70,8 @@ VITE_SERVER_URL=http://localhost:3000
 
 Available environment variables:
 
-| Variable | Description | Default |
-|----------|-------------|---------|
+| Variable          | Description             | Default                 |
+| ----------------- | ----------------------- | ----------------------- |
 | `VITE_SERVER_URL` | Phalanx game server URL | `http://localhost:3000` |
 
 ### Build for Production
@@ -89,11 +90,11 @@ pnpm preview
 
 ## Controls
 
-| Action | Input |
-|--------|-------|
-| Select Unit | Left-click on unit |
-| Move Selected Units | Right-click on ground |
-| Deselect | Left-click on empty ground |
+| Action              | Input                      |
+| ------------------- | -------------------------- |
+| Select Unit         | Left-click on unit         |
+| Move Selected Units | Right-click on ground      |
+| Deselect            | Left-click on empty ground |
 
 ## Tech Stack
 
@@ -133,4 +134,3 @@ For detailed architecture documentation and development guidelines, see [DEVELOP
 ## License
 
 This project is private and intended for demonstration purposes.
-
