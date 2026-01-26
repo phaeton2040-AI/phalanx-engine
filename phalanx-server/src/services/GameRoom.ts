@@ -1,6 +1,13 @@
 import { randomBytes } from 'crypto';
 import type { Server as SocketIOServer } from 'socket.io';
-import type { PhalanxConfig, QueuedPlayer, MatchInfo, PlayerInfo, PlayerCommand, TickCommands } from '../types/index.js';
+import type {
+  PhalanxConfig,
+  QueuedPlayer,
+  MatchInfo,
+  PlayerInfo,
+  PlayerCommand,
+  TickCommands,
+} from '../types/index.js';
 
 /**
  * Game Room
@@ -14,7 +21,10 @@ export class GameRoom {
   private readonly players: Map<string, PlayerInfo> = new Map();
   private readonly socketToPlayer: Map<string, string> = new Map();
   private readonly teams: QueuedPlayer[][];
-  private readonly eventEmitter: (event: string, ...args: unknown[]) => boolean | void;
+  private readonly eventEmitter: (
+    event: string,
+    ...args: unknown[]
+  ) => boolean | void;
 
   private currentTick: number = 0;
   private state: 'countdown' | 'playing' | 'paused' | 'finished' = 'countdown';
@@ -81,20 +91,22 @@ export class GameRoom {
   start(): void {
     // Join all players to the room and assign socket.data
     this.teams.forEach((team, teamId) => {
-      const teammateIds = team.map(p => p.playerId);
+      const teammateIds = team.map((p) => p.playerId);
       const opponentIds = this.teams
         .filter((_, i) => i !== teamId)
         .flat()
-        .map(p => p.playerId);
+        .map((p) => p.playerId);
 
-      team.forEach(player => {
+      team.forEach((player) => {
         const socket = this.io.sockets.sockets.get(player.socketId);
         if (socket) {
           // Assign match data to socket
           socket.data.matchId = this.id;
           socket.data.playerId = player.playerId;
           socket.data.teamId = teamId;
-          socket.data.teammates = teammateIds.filter(id => id !== player.playerId);
+          socket.data.teammates = teammateIds.filter(
+            (id) => id !== player.playerId
+          );
           socket.data.opponents = opponentIds;
 
           // Join the room
@@ -133,7 +145,7 @@ export class GameRoom {
         // Emit game-start event with random seed for deterministic RNG
         this.io.to(this.roomId).emit('game-start', {
           matchId: this.id,
-          randomSeed: this.randomSeed
+          randomSeed: this.randomSeed,
         });
         this.startGame();
       }
@@ -147,7 +159,7 @@ export class GameRoom {
   private notifyMatchFound(): void {
     this.teams.forEach((team, teamId) => {
       // Build teammate info for this team
-      const teammateInfo = team.map(p => ({
+      const teammateInfo = team.map((p) => ({
         playerId: p.playerId,
         username: p.username,
       }));
@@ -156,20 +168,22 @@ export class GameRoom {
       const opponentInfo = this.teams
         .filter((_, i) => i !== teamId)
         .flat()
-        .map(p => ({
+        .map((p) => ({
           playerId: p.playerId,
           username: p.username,
         }));
 
       // Notify each player on this team
-      team.forEach(player => {
+      team.forEach((player) => {
         const socket = this.io.sockets.sockets.get(player.socketId);
         if (socket) {
           socket.emit('match-found', {
             matchId: this.id,
             playerId: player.playerId,
             teamId,
-            teammates: teammateInfo.filter(t => t.playerId !== player.playerId),
+            teammates: teammateInfo.filter(
+              (t) => t.playerId !== player.playerId
+            ),
             opponents: opponentInfo,
           });
         }
@@ -194,7 +208,9 @@ export class GameRoom {
     this.eventEmitter('match-started', this.getMatchInfo());
 
     // Log tick clock start
-    console.log(`[TICK] Match ${this.id} started tick clock at ${this.config.tickRate} ticks/sec`);
+    console.log(
+      `[TICK] Match ${this.id} started tick clock at ${this.config.tickRate} ticks/sec`
+    );
 
     // Start tick loop
     const tickIntervalMs = 1000 / this.config.tickRate;
@@ -262,7 +278,10 @@ export class GameRoom {
 
     // Validate tick range
     const tickDiff = command.tick - this.currentTick;
-    if (tickDiff < -this.config.maxTickBehind || tickDiff > this.config.maxTickAhead) {
+    if (
+      tickDiff < -this.config.maxTickBehind ||
+      tickDiff > this.config.maxTickAhead
+    ) {
       return false;
     }
 
@@ -289,7 +308,10 @@ export class GameRoom {
    * Validate command sequence number (2.1.4)
    * Returns true if sequence is valid, false otherwise
    */
-  private validateCommandSequence(playerId: string, command: PlayerCommand): boolean {
+  private validateCommandSequence(
+    playerId: string,
+    command: PlayerCommand
+  ): boolean {
     // If command has no sequence, accept it (backward compatibility)
     if (command.sequence === undefined) {
       return true;
@@ -299,7 +321,9 @@ export class GameRoom {
     const expectedSeq = lastSeq + 1;
 
     if (command.sequence !== expectedSeq) {
-      console.log(`[SECURITY] Player ${playerId} invalid sequence: got ${command.sequence}, expected ${expectedSeq}`);
+      console.log(
+        `[SECURITY] Player ${playerId} invalid sequence: got ${command.sequence}, expected ${expectedSeq}`
+      );
       return false;
     }
 
@@ -313,7 +337,11 @@ export class GameRoom {
    * Commands can be empty if player has no actions for this tick.
    * This is normal - units may be moving/idle and player doesn't need to input anything.
    */
-  receivePlayerCommands(playerId: string, tick: number, commands: PlayerCommand[]): { accepted: boolean; invalidCommands?: PlayerCommand[] } {
+  receivePlayerCommands(
+    playerId: string,
+    tick: number,
+    commands: PlayerCommand[]
+  ): { accepted: boolean; invalidCommands?: PlayerCommand[] } {
     const player = this.players.get(playerId);
     if (!player || this.state !== 'playing') {
       return { accepted: false };
@@ -324,8 +352,13 @@ export class GameRoom {
 
     // Validate tick range - can't submit for ticks too far in the past or future
     const tickDiff = tick - this.currentTick;
-    if (tickDiff < -this.config.maxTickBehind || tickDiff > this.config.maxTickAhead) {
-      console.log(`[LOCKSTEP] Player ${playerId} rejected: tick ${tick} out of range (current: ${this.currentTick})`);
+    if (
+      tickDiff < -this.config.maxTickBehind ||
+      tickDiff > this.config.maxTickAhead
+    ) {
+      console.log(
+        `[LOCKSTEP] Player ${playerId} rejected: tick ${tick} out of range (current: ${this.currentTick})`
+      );
       return { accepted: false };
     }
 
@@ -337,7 +370,9 @@ export class GameRoom {
       for (const cmd of commands) {
         if (!this.validateCommandSequence(playerId, cmd)) {
           invalidCommands.push(cmd);
-          console.log(`[LOCKSTEP] Player ${playerId} command rejected: invalid sequence ${cmd.sequence}`);
+          console.log(
+            `[LOCKSTEP] Player ${playerId} command rejected: invalid sequence ${cmd.sequence}`
+          );
         } else {
           validCommands.push(cmd);
         }
@@ -356,7 +391,9 @@ export class GameRoom {
 
     // Check for duplicate submission
     if (tickData[playerId] !== undefined) {
-      console.log(`[LOCKSTEP] Player ${playerId} duplicate submission for tick ${tick} - overwriting`);
+      console.log(
+        `[LOCKSTEP] Player ${playerId} duplicate submission for tick ${tick} - overwriting`
+      );
     }
 
     // Store commands for this player (can be empty array - this is valid)
@@ -387,7 +424,10 @@ export class GameRoom {
       `[LOCKSTEP] Player ${playerId} submitted ${validCommands.length} command${validCommands.length !== 1 ? 's' : ''} for tick ${tick}${invalidCommands.length > 0 ? ` (${invalidCommands.length} rejected)` : ''}`
     );
 
-    return { accepted: true, invalidCommands: invalidCommands.length > 0 ? invalidCommands : undefined };
+    return {
+      accepted: true,
+      invalidCommands: invalidCommands.length > 0 ? invalidCommands : undefined,
+    };
   }
 
   /**
@@ -460,8 +500,10 @@ export class GameRoom {
   private checkPlayerTimeouts(): void {
     const now = Date.now();
     // Convert tick-based config to milliseconds
-    const lagThresholdMs = (this.config.timeoutTicks / this.config.tickRate) * 1000;
-    const disconnectThresholdMs = (this.config.disconnectTicks / this.config.tickRate) * 1000;
+    const lagThresholdMs =
+      (this.config.timeoutTicks / this.config.tickRate) * 1000;
+    const disconnectThresholdMs =
+      (this.config.disconnectTicks / this.config.tickRate) * 1000;
 
     for (const [playerId, playerInfo] of this.players) {
       if (!playerInfo.connected) continue;
@@ -477,7 +519,9 @@ export class GameRoom {
           currentTick: this.currentTick,
           msSinceLastMessage,
         });
-        console.log(`[LOCKSTEP] Player ${playerId} timed out: no message for ${msSinceLastMessage}ms`);
+        console.log(
+          `[LOCKSTEP] Player ${playerId} timed out: no message for ${msSinceLastMessage}ms`
+        );
 
         playerInfo.connected = false;
         this.laggingPlayers.delete(playerId);
@@ -491,7 +535,9 @@ export class GameRoom {
             currentTick: this.currentTick,
             msSinceLastMessage,
           });
-          console.log(`[LOCKSTEP] Player ${playerId} lagging: no message for ${msSinceLastMessage}ms`);
+          console.log(
+            `[LOCKSTEP] Player ${playerId} lagging: no message for ${msSinceLastMessage}ms`
+          );
         }
       }
     }
@@ -519,7 +565,9 @@ export class GameRoom {
   /**
    * Get recent command history for reconnecting player (NET-2)
    */
-  getRecentCommandHistory(fromTick: number): { tick: number; commands: PlayerCommand[] }[] {
+  getRecentCommandHistory(
+    fromTick: number
+  ): { tick: number; commands: PlayerCommand[] }[] {
     const history: { tick: number; commands: PlayerCommand[] }[] = [];
 
     for (let tick = fromTick; tick < this.currentTick; tick++) {
@@ -588,7 +636,9 @@ export class GameRoom {
         gracePeriodMs: this.config.reconnectGracePeriodMs,
       });
 
-      console.log(`[NET] Player ${playerId} disconnected from match ${this.id}`);
+      console.log(
+        `[NET] Player ${playerId} disconnected from match ${this.id}`
+      );
     }
   }
 
@@ -626,7 +676,10 @@ export class GameRoom {
       socket.data.playerId = playerId;
 
       // Send reconnect-state with command history (NET-2)
-      const fromTick = Math.max(0, this.currentTick - this.config.commandHistoryTicks);
+      const fromTick = Math.max(
+        0,
+        this.currentTick - this.config.commandHistoryTicks
+      );
       socket.emit('reconnect-state', {
         matchId: this.id,
         currentTick: this.currentTick,
@@ -639,7 +692,9 @@ export class GameRoom {
       socket.to(this.roomId).emit('player-reconnected', { playerId });
     }
 
-    console.log(`[NET] Player ${playerId} reconnected to match ${this.id} at tick ${this.currentTick}`);
+    console.log(
+      `[NET] Player ${playerId} reconnected to match ${this.id} at tick ${this.currentTick}`
+    );
     return true;
   }
 
@@ -705,7 +760,7 @@ export class GameRoom {
       .filter(([_, p]) => p.connected)
       .map(([id]) => id);
 
-    const allSubmitted = connectedPlayers.every(id => tickHashes.has(id));
+    const allSubmitted = connectedPlayers.every((id) => tickHashes.has(id));
 
     if (allSubmitted) {
       this.checkForDesync(tick, tickHashes);
@@ -719,7 +774,7 @@ export class GameRoom {
    */
   private checkForDesync(tick: number, hashes: Map<string, string>): void {
     const hashValues = Array.from(hashes.values());
-    const allMatch = hashValues.every(h => h === hashValues[0]);
+    const allMatch = hashValues.every((h) => h === hashValues[0]);
 
     if (!allMatch) {
       const hashObject: { [playerId: string]: string } = {};
@@ -727,7 +782,10 @@ export class GameRoom {
         hashObject[playerId] = hash;
       });
 
-      console.log(`[DESYNC] Detected at tick ${tick} in match ${this.id}:`, hashObject);
+      console.log(
+        `[DESYNC] Detected at tick ${tick} in match ${this.id}:`,
+        hashObject
+      );
 
       // Emit desync event to server handlers
       this.eventEmitter('desync-detected', this.id, tick, hashObject);

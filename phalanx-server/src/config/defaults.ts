@@ -1,4 +1,8 @@
-import type { PhalanxConfig, GameModePreset, CustomGameMode } from '../types/index.js';
+import type {
+  PhalanxConfig,
+  GameModePreset,
+  CustomGameMode,
+} from '../types/index.js';
 
 /**
  * Game mode presets configuration
@@ -8,7 +12,7 @@ export const GAME_MODES: Record<GameModePreset, CustomGameMode> = {
   '2v2': { playersPerMatch: 4, teamsCount: 2 },
   '3v3': { playersPerMatch: 6, teamsCount: 2 },
   '4v4': { playersPerMatch: 8, teamsCount: 2 },
-  'FFA4': { playersPerMatch: 4, teamsCount: 4 },
+  FFA4: { playersPerMatch: 4, teamsCount: 4 },
 };
 
 /**

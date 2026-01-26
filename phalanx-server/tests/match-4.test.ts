@@ -28,7 +28,7 @@ describe('MATCH-4: Server Creates Match Room and Assigns Players', () => {
       }
     }
     clients = [];
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, 50));
     await server.stop();
   });
 
@@ -176,7 +176,7 @@ describe('MATCH-4: Team Assignment for 2v2 Mode', () => {
       }
     }
     clients = [];
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, 50));
     await server.stop();
   });
 
@@ -210,9 +210,10 @@ describe('MATCH-4: Team Assignment for 2v2 Mode', () => {
     ]);
 
     const matchPromises = [client1, client2, client3, client4].map(
-      client => new Promise<MatchFoundEvent>((resolve) => {
-        client.on('match-found', (data: MatchFoundEvent) => resolve(data));
-      })
+      (client) =>
+        new Promise<MatchFoundEvent>((resolve) => {
+          client.on('match-found', (data: MatchFoundEvent) => resolve(data));
+        })
     );
 
     client1.emit('queue-join', { playerId: 'p1', username: 'alice' });
@@ -223,12 +224,12 @@ describe('MATCH-4: Team Assignment for 2v2 Mode', () => {
     const matches = await Promise.all(matchPromises);
 
     // All 4 players should be in the same match
-    const matchIds = new Set(matches.map(m => m.matchId));
+    const matchIds = new Set(matches.map((m) => m.matchId));
     expect(matchIds.size).toBe(1);
 
     // Team 0 should have 2 players, Team 1 should have 2 players
-    const team0 = matches.filter(m => m.teamId === 0);
-    const team1 = matches.filter(m => m.teamId === 1);
+    const team0 = matches.filter((m) => m.teamId === 0);
+    const team1 = matches.filter((m) => m.teamId === 1);
 
     expect(team0.length).toBe(2);
     expect(team1.length).toBe(2);
@@ -254,9 +255,10 @@ describe('MATCH-4: Team Assignment for 2v2 Mode', () => {
     ]);
 
     const matchPromises = [client1, client2, client3, client4].map(
-      client => new Promise<MatchFoundEvent>((resolve) => {
-        client.on('match-found', (data: MatchFoundEvent) => resolve(data));
-      })
+      (client) =>
+        new Promise<MatchFoundEvent>((resolve) => {
+          client.on('match-found', (data: MatchFoundEvent) => resolve(data));
+        })
     );
 
     client1.emit('queue-join', { playerId: 'p1', username: 'alice' });
@@ -267,7 +269,7 @@ describe('MATCH-4: Team Assignment for 2v2 Mode', () => {
     const matches = await Promise.all(matchPromises);
 
     // All players should receive the same match ID
-    const matchIds = new Set(matches.map(m => m.matchId));
+    const matchIds = new Set(matches.map((m) => m.matchId));
     expect(matchIds.size).toBe(1);
   });
 });

@@ -1,32 +1,32 @@
 import {
-    Scene,
-    Vector3,
-    MeshBuilder,
-    StandardMaterial,
-    Color3,
-    Mesh,
-} from "@babylonjs/core";
-import { Entity } from "./Entity";
+  Scene,
+  Vector3,
+  MeshBuilder,
+  StandardMaterial,
+  Color3,
+  Mesh,
+} from '@babylonjs/core';
+import { Entity } from './Entity';
 import {
-    ComponentType,
-    TeamComponent,
-    HealthComponent,
-    AttackComponent,
-    MovementComponent,
-    UnitTypeComponent,
-    UnitType,
-} from "../components";
-import { TeamTag } from "../enums/TeamTag";
+  ComponentType,
+  TeamComponent,
+  HealthComponent,
+  AttackComponent,
+  MovementComponent,
+  UnitTypeComponent,
+  UnitType,
+} from '../components';
+import { TeamTag } from '../enums/TeamTag';
 
 export interface LanceUnitConfig {
-    color?: Color3;
-    team?: TeamTag;
-    attackRange?: number;
-    attackCooldown?: number;
-    attackDamage?: number;
-    health?: number;
-    moveSpeed?: number;
-    debug?: boolean;
+  color?: Color3;
+  team?: TeamTag;
+  attackRange?: number;
+  attackCooldown?: number;
+  attackDamage?: number;
+  health?: number;
+  moveSpeed?: number;
+  debug?: boolean;
 }
 
 /**
@@ -37,223 +37,241 @@ export interface LanceUnitConfig {
  * For Team2, the unit is rotated 180 degrees to face the opposite direction
  */
 export class LanceUnit extends Entity {
-    private selectionIndicator: Mesh;
-    private rangeIndicator: Mesh | null = null;
-    private _isSelected: boolean = false;
-    private _debug: boolean;
-    private _color: Color3;
+  private selectionIndicator: Mesh;
+  private rangeIndicator: Mesh | null = null;
+  private _isSelected: boolean = false;
+  private _debug: boolean;
+  private _color: Color3;
 
-    constructor(scene: Scene, config: LanceUnitConfig = {}, position: Vector3 = new Vector3(0, 1, 0)) {
-        super(scene);
+  constructor(
+    scene: Scene,
+    config: LanceUnitConfig = {},
+    position: Vector3 = new Vector3(0, 1, 0)
+  ) {
+    super(scene);
 
-        this._debug = config.debug ?? false;
-        this._color = config.color ?? new Color3(0.3, 0.6, 0.8);
-        const team = config.team ?? TeamTag.Team1;
+    this._debug = config.debug ?? false;
+    this._color = config.color ?? new Color3(0.3, 0.6, 0.8);
+    const team = config.team ?? TeamTag.Team1;
 
-        // Create mesh
-        this.mesh = this.createLanceMesh();
-        this.mesh.position = position;
+    // Create mesh
+    this.mesh = this.createLanceMesh();
+    this.mesh.position = position;
 
-        // Rotate 180 degrees for Team2 so lance faces towards enemy
-        if (team === TeamTag.Team2) {
-            this.mesh.rotation.y = Math.PI;
-        }
-
-        this.selectionIndicator = this.createSelectionIndicator();
-
-        // Sync simulation position with mesh position
-        this.syncSimulationPosition();
-
-        // Add components - Lance has medium stats between Sphere and Prisma
-        this.addComponent(new TeamComponent(team));
-        this.addComponent(new HealthComponent(config.health ?? 100)); // Between sphere (50) and prisma (150)
-        this.addComponent(new AttackComponent({
-            range: config.attackRange ?? 26,      // Extended range (spear reach)
-            cooldown: config.attackCooldown ?? 1.2,
-            damage: config.attackDamage ?? 18,    // Between sphere (10) and prisma (25)
-        }));
-        this.addComponent(new MovementComponent(config.moveSpeed ?? 8)); // Between sphere (10) and prisma (6)
-        this.addComponent(new UnitTypeComponent(UnitType.Lance));
-
-        if (this._debug) {
-            this.createRangeIndicator();
-        }
+    // Rotate 180 degrees for Team2 so lance faces towards enemy
+    if (team === TeamTag.Team2) {
+      this.mesh.rotation.y = Math.PI;
     }
 
-    /**
-     * Create a lance-shaped mesh (elongated for 2x1 footprint)
-     * Consists of a main shaft with a pointed tip and team-colored crystal
-     * Lance faces forward (positive X direction)
-     */
-    private createLanceMesh(): Mesh {
-        // Create parent mesh to hold all parts
-        const parentMesh = new Mesh(`lanceUnit_${this.id}`, this.scene);
+    this.selectionIndicator = this.createSelectionIndicator();
 
-        // Main body - elongated capsule along X-axis (forward direction)
-        const bodyLength = 4.0;  // Increased from 3.0
-        const body = MeshBuilder.CreateCylinder(
-            `lanceBody_${this.id}`,
-            {
-                height: bodyLength,
-                diameterTop: 0.9,    // Increased from 0.7
-                diameterBottom: 1.1,  // Increased from 0.8
-                tessellation: 12,
-            },
-            this.scene
-        );
-        // Rotate to align with X-axis (horizontal, facing forward)
-        body.rotation.z = -Math.PI / 2;
-        body.position.y = 1.0;  // Raised slightly
-        body.parent = parentMesh;
+    // Sync simulation position with mesh position
+    this.syncSimulationPosition();
 
-        // Apply neutral material to body
-        const bodyMaterial = new StandardMaterial(`lanceBodyMat_${this.id}`, this.scene);
-        bodyMaterial.diffuseColor = new Color3(0.5, 0.5, 0.55);
-        bodyMaterial.specularColor = new Color3(0.3, 0.3, 0.3);
-        body.material = bodyMaterial;
+    // Add components - Lance has medium stats between Sphere and Prisma
+    this.addComponent(new TeamComponent(team));
+    this.addComponent(new HealthComponent(config.health ?? 100)); // Between sphere (50) and prisma (150)
+    this.addComponent(
+      new AttackComponent({
+        range: config.attackRange ?? 26, // Extended range (spear reach)
+        cooldown: config.attackCooldown ?? 1.2,
+        damage: config.attackDamage ?? 18, // Between sphere (10) and prisma (25)
+      })
+    );
+    this.addComponent(new MovementComponent(config.moveSpeed ?? 8)); // Between sphere (10) and prisma (6)
+    this.addComponent(new UnitTypeComponent(UnitType.Lance));
 
-        // Spear tip - cone at front (positive X) - larger and more menacing
-        const tip = MeshBuilder.CreateCylinder(
-            `lanceTip_${this.id}`,
-            {
-                height: 1.5,         // Increased from 1.0
-                diameterTop: 0,
-                diameterBottom: 0.7,  // Increased from 0.5
-                tessellation: 8,
-            },
-            this.scene
-        );
-        tip.rotation.z = -Math.PI / 2;
-        tip.position.y = 1.0;
-        tip.position.x = bodyLength / 2 + 0.75;  // Adjusted for larger tip
-        tip.parent = parentMesh;
-
-        // Tip material - metallic
-        const tipMaterial = new StandardMaterial(`lanceTipMat_${this.id}`, this.scene);
-        tipMaterial.diffuseColor = new Color3(0.7, 0.7, 0.75);
-        tipMaterial.specularColor = new Color3(1, 1, 1);
-        tipMaterial.specularPower = 64;
-        tip.material = tipMaterial;
-
-        // Rear guard - larger disc at back (negative X)
-        const guard = MeshBuilder.CreateCylinder(
-            `lanceGuard_${this.id}`,
-            {
-                height: 0.3,      // Increased from 0.2
-                diameter: 1.4,    // Increased from 1.0
-                tessellation: 16,
-            },
-            this.scene
-        );
-        guard.rotation.z = -Math.PI / 2;
-        guard.position.y = 1.0;
-        guard.position.x = -bodyLength / 2 + 0.15;
-        guard.parent = parentMesh;
-        guard.material = bodyMaterial;
-
-        // Central crystal with team color (positioned at center)
-        const crystal = this.createCentralCrystal();
-        crystal.parent = parentMesh;
-
-        return parentMesh;
+    if (this._debug) {
+      this.createRangeIndicator();
     }
+  }
 
-    /**
-     * Create a central crystal with team color
-     */
-    private createCentralCrystal(): Mesh {
-        // Create a double-ended crystal (octahedron-like shape)
-        const crystal = MeshBuilder.CreatePolyhedron(
-            `lanceCrystal_${this.id}`,
-            {
-                type: 1, // Octahedron
-                size: 0.55,  // Increased from 0.4
-            },
-            this.scene
-        );
+  /**
+   * Create a lance-shaped mesh (elongated for 2x1 footprint)
+   * Consists of a main shaft with a pointed tip and team-colored crystal
+   * Lance faces forward (positive X direction)
+   */
+  private createLanceMesh(): Mesh {
+    // Create parent mesh to hold all parts
+    const parentMesh = new Mesh(`lanceUnit_${this.id}`, this.scene);
 
-        // Position at center, slightly above body
-        crystal.position = new Vector3(0, 1.7, 0);  // Raised to match new body height
+    // Main body - elongated capsule along X-axis (forward direction)
+    const bodyLength = 4.0; // Increased from 3.0
+    const body = MeshBuilder.CreateCylinder(
+      `lanceBody_${this.id}`,
+      {
+        height: bodyLength,
+        diameterTop: 0.9, // Increased from 0.7
+        diameterBottom: 1.1, // Increased from 0.8
+        tessellation: 12,
+      },
+      this.scene
+    );
+    // Rotate to align with X-axis (horizontal, facing forward)
+    body.rotation.z = -Math.PI / 2;
+    body.position.y = 1.0; // Raised slightly
+    body.parent = parentMesh;
 
-        // Stretch for crystal look
-        crystal.scaling = new Vector3(0.8, 1.2, 0.8);  // Increased from (0.7, 1.0, 0.7)
+    // Apply neutral material to body
+    const bodyMaterial = new StandardMaterial(
+      `lanceBodyMat_${this.id}`,
+      this.scene
+    );
+    bodyMaterial.diffuseColor = new Color3(0.5, 0.5, 0.55);
+    bodyMaterial.specularColor = new Color3(0.3, 0.3, 0.3);
+    body.material = bodyMaterial;
 
-        // Create glowing material with team color
-        const crystalMaterial = new StandardMaterial(`lanceCrystalMat_${this.id}`, this.scene);
-        crystalMaterial.diffuseColor = this._color;
-        crystalMaterial.emissiveColor = this._color.scale(0.5);
-        crystalMaterial.specularColor = new Color3(1, 1, 1);
-        crystalMaterial.specularPower = 64;
-        crystal.material = crystalMaterial;
+    // Spear tip - cone at front (positive X) - larger and more menacing
+    const tip = MeshBuilder.CreateCylinder(
+      `lanceTip_${this.id}`,
+      {
+        height: 1.5, // Increased from 1.0
+        diameterTop: 0,
+        diameterBottom: 0.7, // Increased from 0.5
+        tessellation: 8,
+      },
+      this.scene
+    );
+    tip.rotation.z = -Math.PI / 2;
+    tip.position.y = 1.0;
+    tip.position.x = bodyLength / 2 + 0.75; // Adjusted for larger tip
+    tip.parent = parentMesh;
 
-        return crystal;
-    }
+    // Tip material - metallic
+    const tipMaterial = new StandardMaterial(
+      `lanceTipMat_${this.id}`,
+      this.scene
+    );
+    tipMaterial.diffuseColor = new Color3(0.7, 0.7, 0.75);
+    tipMaterial.specularColor = new Color3(1, 1, 1);
+    tipMaterial.specularPower = 64;
+    tip.material = tipMaterial;
 
-    private createSelectionIndicator(): Mesh {
-        // Oval indicator for 2x1 unit (elongated along X-axis)
-        const indicator = MeshBuilder.CreateTorus(
-            `lanceSelection_${this.id}`,
-            { diameter: 5, thickness: 0.25, tessellation: 32 },  // Increased from diameter: 4, thickness: 0.2
-            this.scene
-        );
+    // Rear guard - larger disc at back (negative X)
+    const guard = MeshBuilder.CreateCylinder(
+      `lanceGuard_${this.id}`,
+      {
+        height: 0.3, // Increased from 0.2
+        diameter: 1.4, // Increased from 1.0
+        tessellation: 16,
+      },
+      this.scene
+    );
+    guard.rotation.z = -Math.PI / 2;
+    guard.position.y = 1.0;
+    guard.position.x = -bodyLength / 2 + 0.15;
+    guard.parent = parentMesh;
+    guard.material = bodyMaterial;
 
-        // Scale to make it oval (2x1 proportions - elongated along X)
-        indicator.scaling = new Vector3(1.8, 0.01, 1);
-        indicator.position.y = 0.1;
-        indicator.parent = this.mesh;
-        indicator.isPickable = false;
-        indicator.visibility = 0;
+    // Central crystal with team color (positioned at center)
+    const crystal = this.createCentralCrystal();
+    crystal.parent = parentMesh;
 
-        const material = new StandardMaterial(`lanceSelMat_${this.id}`, this.scene);
-        material.diffuseColor = new Color3(0, 1, 0);
-        material.emissiveColor = new Color3(0, 0.5, 0);
-        indicator.material = material;
+    return parentMesh;
+  }
 
-        return indicator;
-    }
+  /**
+   * Create a central crystal with team color
+   */
+  private createCentralCrystal(): Mesh {
+    // Create a double-ended crystal (octahedron-like shape)
+    const crystal = MeshBuilder.CreatePolyhedron(
+      `lanceCrystal_${this.id}`,
+      {
+        type: 1, // Octahedron
+        size: 0.55, // Increased from 0.4
+      },
+      this.scene
+    );
 
-    private createRangeIndicator(): void {
-        const attack = this.getComponent<AttackComponent>(ComponentType.Attack);
-        if (!attack) return;
+    // Position at center, slightly above body
+    crystal.position = new Vector3(0, 1.7, 0); // Raised to match new body height
 
-        this.rangeIndicator = MeshBuilder.CreateSphere(
-            `lanceRange_${this.id}`,
-            { diameter: attack.range * 2, segments: 32 },
-            this.scene
-        );
-        this.rangeIndicator.parent = this.mesh;
-        this.rangeIndicator.position.y = 0;
-        this.rangeIndicator.isPickable = false;
+    // Stretch for crystal look
+    crystal.scaling = new Vector3(0.8, 1.2, 0.8); // Increased from (0.7, 1.0, 0.7)
 
-        const material = new StandardMaterial(`lanceRangeMat_${this.id}`, this.scene);
-        material.diffuseColor = new Color3(1, 0.5, 0);
-        material.alpha = 0.15;
-        material.wireframe = true;
-        this.rangeIndicator.material = material;
-    }
+    // Create glowing material with team color
+    const crystalMaterial = new StandardMaterial(
+      `lanceCrystalMat_${this.id}`,
+      this.scene
+    );
+    crystalMaterial.diffuseColor = this._color;
+    crystalMaterial.emissiveColor = this._color.scale(0.5);
+    crystalMaterial.specularColor = new Color3(1, 1, 1);
+    crystalMaterial.specularPower = 64;
+    crystal.material = crystalMaterial;
 
-    // Selection interface
-    public get isSelected(): boolean {
-        return this._isSelected;
-    }
+    return crystal;
+  }
 
-    public select(): void {
-        this._isSelected = true;
-        this.selectionIndicator.visibility = 1;
-    }
+  private createSelectionIndicator(): Mesh {
+    // Oval indicator for 2x1 unit (elongated along X-axis)
+    const indicator = MeshBuilder.CreateTorus(
+      `lanceSelection_${this.id}`,
+      { diameter: 5, thickness: 0.25, tessellation: 32 }, // Increased from diameter: 4, thickness: 0.2
+      this.scene
+    );
 
-    public deselect(): void {
-        this._isSelected = false;
-        this.selectionIndicator.visibility = 0;
-    }
+    // Scale to make it oval (2x1 proportions - elongated along X)
+    indicator.scaling = new Vector3(1.8, 0.01, 1);
+    indicator.position.y = 0.1;
+    indicator.parent = this.mesh;
+    indicator.isPickable = false;
+    indicator.visibility = 0;
 
-    public canBeSelected(): boolean {
-        return !this.isDestroyed;
-    }
+    const material = new StandardMaterial(`lanceSelMat_${this.id}`, this.scene);
+    material.diffuseColor = new Color3(0, 1, 0);
+    material.emissiveColor = new Color3(0, 0.5, 0);
+    indicator.material = material;
 
-    public dispose(): void {
-        this.selectionIndicator?.dispose();
-        this.rangeIndicator?.dispose();
-        this.mesh?.dispose();
-    }
+    return indicator;
+  }
+
+  private createRangeIndicator(): void {
+    const attack = this.getComponent<AttackComponent>(ComponentType.Attack);
+    if (!attack) return;
+
+    this.rangeIndicator = MeshBuilder.CreateSphere(
+      `lanceRange_${this.id}`,
+      { diameter: attack.range * 2, segments: 32 },
+      this.scene
+    );
+    this.rangeIndicator.parent = this.mesh;
+    this.rangeIndicator.position.y = 0;
+    this.rangeIndicator.isPickable = false;
+
+    const material = new StandardMaterial(
+      `lanceRangeMat_${this.id}`,
+      this.scene
+    );
+    material.diffuseColor = new Color3(1, 0.5, 0);
+    material.alpha = 0.15;
+    material.wireframe = true;
+    this.rangeIndicator.material = material;
+  }
+
+  // Selection interface
+  public get isSelected(): boolean {
+    return this._isSelected;
+  }
+
+  public select(): void {
+    this._isSelected = true;
+    this.selectionIndicator.visibility = 1;
+  }
+
+  public deselect(): void {
+    this._isSelected = false;
+    this.selectionIndicator.visibility = 0;
+  }
+
+  public canBeSelected(): boolean {
+    return !this.isDestroyed;
+  }
+
+  public dispose(): void {
+    this.selectionIndicator?.dispose();
+    this.rangeIndicator?.dispose();
+    this.mesh?.dispose();
+  }
 }

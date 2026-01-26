@@ -71,10 +71,10 @@ heroku logs --tail
 
 ### Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `PORT` | Server port (set automatically by Heroku) | `3000` |
-| `NODE_ENV` | Environment mode | `development` |
+| Variable       | Description                                  | Default                                       |
+| -------------- | -------------------------------------------- | --------------------------------------------- |
+| `PORT`         | Server port (set automatically by Heroku)    | `3000`                                        |
+| `NODE_ENV`     | Environment mode                             | `development`                                 |
 | `CORS_ORIGINS` | Comma-separated list of allowed CORS origins | `http://localhost:3001,http://localhost:5173` |
 
 ## Scripts

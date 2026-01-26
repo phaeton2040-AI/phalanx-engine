@@ -30,7 +30,7 @@ describe('LOCKSTEP-1: Server Initializes Tick Clock and Synchronizes All Clients
       }
     }
     clients = [];
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, 50));
     await server.stop();
   });
 
@@ -93,7 +93,7 @@ describe('LOCKSTEP-1: Server Initializes Tick Clock and Synchronizes All Clients
     client2.emit('queue-join', { playerId: 'player2', username: 'bob' });
 
     // Wait for countdown (1s) + some ticks (~500ms = 10 ticks at 20 TPS)
-    await new Promise(resolve => setTimeout(resolve, 1800));
+    await new Promise((resolve) => setTimeout(resolve, 1800));
 
     // Should have received multiple tick events
     expect(tickEvents.length).toBeGreaterThanOrEqual(5);
@@ -122,10 +122,12 @@ describe('LOCKSTEP-1: Server Initializes Tick Clock and Synchronizes All Clients
     client2.emit('queue-join', { playerId: 'player2', username: 'bob' });
 
     // Wait for countdown + 1 second of ticks (20 ticks)
-    await new Promise(resolve => setTimeout(resolve, 2200));
+    await new Promise((resolve) => setTimeout(resolve, 2200));
 
     // Should have ~20 ticks in 1 second
-    const ticksAfterFirst = tickEvents.filter(e => e.tick >= 1 && e.tick <= 20);
+    const ticksAfterFirst = tickEvents.filter(
+      (e) => e.tick >= 1 && e.tick <= 20
+    );
     expect(ticksAfterFirst.length).toBeGreaterThanOrEqual(15); // Allow some margin
 
     // Ticks should be sequential
@@ -154,15 +156,15 @@ describe('LOCKSTEP-1: Server Initializes Tick Clock and Synchronizes All Clients
     client2.emit('queue-join', { playerId: 'player2', username: 'bob' });
 
     // Wait for countdown + some ticks
-    await new Promise(resolve => setTimeout(resolve, 1800));
+    await new Promise((resolve) => setTimeout(resolve, 1800));
 
     // Both players should receive same ticks
     expect(tickEvents1.length).toBeGreaterThanOrEqual(5);
     expect(tickEvents2.length).toBeGreaterThanOrEqual(5);
 
     // Same tick numbers
-    const ticks1 = tickEvents1.map(e => e.tick);
-    const ticks2 = tickEvents2.map(e => e.tick);
+    const ticks1 = tickEvents1.map((e) => e.tick);
+    const ticks2 = tickEvents2.map((e) => e.tick);
     expect(ticks1).toEqual(ticks2);
   });
 
@@ -203,7 +205,7 @@ describe('LOCKSTEP-1: Server Initializes Tick Clock and Synchronizes All Clients
     client2.emit('queue-join', { playerId: 'player2', username: 'bob' });
 
     // Wait for 2 seconds of gameplay
-    await new Promise(resolve => setTimeout(resolve, 3200));
+    await new Promise((resolve) => setTimeout(resolve, 3200));
 
     // Should have ~40 ticks in 2 seconds at 20 TPS
     expect(tickEvents.length).toBeGreaterThanOrEqual(30);
@@ -238,7 +240,7 @@ describe('LOCKSTEP-1: Independent Tick Counters Per Match', () => {
       }
     }
     clients = [];
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, 50));
     await server.stop();
   });
 
@@ -281,7 +283,7 @@ describe('LOCKSTEP-1: Independent Tick Counters Per Match', () => {
     client2.emit('queue-join', { playerId: 'p2', username: 'bob' });
 
     // Wait for first match to start and progress
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    await new Promise((resolve) => setTimeout(resolve, 2000));
 
     const match2FirstTick = new Promise<TickSyncEvent>((resolve) => {
       client3.once('tick-sync', (data: TickSyncEvent) => resolve(data));
@@ -313,7 +315,7 @@ describe('LOCKSTEP-1: Configurable Tick Rate', () => {
       }
     }
     clients = [];
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, 50));
     if (server) {
       await server.stop();
     }
@@ -360,10 +362,12 @@ describe('LOCKSTEP-1: Configurable Tick Rate', () => {
     client2.emit('queue-join', { playerId: 'player2', username: 'bob' });
 
     // Wait for countdown + 1 second
-    await new Promise(resolve => setTimeout(resolve, 2200));
+    await new Promise((resolve) => setTimeout(resolve, 2200));
 
     // At 10 TPS, should have ~10 ticks in 1 second
-    const ticksInOneSecond = tickEvents.filter(e => e.tick >= 0 && e.tick < 15);
+    const ticksInOneSecond = tickEvents.filter(
+      (e) => e.tick >= 0 && e.tick < 15
+    );
     expect(ticksInOneSecond.length).toBeGreaterThanOrEqual(8);
     expect(ticksInOneSecond.length).toBeLessThanOrEqual(15);
   });

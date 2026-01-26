@@ -26,7 +26,7 @@ describe('MATCH-1: Player Can Join the Matchmaking Queue', () => {
     }
     clients = [];
     // Small delay to allow disconnect events to process
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, 50));
     await server.stop();
   });
 

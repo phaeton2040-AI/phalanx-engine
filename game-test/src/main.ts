@@ -24,14 +24,16 @@ function returnToLobby(): void {
 }
 
 // Handle game start
-lobbyScene.setOnGameStart((client: PhalanxClient, matchData: MatchFoundEvent) => {
-  console.log('Game starting!', matchData);
+lobbyScene.setOnGameStart(
+  (client: PhalanxClient, matchData: MatchFoundEvent) => {
+    console.log('Game starting!', matchData);
 
-  // Create and start game scene
-  gameScene = new GameScene(client, matchData);
-  gameScene.setOnExit(returnToLobby);
-  gameScene.start();
-});
+    // Create and start game scene
+    gameScene = new GameScene(client, matchData);
+    gameScene.setOnExit(returnToLobby);
+    gameScene.start();
+  }
+);
 
 // Log startup
 console.log('Phalanx Test Game initialized');

@@ -35,12 +35,12 @@ describe('LOCKSTEP-3: Server Broadcasts Tick Commands on Timer', () => {
     socket2 = io(SERVER_URL, { forceNew: true });
 
     await Promise.all([
-      new Promise<void>(resolve => socket1.on('connect', resolve)),
-      new Promise<void>(resolve => socket2.on('connect', resolve)),
+      new Promise<void>((resolve) => socket1.on('connect', resolve)),
+      new Promise<void>((resolve) => socket2.on('connect', resolve)),
     ]);
 
     // Join queue and wait for match
-    const matchPromise = new Promise<string>(resolve => {
+    const matchPromise = new Promise<string>((resolve) => {
       socket1.once('match-found', (data) => {
         matchId = data.matchId;
         resolve(data.matchId);
@@ -53,7 +53,7 @@ describe('LOCKSTEP-3: Server Broadcasts Tick Commands on Timer', () => {
     matchId = await matchPromise;
 
     // Wait for game to start
-    await new Promise<void>(resolve => {
+    await new Promise<void>((resolve) => {
       socket1.once('game-start', () => resolve());
     });
   });
@@ -72,7 +72,7 @@ describe('LOCKSTEP-3: Server Broadcasts Tick Commands on Timer', () => {
     });
 
     // Wait for several ticks
-    await new Promise(resolve => setTimeout(resolve, 200));
+    await new Promise((resolve) => setTimeout(resolve, 200));
 
     // At 20Hz we should have ~4 batches in 200ms
     expect(batches.length).toBeGreaterThanOrEqual(2);
@@ -87,7 +87,10 @@ describe('LOCKSTEP-3: Server Broadcasts Tick Commands on Timer', () => {
 
   it('should broadcast empty commands array if no player submitted', async () => {
     // Wait for a batch without submitting any commands
-    const batch = await new Promise<{ tick: number; commands: PlayerCommand[] }>(resolve => {
+    const batch = await new Promise<{
+      tick: number;
+      commands: PlayerCommand[];
+    }>((resolve) => {
       socket1.once('commands-batch', resolve);
     });
 
@@ -96,7 +99,7 @@ describe('LOCKSTEP-3: Server Broadcasts Tick Commands on Timer', () => {
 
   it('should include submitted commands in broadcast', async () => {
     // Wait for current tick
-    const currentTick = await new Promise<number>(resolve => {
+    const currentTick = await new Promise<number>((resolve) => {
       socket1.once('tick-sync', (data) => resolve(data.tick));
     });
 
@@ -109,7 +112,10 @@ describe('LOCKSTEP-3: Server Broadcasts Tick Commands on Timer', () => {
     });
 
     // Wait for that tick's batch
-    const batch = await new Promise<{ tick: number; commands: PlayerCommand[] }>(resolve => {
+    const batch = await new Promise<{
+      tick: number;
+      commands: PlayerCommand[];
+    }>((resolve) => {
       socket1.on('commands-batch', (data) => {
         if (data.tick === targetTick) resolve(data);
       });
@@ -127,7 +133,7 @@ describe('LOCKSTEP-3: Server Broadcasts Tick Commands on Timer', () => {
     });
 
     // Neither player submits anything
-    await new Promise(resolve => setTimeout(resolve, 300));
+    await new Promise((resolve) => setTimeout(resolve, 300));
 
     // Ticks should still advance at 20Hz (~6 ticks in 300ms)
     expect(ticks.length).toBeGreaterThanOrEqual(4);
@@ -140,7 +146,7 @@ describe('LOCKSTEP-3: Server Broadcasts Tick Commands on Timer', () => {
 
   it('should sort commands by playerId for deterministic order', async () => {
     // Wait for current tick
-    const currentTick = await new Promise<number>(resolve => {
+    const currentTick = await new Promise<number>((resolve) => {
       socket1.once('tick-sync', (data) => resolve(data.tick));
     });
 
@@ -153,14 +159,17 @@ describe('LOCKSTEP-3: Server Broadcasts Tick Commands on Timer', () => {
     });
 
     // Small delay then Player1 submits
-    await new Promise(resolve => setTimeout(resolve, 10));
+    await new Promise((resolve) => setTimeout(resolve, 10));
     socket1.emit('submit-commands', {
       tick: targetTick,
       commands: [{ type: 'player1-action', data: {} }],
     });
 
     // Wait for that tick's batch
-    const batch = await new Promise<{ tick: number; commands: PlayerCommand[] }>(resolve => {
+    const batch = await new Promise<{
+      tick: number;
+      commands: PlayerCommand[];
+    }>((resolve) => {
       socket1.on('commands-batch', (data) => {
         if (data.tick === targetTick) resolve(data);
       });
@@ -174,7 +183,7 @@ describe('LOCKSTEP-3: Server Broadcasts Tick Commands on Timer', () => {
 
   it('should broadcast same batch to all players', async () => {
     // Wait for current tick
-    const currentTick = await new Promise<number>(resolve => {
+    const currentTick = await new Promise<number>((resolve) => {
       socket1.once('tick-sync', (data) => resolve(data.tick));
     });
 
@@ -188,12 +197,12 @@ describe('LOCKSTEP-3: Server Broadcasts Tick Commands on Timer', () => {
 
     // Wait for batch on both sockets
     const [batch1, batch2] = await Promise.all([
-      new Promise<{ tick: number; commands: PlayerCommand[] }>(resolve => {
+      new Promise<{ tick: number; commands: PlayerCommand[] }>((resolve) => {
         socket1.on('commands-batch', (data) => {
           if (data.tick === targetTick) resolve(data);
         });
       }),
-      new Promise<{ tick: number; commands: PlayerCommand[] }>(resolve => {
+      new Promise<{ tick: number; commands: PlayerCommand[] }>((resolve) => {
         socket2.on('commands-batch', (data) => {
           if (data.tick === targetTick) resolve(data);
         });
@@ -208,7 +217,7 @@ describe('LOCKSTEP-3: Server Broadcasts Tick Commands on Timer', () => {
 
   it('should handle player submitting commands while other player is idle (RTS scenario)', async () => {
     // Wait for current tick
-    const currentTick = await new Promise<number>(resolve => {
+    const currentTick = await new Promise<number>((resolve) => {
       socket1.once('tick-sync', (data) => resolve(data.tick));
     });
 
@@ -221,7 +230,10 @@ describe('LOCKSTEP-3: Server Broadcasts Tick Commands on Timer', () => {
     });
 
     // Wait for that tick's batch
-    const batch = await new Promise<{ tick: number; commands: PlayerCommand[] }>(resolve => {
+    const batch = await new Promise<{
+      tick: number;
+      commands: PlayerCommand[];
+    }>((resolve) => {
       socket2.on('commands-batch', (data) => {
         if (data.tick === targetTick) resolve(data);
       });

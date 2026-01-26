@@ -19,7 +19,9 @@ export class LobbyScene {
   private statusElement: HTMLElement;
 
   // Callbacks
-  private onGameStart: ((client: PhalanxClient, matchData: MatchFoundEvent) => void) | null = null;
+  private onGameStart:
+    | ((client: PhalanxClient, matchData: MatchFoundEvent) => void)
+    | null = null;
 
   constructor() {
     // Generate unique player ID
@@ -28,8 +30,12 @@ export class LobbyScene {
     // Get DOM elements
     this.lobbyElement = document.getElementById('lobby')!;
     this.gameContainer = document.getElementById('game-container')!;
-    this.usernameInput = document.getElementById('username') as HTMLInputElement;
-    this.connectButton = document.getElementById('connect-btn') as HTMLButtonElement;
+    this.usernameInput = document.getElementById(
+      'username'
+    ) as HTMLInputElement;
+    this.connectButton = document.getElementById(
+      'connect-btn'
+    ) as HTMLButtonElement;
     this.statusElement = document.getElementById('status')!;
 
     this.setupEventListeners();
@@ -38,7 +44,9 @@ export class LobbyScene {
   /**
    * Set callback for game start
    */
-  setOnGameStart(callback: (client: PhalanxClient, matchData: MatchFoundEvent) => void): void {
+  setOnGameStart(
+    callback: (client: PhalanxClient, matchData: MatchFoundEvent) => void
+  ): void {
     this.onGameStart = callback;
   }
 
@@ -72,7 +80,10 @@ export class LobbyScene {
     try {
       await this.connectToServer(username);
     } catch (error) {
-      this.setStatus(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+      this.setStatus(
+        `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        'error'
+      );
       this.connectButton.disabled = false;
       this.usernameInput.disabled = false;
     }
@@ -126,10 +137,14 @@ export class LobbyScene {
       GameRandom.initialize(gameStartEvent.randomSeed);
     } else {
       // Fallback for backward compatibility - use match ID hash
-      console.warn('[LobbyScene] No randomSeed in game-start event, using fallback');
-      const fallbackSeed = this.matchData!.matchId
-        .split('')
-        .reduce((acc, char) => ((acc << 5) - acc) + char.charCodeAt(0), 0) >>> 0;
+      console.warn(
+        '[LobbyScene] No randomSeed in game-start event, using fallback'
+      );
+      const fallbackSeed =
+        this.matchData.matchId
+          .split('')
+          .reduce((acc, char) => (acc << 5) - acc + char.charCodeAt(0), 0) >>>
+        0;
       GameRandom.initialize(fallbackSeed);
     }
 

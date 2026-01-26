@@ -1,28 +1,28 @@
-import type { Engine } from "@babylonjs/core";
-import type { EntityManager } from "../core/EntityManager";
-import { EventBus } from "../core/EventBus";
-import { GameEvents, createEvent } from "../events";
-import { TeamTag } from "../enums/TeamTag";
-import { resourceConfig, unitConfig } from "../config/constants";
+import type { Engine } from '@babylonjs/core';
+import type { EntityManager } from '../core/EntityManager';
+import { EventBus } from '../core/EventBus';
+import { GameEvents, createEvent } from '../events';
+import { TeamTag } from '../enums/TeamTag';
+import { resourceConfig, unitConfig } from '../config/constants';
 import type {
-    ResourcesChangedEvent,
-    ResourcesGeneratedEvent,
-    UnitPurchaseRequestedEvent,
-    UnitPurchaseCompletedEvent,
-    UnitPurchaseFailedEvent,
-    TowerDestroyedEvent,
-} from "../events";
+  ResourcesChangedEvent,
+  ResourcesGeneratedEvent,
+  UnitPurchaseRequestedEvent,
+  UnitPurchaseCompletedEvent,
+  UnitPurchaseFailedEvent,
+  TowerDestroyedEvent,
+} from '../events';
 
 /**
  * Player resource state
  */
 interface PlayerResources {
-    playerId: string;
-    team: TeamTag;
-    currentResources: number;
-    baseGenerationRate: number; // Resources per second
-    currentGenerationRate: number; // Resources per second (with modifiers)
-    hasAggressionBonus: boolean;
+  playerId: string;
+  team: TeamTag;
+  currentResources: number;
+  baseGenerationRate: number; // Resources per second
+  currentGenerationRate: number; // Resources per second (with modifiers)
+  hasAggressionBonus: boolean;
 }
 
 /**
@@ -33,278 +33,324 @@ interface PlayerResources {
  * not frame delta time. This ensures both clients have identical resource counts.
  */
 export class ResourceSystem {
-    private eventBus: EventBus;
-    private unsubscribers: (() => void)[] = [];
+  private eventBus: EventBus;
+  private unsubscribers: (() => void)[] = [];
 
-    private playerResources: Map<string, PlayerResources> = new Map();
-    private lastProcessedTick: number = 0;
-    private tickRate: number = 20; // Default: 20 ticks per second
-    private lastUIUpdateTime: number = 0;
+  private playerResources: Map<string, PlayerResources> = new Map();
+  private lastProcessedTick: number = 0;
+  private tickRate: number = 20; // Default: 20 ticks per second
+  private lastUIUpdateTime: number = 0;
 
-    constructor(_engine: Engine, _entityManager: EntityManager, eventBus: EventBus) {
-        this.eventBus = eventBus;
+  constructor(
+    _engine: Engine,
+    _entityManager: EntityManager,
+    eventBus: EventBus
+  ) {
+    this.eventBus = eventBus;
 
-        this.setupEventListeners();
+    this.setupEventListeners();
+  }
+
+  /**
+   * Set the tick rate for deterministic resource generation
+   * @param tickRate - Number of ticks per second (default: 20)
+   */
+  public setTickRate(tickRate: number): void {
+    this.tickRate = tickRate;
+  }
+
+  /**
+   * Initialize resources for a player
+   */
+  public initializePlayer(playerId: string, team: TeamTag): void {
+    this.playerResources.set(playerId, {
+      playerId,
+      team,
+      currentResources: resourceConfig.initialResources,
+      baseGenerationRate: resourceConfig.baseGenerationRate,
+      currentGenerationRate: resourceConfig.baseGenerationRate,
+      hasAggressionBonus: false,
+    });
+
+    console.log(
+      `[ResourceSystem] Initialized player ${playerId} with ${resourceConfig.initialResources} resources`
+    );
+  }
+
+  private setupEventListeners(): void {
+    // Listen for tower destruction to grant bonus
+    this.unsubscribers.push(
+      this.eventBus.on<TowerDestroyedEvent>(
+        GameEvents.TOWER_DESTROYED,
+        (event) => {
+          this.handleTowerDestroyed(event);
+        }
+      )
+    );
+
+    // Listen for unit purchase requests
+    this.unsubscribers.push(
+      this.eventBus.on<UnitPurchaseRequestedEvent>(
+        GameEvents.UNIT_PURCHASE_REQUESTED,
+        (event) => {
+          this.handleUnitPurchaseRequest(event);
+        }
+      )
+    );
+
+    // Listen for aggression bonus events
+    this.unsubscribers.push(
+      this.eventBus.on(GameEvents.AGGRESSION_BONUS_ACTIVATED, (event: any) => {
+        this.setAggressionBonus(event.team, true, event.bonusMultiplier);
+      })
+    );
+
+    this.unsubscribers.push(
+      this.eventBus.on(
+        GameEvents.AGGRESSION_BONUS_DEACTIVATED,
+        (event: any) => {
+          this.setAggressionBonus(event.team, false);
+        }
+      )
+    );
+  }
+
+  /**
+   * Process a network tick for deterministic resource generation
+   * Call this method for each network tick received from server
+   * @param tick - The current network tick number
+   */
+  public processTick(tick: number): void {
+    // Skip if we've already processed this tick
+    if (tick <= this.lastProcessedTick) {
+      return;
     }
 
-    /**
-     * Set the tick rate for deterministic resource generation
-     * @param tickRate - Number of ticks per second (default: 20)
-     */
-    public setTickRate(tickRate: number): void {
-        this.tickRate = tickRate;
+    // Calculate how many ticks to process (in case we missed some)
+    const ticksToProcess = tick - this.lastProcessedTick;
+    this.lastProcessedTick = tick;
+
+    // Calculate resources per tick: rate per second / ticks per second
+    const resourcesPerTick = 1 / this.tickRate;
+
+    for (const [_playerId, resources] of this.playerResources) {
+      const generated =
+        resources.currentGenerationRate * resourcesPerTick * ticksToProcess;
+      resources.currentResources += generated;
     }
+  }
 
-    /**
-     * Initialize resources for a player
-     */
-    public initializePlayer(playerId: string, team: TeamTag): void {
-        this.playerResources.set(playerId, {
-            playerId,
-            team,
-            currentResources: resourceConfig.initialResources,
-            baseGenerationRate: resourceConfig.baseGenerationRate,
-            currentGenerationRate: resourceConfig.baseGenerationRate,
-            hasAggressionBonus: false,
-        });
+  /**
+   * Update UI - call this each frame for smooth UI updates
+   * This does NOT generate resources, only updates the display
+   */
+  public update(_deltaTime: number): void {
+    // Emit generation event periodically (not every frame to reduce noise)
+    const currentTime = performance.now();
+    if (currentTime - this.lastUIUpdateTime > 1000) {
+      // Every second
+      this.lastUIUpdateTime = currentTime;
 
-        console.log(`[ResourceSystem] Initialized player ${playerId} with ${resourceConfig.initialResources} resources`);
-    }
-
-    private setupEventListeners(): void {
-        // Listen for tower destruction to grant bonus
-        this.unsubscribers.push(
-            this.eventBus.on<TowerDestroyedEvent>(GameEvents.TOWER_DESTROYED, (event) => {
-                this.handleTowerDestroyed(event);
-            })
-        );
-
-        // Listen for unit purchase requests
-        this.unsubscribers.push(
-            this.eventBus.on<UnitPurchaseRequestedEvent>(GameEvents.UNIT_PURCHASE_REQUESTED, (event) => {
-                this.handleUnitPurchaseRequest(event);
-            })
-        );
-
-        // Listen for aggression bonus events
-        this.unsubscribers.push(
-            this.eventBus.on(GameEvents.AGGRESSION_BONUS_ACTIVATED, (event: any) => {
-                this.setAggressionBonus(event.team, true, event.bonusMultiplier);
-            })
-        );
-
-        this.unsubscribers.push(
-            this.eventBus.on(GameEvents.AGGRESSION_BONUS_DEACTIVATED, (event: any) => {
-                this.setAggressionBonus(event.team, false);
-            })
-        );
-    }
-
-    /**
-     * Process a network tick for deterministic resource generation
-     * Call this method for each network tick received from server
-     * @param tick - The current network tick number
-     */
-    public processTick(tick: number): void {
-        // Skip if we've already processed this tick
-        if (tick <= this.lastProcessedTick) {
-            return;
-        }
-
-        // Calculate how many ticks to process (in case we missed some)
-        const ticksToProcess = tick - this.lastProcessedTick;
-        this.lastProcessedTick = tick;
-
-        // Calculate resources per tick: rate per second / ticks per second
-        const resourcesPerTick = 1 / this.tickRate;
-
-        for (const [_playerId, resources] of this.playerResources) {
-            const generated = resources.currentGenerationRate * resourcesPerTick * ticksToProcess;
-            resources.currentResources += generated;
-        }
-    }
-
-    /**
-     * Update UI - call this each frame for smooth UI updates
-     * This does NOT generate resources, only updates the display
-     */
-    public update(_deltaTime: number): void {
-        // Emit generation event periodically (not every frame to reduce noise)
-        const currentTime = performance.now();
-        if (currentTime - this.lastUIUpdateTime > 1000) { // Every second
-            this.lastUIUpdateTime = currentTime;
-
-            for (const [playerId, resources] of this.playerResources) {
-                this.eventBus.emit<ResourcesGeneratedEvent>(GameEvents.RESOURCES_GENERATED, {
-                    ...createEvent(),
-                    playerId,
-                    team: resources.team,
-                    amount: resources.currentGenerationRate, // Rate per second
-                    currentTotal: resources.currentResources,
-                    generationRate: resources.currentGenerationRate,
-                });
-            }
-        }
-    }
-
-    /**
-     * Handle tower destroyed - grant bonus to attacking team
-     */
-    private handleTowerDestroyed(event: TowerDestroyedEvent): void {
-        // Find the opposing team and grant bonus
-        const opposingTeam = event.team === TeamTag.Team1 ? TeamTag.Team2 : TeamTag.Team1;
-
-        for (const [playerId, resources] of this.playerResources) {
-            if (resources.team === opposingTeam) {
-                const oldAmount = resources.currentResources;
-                resources.currentResources += event.resourceBonus;
-
-                this.eventBus.emit<ResourcesChangedEvent>(GameEvents.RESOURCES_CHANGED, {
-                    ...createEvent(),
-                    playerId,
-                    team: resources.team,
-                    oldAmount,
-                    newAmount: resources.currentResources,
-                });
-
-                console.log(`[ResourceSystem] Player ${playerId} received ${event.resourceBonus} tower destruction bonus`);
-            }
-        }
-    }
-
-    /**
-     * Handle unit purchase request
-     */
-    private handleUnitPurchaseRequest(event: UnitPurchaseRequestedEvent): void {
-        const resources = this.getResourcesByTeam(event.team);
-        if (!resources) {
-            console.warn(`[ResourceSystem] No resources found for team ${event.team}`);
-            return;
-        }
-
-        let cost: number;
-        switch (event.unitType) {
-            case 'sphere':
-            case 'mutant':
-                cost = unitConfig.mutant.cost;
-                break;
-            case 'prisma':
-                cost = unitConfig.prisma.cost;
-                break;
-            case 'lance':
-                cost = unitConfig.lance.cost;
-                break;
-        }
-
-        if (resources.currentResources < cost) {
-            this.eventBus.emit<UnitPurchaseFailedEvent>(GameEvents.UNIT_PURCHASE_FAILED, {
-                ...createEvent(),
-                playerId: event.playerId,
-                team: event.team,
-                unitType: event.unitType,
-                reason: 'insufficient_resources',
-            });
-            return;
-        }
-
-        // Deduct resources
-        const oldAmount = resources.currentResources;
-        resources.currentResources -= cost;
-
-        this.eventBus.emit<ResourcesChangedEvent>(GameEvents.RESOURCES_CHANGED, {
+      for (const [playerId, resources] of this.playerResources) {
+        this.eventBus.emit<ResourcesGeneratedEvent>(
+          GameEvents.RESOURCES_GENERATED,
+          {
             ...createEvent(),
-            playerId: resources.playerId,
+            playerId,
+            team: resources.team,
+            amount: resources.currentGenerationRate, // Rate per second
+            currentTotal: resources.currentResources,
+            generationRate: resources.currentGenerationRate,
+          }
+        );
+      }
+    }
+  }
+
+  /**
+   * Handle tower destroyed - grant bonus to attacking team
+   */
+  private handleTowerDestroyed(event: TowerDestroyedEvent): void {
+    // Find the opposing team and grant bonus
+    const opposingTeam =
+      event.team === TeamTag.Team1 ? TeamTag.Team2 : TeamTag.Team1;
+
+    for (const [playerId, resources] of this.playerResources) {
+      if (resources.team === opposingTeam) {
+        const oldAmount = resources.currentResources;
+        resources.currentResources += event.resourceBonus;
+
+        this.eventBus.emit<ResourcesChangedEvent>(
+          GameEvents.RESOURCES_CHANGED,
+          {
+            ...createEvent(),
+            playerId,
             team: resources.team,
             oldAmount,
             newAmount: resources.currentResources,
-        });
+          }
+        );
 
-        // The actual unit creation is handled by FormationGridSystem
-        // We just emit the completion event here
-        this.eventBus.emit<UnitPurchaseCompletedEvent>(GameEvents.UNIT_PURCHASE_COMPLETED, {
-            ...createEvent(),
-            playerId: event.playerId,
-            team: event.team,
-            unitType: event.unitType,
-            entityId: 0, // Will be set by formation system
-            cost,
-        });
+        console.log(
+          `[ResourceSystem] Player ${playerId} received ${event.resourceBonus} tower destruction bonus`
+        );
+      }
+    }
+  }
 
-        console.log(`[ResourceSystem] Player ${resources.playerId} purchased ${event.unitType} for ${cost} resources`);
+  /**
+   * Handle unit purchase request
+   */
+  private handleUnitPurchaseRequest(event: UnitPurchaseRequestedEvent): void {
+    const resources = this.getResourcesByTeam(event.team);
+    if (!resources) {
+      console.warn(
+        `[ResourceSystem] No resources found for team ${event.team}`
+      );
+      return;
     }
 
-    /**
-     * Set aggression bonus for a team
-     */
-    private setAggressionBonus(team: TeamTag, active: boolean, multiplier?: number): void {
-        for (const [_playerId, resources] of this.playerResources) {
-            if (resources.team === team) {
-                resources.hasAggressionBonus = active;
-                if (active && multiplier) {
-                    resources.currentGenerationRate = resources.baseGenerationRate * multiplier;
-                } else {
-                    resources.currentGenerationRate = resources.baseGenerationRate;
-                }
-                console.log(`[ResourceSystem] Team ${team} aggression bonus: ${active}, rate: ${resources.currentGenerationRate}`);
-            }
+    let cost: number;
+    switch (event.unitType) {
+      case 'sphere':
+      case 'mutant':
+        cost = unitConfig.mutant.cost;
+        break;
+      case 'prisma':
+        cost = unitConfig.prisma.cost;
+        break;
+      case 'lance':
+        cost = unitConfig.lance.cost;
+        break;
+    }
+
+    if (resources.currentResources < cost) {
+      this.eventBus.emit<UnitPurchaseFailedEvent>(
+        GameEvents.UNIT_PURCHASE_FAILED,
+        {
+          ...createEvent(),
+          playerId: event.playerId,
+          team: event.team,
+          unitType: event.unitType,
+          reason: 'insufficient_resources',
         }
+      );
+      return;
     }
 
-    /**
-     * Get resources for a specific player
-     */
-    public getResources(playerId: string): number {
-        return this.playerResources.get(playerId)?.currentResources ?? 0;
-    }
+    // Deduct resources
+    const oldAmount = resources.currentResources;
+    resources.currentResources -= cost;
 
-    /**
-     * Get resources by team
-     */
-    private getResourcesByTeam(team: TeamTag): PlayerResources | undefined {
-        for (const resources of this.playerResources.values()) {
-            if (resources.team === team) {
-                return resources;
-            }
+    this.eventBus.emit<ResourcesChangedEvent>(GameEvents.RESOURCES_CHANGED, {
+      ...createEvent(),
+      playerId: resources.playerId,
+      team: resources.team,
+      oldAmount,
+      newAmount: resources.currentResources,
+    });
+
+    // The actual unit creation is handled by FormationGridSystem
+    // We just emit the completion event here
+    this.eventBus.emit<UnitPurchaseCompletedEvent>(
+      GameEvents.UNIT_PURCHASE_COMPLETED,
+      {
+        ...createEvent(),
+        playerId: event.playerId,
+        team: event.team,
+        unitType: event.unitType,
+        entityId: 0, // Will be set by formation system
+        cost,
+      }
+    );
+
+    console.log(
+      `[ResourceSystem] Player ${resources.playerId} purchased ${event.unitType} for ${cost} resources`
+    );
+  }
+
+  /**
+   * Set aggression bonus for a team
+   */
+  private setAggressionBonus(
+    team: TeamTag,
+    active: boolean,
+    multiplier?: number
+  ): void {
+    for (const [_playerId, resources] of this.playerResources) {
+      if (resources.team === team) {
+        resources.hasAggressionBonus = active;
+        if (active && multiplier) {
+          resources.currentGenerationRate =
+            resources.baseGenerationRate * multiplier;
+        } else {
+          resources.currentGenerationRate = resources.baseGenerationRate;
         }
-        return undefined;
+        console.log(
+          `[ResourceSystem] Team ${team} aggression bonus: ${active}, rate: ${resources.currentGenerationRate}`
+        );
+      }
     }
+  }
 
-    /**
-     * Get player resources object
-     */
-    public getPlayerResources(playerId: string): PlayerResources | undefined {
-        return this.playerResources.get(playerId);
+  /**
+   * Get resources for a specific player
+   */
+  public getResources(playerId: string): number {
+    return this.playerResources.get(playerId)?.currentResources ?? 0;
+  }
+
+  /**
+   * Get resources by team
+   */
+  private getResourcesByTeam(team: TeamTag): PlayerResources | undefined {
+    for (const resources of this.playerResources.values()) {
+      if (resources.team === team) {
+        return resources;
+      }
     }
+    return undefined;
+  }
 
-    /**
-     * Check if player can afford a unit
-     */
-    public canAfford(playerId: string, unitType: 'sphere' | 'mutant' | 'prisma' | 'lance'): boolean {
-        const resources = this.playerResources.get(playerId);
-        if (!resources) return false;
+  /**
+   * Get player resources object
+   */
+  public getPlayerResources(playerId: string): PlayerResources | undefined {
+    return this.playerResources.get(playerId);
+  }
 
-        let cost: number;
-        switch (unitType) {
-            case 'sphere':
-            case 'mutant':
-                cost = unitConfig.mutant.cost;
-                break;
-            case 'prisma':
-                cost = unitConfig.prisma.cost;
-                break;
-            case 'lance':
-                cost = unitConfig.lance.cost;
-                break;
-        }
-        return resources.currentResources >= cost;
+  /**
+   * Check if player can afford a unit
+   */
+  public canAfford(
+    playerId: string,
+    unitType: 'sphere' | 'mutant' | 'prisma' | 'lance'
+  ): boolean {
+    const resources = this.playerResources.get(playerId);
+    if (!resources) return false;
+
+    let cost: number;
+    switch (unitType) {
+      case 'sphere':
+      case 'mutant':
+        cost = unitConfig.mutant.cost;
+        break;
+      case 'prisma':
+        cost = unitConfig.prisma.cost;
+        break;
+      case 'lance':
+        cost = unitConfig.lance.cost;
+        break;
     }
+    return resources.currentResources >= cost;
+  }
 
-    /**
-     * Cleanup
-     */
-    public dispose(): void {
-        this.unsubscribers.forEach(unsub => unsub());
-        this.unsubscribers = [];
-        this.playerResources.clear();
-    }
+  /**
+   * Cleanup
+   */
+  public dispose(): void {
+    this.unsubscribers.forEach((unsub) => unsub());
+    this.unsubscribers = [];
+    this.playerResources.clear();
+  }
 }

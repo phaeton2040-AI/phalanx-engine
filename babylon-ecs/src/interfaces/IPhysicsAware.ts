@@ -4,11 +4,11 @@
  * participate in physics calculations (e.g., dying units).
  */
 export interface IPhysicsIgnorable {
-    /**
-     * Returns true if this entity should be ignored by the physics system.
-     * Used for dying units, phasing units, etc.
-     */
-    shouldIgnorePhysics(): boolean;
+  /**
+   * Returns true if this entity should be ignored by the physics system.
+   * Used for dying units, phasing units, etc.
+   */
+  shouldIgnorePhysics(): boolean;
 }
 
 /**
@@ -17,27 +17,29 @@ export interface IPhysicsIgnorable {
  * a death sequence and should be treated differently.
  */
 export interface IDyingEntity {
-    /**
-     * Returns true if this entity is currently in its death sequence.
-     */
-    readonly isDying: boolean;
+  /**
+   * Returns true if this entity is currently in its death sequence.
+   */
+  readonly isDying: boolean;
 }
 
 /**
  * Type guard to check if an entity implements IPhysicsIgnorable
  */
-export function isPhysicsIgnorable(entity: unknown): entity is IPhysicsIgnorable {
-    return entity !== null &&
-           typeof entity === 'object' &&
-           'shouldIgnorePhysics' in entity &&
-           typeof (entity as IPhysicsIgnorable).shouldIgnorePhysics === 'function';
+export function isPhysicsIgnorable(
+  entity: unknown
+): entity is IPhysicsIgnorable {
+  return (
+    entity !== null &&
+    typeof entity === 'object' &&
+    'shouldIgnorePhysics' in entity &&
+    typeof (entity as IPhysicsIgnorable).shouldIgnorePhysics === 'function'
+  );
 }
 
 /**
  * Type guard to check if an entity implements IDyingEntity
  */
 export function isDyingEntity(entity: unknown): entity is IDyingEntity {
-    return entity !== null &&
-           typeof entity === 'object' &&
-           'isDying' in entity;
+  return entity !== null && typeof entity === 'object' && 'isDying' in entity;
 }

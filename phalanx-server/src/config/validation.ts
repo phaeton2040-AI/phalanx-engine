@@ -6,7 +6,9 @@ import { DEFAULT_CONFIG, GAME_MODES } from './defaults.js';
  * @param userConfig - Partial user configuration
  * @returns Complete validated configuration
  */
-export function validateConfig(userConfig: Partial<PhalanxConfig> = {}): PhalanxConfig {
+export function validateConfig(
+  userConfig: Partial<PhalanxConfig> = {}
+): PhalanxConfig {
   const config: PhalanxConfig = {
     ...DEFAULT_CONFIG,
     ...userConfig,
@@ -18,22 +20,28 @@ export function validateConfig(userConfig: Partial<PhalanxConfig> = {}): Phalanx
 
   // Validate port
   if (config.port < 1 || config.port > 65535) {
-    throw new Error(`Invalid port: ${config.port}. Must be between 1 and 65535.`);
+    throw new Error(
+      `Invalid port: ${config.port}. Must be between 1 and 65535.`
+    );
   }
 
   // Validate tickRate
   if (config.tickRate < 1 || config.tickRate > 128) {
-    throw new Error(`Invalid tickRate: ${config.tickRate}. Must be between 1 and 128.`);
+    throw new Error(
+      `Invalid tickRate: ${config.tickRate}. Must be between 1 and 128.`
+    );
   }
 
   // Validate tickDeadlineMs
   if (config.tickDeadlineMs < 1) {
-    throw new Error(`Invalid tickDeadlineMs: ${config.tickDeadlineMs}. Must be positive.`);
+    throw new Error(
+      `Invalid tickDeadlineMs: ${config.tickDeadlineMs}. Must be positive.`
+    );
   }
 
   // Validate gameMode
   if (typeof config.gameMode === 'string') {
-    if (!GAME_MODES[config.gameMode as GameModePreset]) {
+    if (!GAME_MODES[config.gameMode]) {
       throw new Error(
         `Invalid gameMode: ${config.gameMode}. Valid presets: ${Object.keys(GAME_MODES).join(', ')}`
       );
@@ -72,11 +80,12 @@ export function validateConfig(userConfig: Partial<PhalanxConfig> = {}): Phalanx
 /**
  * Gets the resolved game mode (players per match and teams count)
  */
-export function resolveGameMode(
-  gameMode: PhalanxConfig['gameMode']
-): { playersPerMatch: number; teamsCount: number } {
+export function resolveGameMode(gameMode: PhalanxConfig['gameMode']): {
+  playersPerMatch: number;
+  teamsCount: number;
+} {
   if (typeof gameMode === 'string') {
-    return GAME_MODES[gameMode as GameModePreset];
+    return GAME_MODES[gameMode];
   }
   return gameMode;
 }

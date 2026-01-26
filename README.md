@@ -5,8 +5,10 @@ A game-agnostic deterministic lockstep multiplayer engine with authentication, m
 > ⚠️ **NOT IN PRODUCTION** - This project is currently in active development and not yet published to npm. Please clone the repository to use it.
 
 ## Quick Links
+
 - 📖 [Server Documentation](./phalanx-server/README.md)
 - 📖 [Client Documentation](./phalanx-client/README.md)
+
 ## Installation
 
 **Clone the repository:**
@@ -21,9 +23,9 @@ npm install
 
 This repository contains two packages:
 
-| Package | Description |
-|---------|-------------|
-| [phalanx-server](./phalanx-server) | Server library for hosting multiplayer games |
+| Package                            | Description                                      |
+| ---------------------------------- | ------------------------------------------------ |
+| [phalanx-server](./phalanx-server) | Server library for hosting multiplayer games     |
 | [phalanx-client](./phalanx-client) | Client library for connecting to Phalanx servers |
 
 ## Features
