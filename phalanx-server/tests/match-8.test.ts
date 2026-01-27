@@ -1,6 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { io, Socket } from 'socket.io-client';
 import { Phalanx } from '../src/index.js';
+import type {
+  MatchFoundEvent,
+  TickSyncEvent,
+  CommandsBatchEvent,
+} from '../src/types/index.js';
 
 const TEST_PORT = 3027;
 const SERVER_URL = `http://localhost:${TEST_PORT}`;
@@ -19,7 +24,6 @@ describe('LOCKSTEP-2: Server Collects Commands from All Players for Each Tick', 
   let server: Phalanx;
   let socket1: Socket;
   let socket2: Socket;
-  let matchId: string;
 
   beforeEach(async () => {
     server = new Phalanx({
@@ -41,8 +45,7 @@ describe('LOCKSTEP-2: Server Collects Commands from All Players for Each Tick', 
 
     // Join queue and wait for match
     const matchPromise = new Promise<string>((resolve) => {
-      socket1.once('match-found', (data) => {
-        matchId = data.matchId;
+      socket1.once('match-found', (data: MatchFoundEvent) => {
         resolve(data.matchId);
       });
     });
@@ -50,7 +53,7 @@ describe('LOCKSTEP-2: Server Collects Commands from All Players for Each Tick', 
     socket1.emit('queue-join', { playerId: 'player1', username: 'Player1' });
     socket2.emit('queue-join', { playerId: 'player2', username: 'Player2' });
 
-    matchId = await matchPromise;
+    await matchPromise;
 
     // Wait for game to start
     await new Promise<void>((resolve) => {
@@ -133,7 +136,7 @@ describe('LOCKSTEP-2: Server Collects Commands from All Players for Each Tick', 
   it('should handle out-of-order tick submissions (tick 2 before tick 1)', async () => {
     // Wait for a tick-sync to know the current tick
     const currentTick = await new Promise<number>((resolve) => {
-      socket1.once('tick-sync', (data) => resolve(data.tick));
+      socket1.once('tick-sync', (data: TickSyncEvent) => resolve(data.tick));
     });
 
     const tick1 = currentTick + 1;
@@ -142,17 +145,23 @@ describe('LOCKSTEP-2: Server Collects Commands from All Players for Each Tick', 
     const ackPromises: Promise<{ tick: number; accepted: boolean }>[] = [];
 
     ackPromises.push(
-      new Promise((resolve) => {
-        socket1.on('submit-commands-ack', (ack) => {
-          if (ack.tick === tick2) resolve(ack);
-        });
+      new Promise<{ tick: number; accepted: boolean }>((resolve) => {
+        socket1.on(
+          'submit-commands-ack',
+          (ack: { tick: number; accepted: boolean }) => {
+            if (ack.tick === tick2) resolve(ack);
+          }
+        );
       })
     );
     ackPromises.push(
-      new Promise((resolve) => {
-        socket1.on('submit-commands-ack', (ack) => {
-          if (ack.tick === tick1) resolve(ack);
-        });
+      new Promise<{ tick: number; accepted: boolean }>((resolve) => {
+        socket1.on(
+          'submit-commands-ack',
+          (ack: { tick: number; accepted: boolean }) => {
+            if (ack.tick === tick1) resolve(ack);
+          }
+        );
       })
     );
 
@@ -176,7 +185,10 @@ describe('LOCKSTEP-2: Server Collects Commands from All Players for Each Tick', 
   it('should handle duplicate tick submission from same player (overwrite)', async () => {
     const ack1Promise = new Promise<{ tick: number; accepted: boolean }>(
       (resolve) => {
-        socket1.once('submit-commands-ack', (ack) => resolve(ack));
+        socket1.once(
+          'submit-commands-ack',
+          (ack: { tick: number; accepted: boolean }) => resolve(ack)
+        );
       }
     );
 
@@ -190,7 +202,10 @@ describe('LOCKSTEP-2: Server Collects Commands from All Players for Each Tick', 
     // Second submission for same tick should also be accepted (overwrite)
     const ack2Promise = new Promise<{ tick: number; accepted: boolean }>(
       (resolve) => {
-        socket1.once('submit-commands-ack', (ack) => resolve(ack));
+        socket1.once(
+          'submit-commands-ack',
+          (ack: { tick: number; accepted: boolean }) => resolve(ack)
+        );
       }
     );
 
@@ -224,7 +239,7 @@ describe('LOCKSTEP-2: Server Collects Commands from All Players for Each Tick', 
   it('should broadcast commands in commands-batch event', async () => {
     // Wait for a tick-sync to know the current tick
     const currentTick = await new Promise<number>((resolve) => {
-      socket1.once('tick-sync', (data) => resolve(data.tick));
+      socket1.once('tick-sync', (data: TickSyncEvent) => resolve(data.tick));
     });
 
     // Submit command for a near-future tick
@@ -238,7 +253,7 @@ describe('LOCKSTEP-2: Server Collects Commands from All Players for Each Tick', 
     // Wait for the commands-batch for that tick
     const batch = await new Promise<{ tick: number; commands: unknown[] }>(
       (resolve) => {
-        socket1.on('commands-batch', (data) => {
+        socket1.on('commands-batch', (data: CommandsBatchEvent) => {
           if (data.tick === targetTick) resolve(data);
         });
       }
@@ -251,7 +266,7 @@ describe('LOCKSTEP-2: Server Collects Commands from All Players for Each Tick', 
   it('should include player commands in commands-batch even if one player sends no commands', async () => {
     // Wait for a tick-sync to know the current tick
     const currentTick = await new Promise<number>((resolve) => {
-      socket1.once('tick-sync', (data) => resolve(data.tick));
+      socket1.once('tick-sync', (data: TickSyncEvent) => resolve(data.tick));
     });
 
     const targetTick = currentTick + 2;
@@ -267,7 +282,7 @@ describe('LOCKSTEP-2: Server Collects Commands from All Players for Each Tick', 
     // Wait for the commands-batch for that tick
     const batch = await new Promise<{ tick: number; commands: unknown[] }>(
       (resolve) => {
-        socket1.on('commands-batch', (data) => {
+        socket1.on('commands-batch', (data: CommandsBatchEvent) => {
           if (data.tick === targetTick) resolve(data);
         });
       }

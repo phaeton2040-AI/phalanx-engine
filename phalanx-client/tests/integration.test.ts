@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { Phalanx } from '../../phalanx-server/src/index.js';
-import { PhalanxClient } from '../src/PhalanxClient.js';
+import { Phalanx } from 'phalanx-server';
+import { PhalanxClient } from '../src/index.js';
 import type {
   MatchFoundEvent,
   CountdownEvent,
@@ -8,7 +8,7 @@ import type {
 } from '../src/types.js';
 
 /**
- * Integration tests for PhalanxClient with real Phalanx server
+ * Integration tests for PhalanxClient with the real Phalanx server
  */
 describe('PhalanxClient Integration Tests', () => {
   let server: Phalanx;
@@ -293,6 +293,63 @@ describe('PhalanxClient Integration Tests', () => {
 
       expect(tickEvents.length).toBeGreaterThan(0);
       expect(client1.getCurrentTick()).toBeGreaterThan(0);
+
+      client1.disconnect();
+      client2.disconnect();
+    });
+  });
+
+  describe('LobbyScene Flow', () => {
+    it('should receive matchFound and gameStart via on() subscriptions', async () => {
+      const client1 = await PhalanxClient.create({
+        serverUrl: SERVER_URL,
+        playerId: 'player1',
+        username: 'Player1',
+        debug: true,
+      });
+      const client2 = await PhalanxClient.create({
+        serverUrl: SERVER_URL,
+        playerId: 'player2',
+        username: 'Player2',
+        debug: true,
+      });
+
+      // Track events exactly like LobbyScene does
+      let matchData1: MatchFoundEvent | null = null;
+      let gameStarted1 = false;
+      let matchData2: MatchFoundEvent | null = null;
+      let gameStarted2 = false;
+
+      // Subscribe BEFORE joining queue (like LobbyScene)
+      client1.on('matchFound', (event) => {
+        matchData1 = event;
+      });
+      client1.on('gameStart', () => {
+        gameStarted1 = true;
+      });
+
+      client2.on('matchFound', (event) => {
+        matchData2 = event;
+      });
+      client2.on('gameStart', () => {
+        gameStarted2 = true;
+      });
+
+      // Join queue
+      await client1.joinQueue();
+      await client2.joinQueue();
+
+      // Wait for game to start (countdown is 1 second + some buffer)
+      await new Promise((resolve) => setTimeout(resolve, 2500));
+
+      // Verify both clients received events
+      expect(matchData1).not.toBeNull();
+      expect(matchData1!.matchId).toBeDefined();
+      expect(gameStarted1).toBe(true);
+
+      expect(matchData2).not.toBeNull();
+      expect(matchData2!.matchId).toBeDefined();
+      expect(gameStarted2).toBe(true);
 
       client1.disconnect();
       client2.disconnect();

@@ -1,5 +1,6 @@
 /**
  * Main entry point for the game client
+ * Using simplified Phalanx Client API
  */
 
 import { LobbyScene } from './scenes/LobbyScene';

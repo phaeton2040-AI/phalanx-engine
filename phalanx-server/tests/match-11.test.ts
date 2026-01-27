@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { io, Socket } from 'socket.io-client';
 import { Phalanx } from '../src/index.js';
+import type { TickSyncEvent } from '../src/types/index.js';
 
 const TEST_PORT = 3031;
 const SERVER_URL = `http://localhost:${TEST_PORT}`;
@@ -62,7 +63,7 @@ describe('LOCKSTEP-5: Server Detects Unresponsive Players via Activity Tracking'
   it('should track activity when commands are submitted', async () => {
     // Submit commands to update activity
     const currentTick = await new Promise<number>((resolve) => {
-      socket1.once('tick-sync', (data) => resolve(data.tick));
+      socket1.once('tick-sync', (data: TickSyncEvent) => resolve(data.tick));
     });
 
     socket1.emit('submit-commands', {
@@ -88,11 +89,14 @@ describe('LOCKSTEP-5: Server Detects Unresponsive Players via Activity Tracking'
     // Player 1 should not be lagging since they just sent a message
     // We verify by checking that no lagging event is received for player1
     let player1Lagging = false;
-    socket1.on('player-lagging', (data) => {
-      if (data.playerId === 'player1') {
-        player1Lagging = true;
+    socket1.on(
+      'player-lagging',
+      (data: { playerId: string; msSinceLastMessage: number }) => {
+        if (data.playerId === 'player1') {
+          player1Lagging = true;
+        }
       }
-    });
+    );
 
     await new Promise((resolve) => setTimeout(resolve, 300));
     expect(player1Lagging).toBe(false);
@@ -104,11 +108,14 @@ describe('LOCKSTEP-5: Server Detects Unresponsive Players via Activity Tracking'
       playerId: string;
       msSinceLastMessage: number;
     }>((resolve) => {
-      socket1.on('player-lagging', (data) => {
-        if (data.playerId === 'player2') {
-          resolve(data);
+      socket1.on(
+        'player-lagging',
+        (data: { playerId: string; msSinceLastMessage: number }) => {
+          if (data.playerId === 'player2') {
+            resolve(data);
+          }
         }
-      });
+      );
     });
 
     // Keep player 1 active by sending any message
@@ -138,11 +145,14 @@ describe('LOCKSTEP-5: Server Detects Unresponsive Players via Activity Tracking'
       playerId: string;
       msSinceLastMessage: number;
     }>((resolve) => {
-      socket1.on('player-timeout', (data) => {
-        if (data.playerId === 'player2') {
-          resolve(data);
+      socket1.on(
+        'player-timeout',
+        (data: { playerId: string; msSinceLastMessage: number }) => {
+          if (data.playerId === 'player2') {
+            resolve(data);
+          }
         }
-      });
+      );
     });
 
     // Keep player 1 active
@@ -161,11 +171,14 @@ describe('LOCKSTEP-5: Server Detects Unresponsive Players via Activity Tracking'
   it('should not emit player-lagging for active players', async () => {
     let laggingReceived = false;
 
-    socket1.on('player-lagging', (data) => {
-      if (data.playerId === 'player1') {
-        laggingReceived = true;
+    socket1.on(
+      'player-lagging',
+      (data: { playerId: string; msSinceLastMessage: number }) => {
+        if (data.playerId === 'player1') {
+          laggingReceived = true;
+        }
       }
-    });
+    );
 
     // Both players stay active by sending messages
     const keepAlive1 = setInterval(() => {

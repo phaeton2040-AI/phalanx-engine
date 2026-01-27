@@ -216,11 +216,6 @@ export class Game {
         onCommitButtonUpdate: () => this.uiManager.updateFormationInfo(),
         getLocalTeam: () => this.localTeam,
         getLocalPlayerId: () => this.matchData.playerId,
-        // Interpolation callbacks for smooth visual movement
-        onBeforeSimulationTick: () =>
-          this.interpolationSystem.snapshotPositions(),
-        onAfterSimulationTick: () =>
-          this.interpolationSystem.captureCurrentPositions(),
       }
     );
 
@@ -229,6 +224,7 @@ export class Game {
     this.setupMoveCommandInterceptor();
     this.setupSelectionFilter();
     this.setupGameEventHandlers();
+    this.setupPhalanxClientHandlers();
     this.uiManager.setupBeforeUnloadWarning();
     this.uiManager.setupExitButton(() => this.handleExit());
   }
@@ -256,6 +252,47 @@ export class Game {
       setTimeout(() => {
         this.handleExit();
       }, 2000);
+    });
+  }
+
+  /**
+   * Setup PhalanxClient tick and frame handlers
+   */
+  private setupPhalanxClientHandlers(): void {
+    // Register tick handler for simulation
+    this.client.onTick((tick, commandsBatch) => {
+      // Snapshot positions before simulation
+      this.interpolationSystem.snapshotPositions();
+
+      // Process the tick through lockstep manager
+      this.lockstepManager.processTick(tick, commandsBatch);
+
+      // Capture new positions after simulation
+      this.interpolationSystem.captureCurrentPositions();
+    });
+
+    // Register frame handler for rendering
+    this.client.onFrame((alpha, dt) => {
+      // Update camera controller (keyboard/touch input)
+      this.cameraController.update(dt);
+
+      // Update systems that need frame-rate updates
+      this.resourceSystem.update(0);
+
+      // Update tower turret rotations for smooth visual rotation
+      this.combatSystem.updateTowerTurrets(dt);
+
+      // Update MutantUnit animations and rotations based on movement state
+      this.updateEntityAnimations(dt);
+
+      // Interpolate visual positions using alpha from PhalanxClient
+      this.interpolationSystem.interpolate(alpha);
+
+      // Update health bars (billboarding and position updates)
+      this.healthBarSystem.update();
+
+      // Render the scene
+      this.scene.render();
     });
   }
 
@@ -735,35 +772,13 @@ export class Game {
   }
 
   /**
-   * Start the game loop
+   * Start the game
+   * The render loop is managed by PhalanxClient via onFrame handler
    */
   public start(): void {
-    this.engine.runRenderLoop(() => {
-      this.renderUpdate();
-      this.scene.render();
-    });
-  }
-
-  /**
-   * Render update loop
-   */
-  private renderUpdate(): void {
-    this.lockstepManager.sendPendingCommands();
-    this.resourceSystem.update(0);
-
-    // Update tower turret rotations for smooth visual rotation
-    const deltaTime = this.engine.getDeltaTime() / 1000;
-    this.combatSystem.updateTowerTurrets(deltaTime);
-
-    // Update MutantUnit animations and rotations based on movement state
-    this.updateEntityAnimations(deltaTime);
-
-    // Interpolate visual positions for smooth movement between network ticks
-    const alpha = this.lockstepManager.getInterpolationAlpha();
-    this.interpolationSystem.interpolate(alpha);
-
-    // Update health bars (billboarding and position updates)
-    this.healthBarSystem.update();
+    // PhalanxClient manages the render loop via onFrame callback
+    // No need for engine.runRenderLoop() anymore
+    console.log('[Game] Game started - render loop managed by PhalanxClient');
   }
 
   /**
