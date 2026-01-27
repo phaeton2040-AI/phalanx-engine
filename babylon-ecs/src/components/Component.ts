@@ -19,6 +19,9 @@ export const ComponentType = {
   Renderable: Symbol('Renderable'),
   UnitType: Symbol('UnitType'),
   Resource: Symbol('Resource'),
+  Animation: Symbol('Animation'),
+  Rotation: Symbol('Rotation'),
+  AttackLock: Symbol('AttackLock'),
 } as const;
 
 export type ComponentTypeKey = keyof typeof ComponentType;

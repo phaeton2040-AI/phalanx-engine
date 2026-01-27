@@ -1,6 +1,6 @@
 import { EntityManager } from '../core/EntityManager';
 import { EventBus } from '../core/EventBus';
-import { ComponentType, HealthComponent } from '../components';
+import { ComponentType, HealthComponent, AnimationComponent, MovementComponent } from '../components';
 import { Entity } from '../entities/Entity';
 import { GameEvents, createEvent } from '../events';
 import type {
@@ -10,24 +10,7 @@ import type {
   EntityDyingEvent,
   EntityDestroyedEvent,
 } from '../events';
-import { hasDeathSequence } from '../interfaces/ICombatant';
-
-/**
- * Interface for entities that can show blood effects when damaged
- */
-interface IBloodEffect {
-  showBloodEffect(): void;
-}
-
-/**
- * Type guard for blood effect
- */
-function hasBloodEffect(entity: Entity): entity is Entity & IBloodEffect {
-  return (
-    'showBloodEffect' in entity &&
-    typeof (entity as any).showBloodEffect === 'function'
-  );
-}
+import type { AnimationSystem } from './AnimationSystem';
 
 /**
  * HealthSystem - Manages entity health and destruction
@@ -38,12 +21,20 @@ export class HealthSystem {
   private entityManager: EntityManager;
   private eventBus: EventBus;
   private unsubscribers: (() => void)[] = [];
+  private animationSystem: AnimationSystem | null = null;
 
   constructor(entityManager: EntityManager, eventBus: EventBus) {
     this.entityManager = entityManager;
     this.eventBus = eventBus;
 
     this.setupEventListeners();
+  }
+
+  /**
+   * Set the AnimationSystem reference for triggering death animations
+   */
+  public setAnimationSystem(animationSystem: AnimationSystem): void {
+    this.animationSystem = animationSystem;
   }
 
   private setupEventListeners(): void {
@@ -85,9 +76,10 @@ export class HealthSystem {
 
     const wasDestroyed = health.takeDamage(amount);
 
-    // Show blood effect for entities that support it
-    if (hasBloodEffect(entity)) {
-      entity.showBloodEffect();
+    // Show blood effect via AnimationSystem if available
+    const animComp = entity.getComponent<AnimationComponent>(ComponentType.Animation);
+    if (animComp && this.animationSystem) {
+      this.animationSystem.showBloodEffect(entity);
     }
 
     // Emit damage applied event
@@ -101,16 +93,25 @@ export class HealthSystem {
     });
 
     if (wasDestroyed) {
-      // Handle death differently for entities with death sequences
-      if (hasDeathSequence(entity)) {
+      // Handle death differently for entities with AnimationComponent
+      if (animComp && this.animationSystem) {
+        // Stop any ongoing movement immediately
+        const movement = entity.getComponent<MovementComponent>(ComponentType.Movement);
+        if (movement) {
+          movement.stop();
+        }
+
+        // Mark entity to be ignored by physics (dying units shouldn't move or collide)
+        entity.ignorePhysics = true;
+
         // Emit entity dying event immediately (for health bar removal, etc.)
         this.eventBus.emit<EntityDyingEvent>(GameEvents.ENTITY_DYING, {
           ...createEvent(),
           entityId: entity.id,
         });
 
-        // Start death sequence - unit will be destroyed when animation completes
-        entity.startDeathSequence(() => {
+        // Start death sequence via AnimationSystem - unit will be destroyed when animation completes
+        this.animationSystem.startDeathSequence(animComp, () => {
           // Emit entity destroyed event before destroying
           this.eventBus.emit<EntityDestroyedEvent>(
             GameEvents.ENTITY_DESTROYED,

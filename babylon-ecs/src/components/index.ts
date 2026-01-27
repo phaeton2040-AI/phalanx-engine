@@ -9,3 +9,7 @@ export type { AttackConfig, AttackType } from './AttackComponent';
 export { MovementComponent } from './MovementComponent';
 export { UnitTypeComponent, UnitType, UnitGridSize } from './UnitTypeComponent';
 export { ResourceComponent } from './ResourceComponent';
+export { AnimationComponent, AnimationState } from './AnimationComponent';
+export type { AnimationStateType, AnimationNames } from './AnimationComponent';
+export { RotationComponent } from './RotationComponent';
+export { AttackLockComponent } from './AttackLockComponent';

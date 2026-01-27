@@ -20,8 +20,9 @@ import { WaveSystem } from '../systems/WaveSystem';
 import { CameraController } from '../systems/CameraController';
 import { InterpolationSystem } from '../systems/InterpolationSystem';
 import { HealthBarSystem } from '../systems/HealthBarSystem';
+import { AnimationSystem } from '../systems/AnimationSystem';
+import { RotationSystem } from '../systems/RotationSystem';
 import { resetEntityIdCounter } from '../entities/Entity';
-import { isAnimated } from '../interfaces/ICombatant';
 import { AssetManager } from './AssetManager';
 import { TeamTag } from '../enums/TeamTag';
 import { arenaParams } from '../config/constants';
@@ -79,6 +80,8 @@ export class Game {
   private victorySystem: VictorySystem;
   private waveSystem: WaveSystem;
   private interpolationSystem: InterpolationSystem;
+  private animationSystem: AnimationSystem;
+  private rotationSystem: RotationSystem;
   private healthBarSystem!: HealthBarSystem;
   private cameraController!: CameraController;
   // @ts-ignore - InputManager registers event listeners in constructor
@@ -146,10 +149,20 @@ export class Game {
       this.eventBus
     );
 
+    // Initialize animation systems
+    this.animationSystem = new AnimationSystem(this.entityManager, this.scene);
+    this.rotationSystem = new RotationSystem(this.entityManager);
+
     // Set up combat system move callback for lockstep synchronization
     this.combatSystem.setMoveUnitCallback((entityId, target) => {
       this.movementSystem.moveEntityTo(entityId, target);
     });
+
+    // Wire up animation system to combat system
+    this.combatSystem.setAnimationSystem(this.animationSystem);
+
+    // Wire up animation system to health system for death sequences
+    this.healthSystem.setAnimationSystem(this.animationSystem);
 
     // Initialize gameplay systems
     this.resourceSystem = new ResourceSystem(
@@ -783,14 +796,11 @@ export class Game {
 
   /**
    * Update animations and rotations for all animated entities
+   * Uses the AnimationSystem and RotationSystem for proper ECS architecture
    */
   private updateEntityAnimations(deltaTime: number): void {
-    for (const entity of this.entityManager.getAllEntities()) {
-      if (isAnimated(entity)) {
-        entity.updateAnimation();
-        entity.updateRotation(deltaTime);
-      }
-    }
+    this.animationSystem.update();
+    this.rotationSystem.update(deltaTime);
   }
 
   /**

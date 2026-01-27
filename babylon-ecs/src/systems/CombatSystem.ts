@@ -1,24 +1,23 @@
-import { Engine, Vector3 } from '@babylonjs/core';
-import { Entity } from '../entities/Entity';
-import { Tower } from '../entities/Tower';
-import { EntityManager } from '../core/EntityManager';
-import { EventBus } from '../core/EventBus';
-import { GameRandom } from '../core/GameRandom';
+import {Engine, Vector3} from '@babylonjs/core';
+import {Entity} from '../entities/Entity';
+import {Tower} from '../entities/Tower';
+import {EntityManager} from '../core/EntityManager';
+import {EventBus} from '../core/EventBus';
+import {GameRandom} from '../core/GameRandom';
 import {
-  ComponentType,
-  TeamComponent,
-  HealthComponent,
+  AnimationComponent,
   AttackComponent,
+  AttackLockComponent,
+  ComponentType,
+  HealthComponent,
   MovementComponent,
+  RotationComponent,
+  TeamComponent,
 } from '../components';
-import { GameEvents, createEvent } from '../events';
-import type {
-  ProjectileSpawnedEvent,
-  DamageAppliedEvent,
-  DamageRequestedEvent,
-} from '../events';
-import { networkConfig } from '../config/constants';
-import { isCombatant, hasDeathSequence } from '../interfaces/ICombatant';
+import type {DamageAppliedEvent, DamageRequestedEvent, ProjectileSpawnedEvent,} from '../events';
+import {createEvent, GameEvents} from '../events';
+import {networkConfig} from '../config/constants';
+import type {AnimationSystem} from './AnimationSystem';
 
 /**
  * Combat system configuration for deterministic simulation
@@ -72,6 +71,9 @@ export class CombatSystem {
     | ((entityId: number, target: Vector3) => void)
     | null = null;
 
+  // AnimationSystem reference for triggering animations
+  private animationSystem: AnimationSystem | null = null;
+
   constructor(
     engine: Engine,
     entityManager: EntityManager,
@@ -94,6 +96,13 @@ export class CombatSystem {
     callback: (entityId: number, target: Vector3) => void
   ): void {
     this.moveUnitCallback = callback;
+  }
+
+  /**
+   * Set the AnimationSystem reference for triggering animations
+   */
+  public setAnimationSystem(animationSystem: AnimationSystem): void {
+    this.animationSystem = animationSystem;
   }
 
   /**
@@ -188,8 +197,9 @@ export class CombatSystem {
       );
       if (health?.isDestroyed) continue;
 
-      // Skip dying entities - they shouldn't attack or be processed
-      if (hasDeathSequence(attacker) && attacker.isDying) continue;
+      // Skip dying entities - check via AnimationComponent
+      const animComp = attacker.getComponent<AnimationComponent>(ComponentType.Animation);
+      if (animComp?.isDying) continue;
 
       const attack = attacker.getComponent<AttackComponent>(
         ComponentType.Attack
@@ -201,9 +211,10 @@ export class CombatSystem {
       // Update attack cooldown with fixed timestep
       attack.updateCooldown(deltaTime);
 
-      // Update attack lock timer for combatants (deterministic)
-      if (isCombatant(attacker)) {
-        attacker.updateAttackLock(deltaTime);
+      // Update attack lock timer (deterministic)
+      const attackLock = attacker.getComponent<AttackLockComponent>(ComponentType.AttackLock);
+      if (attackLock) {
+        attackLock.update(deltaTime);
       }
 
       // Check for aggro target first (unit that attacked us)
@@ -253,15 +264,16 @@ export class CombatSystem {
           attacker.setTargetPosition(target.position);
         }
 
-        // Check if combatant is currently attacking
-        const combatant = isCombatant(attacker) ? attacker : null;
-        const isAttackingCombatant = combatant?.isCurrentlyAttacking ?? false;
+        // Check if entity is currently attack-locked (via component)
+        const attackLockComp = attacker.getComponent<AttackLockComponent>(ComponentType.AttackLock);
+        const rotationComp = attacker.getComponent<RotationComponent>(ComponentType.Rotation);
+        const isAttackLocked = attackLockComp?.isLocked ?? false;
 
-        // Orient combatant units toward their target only when:
+        // Orient units toward their target only when:
         // 1. It's a new target, OR
         // 2. Not currently in attack animation (to avoid jitter during attack)
-        if (combatant && !isAttackingCombatant) {
-          combatant.orientToTarget(target.position);
+        if (rotationComp && this.animationSystem && !isAttackLocked) {
+          this.animationSystem.orientToTarget(attacker, target.position);
         }
 
         if (inAttackRange) {
@@ -271,19 +283,19 @@ export class CombatSystem {
           }
 
           // Attack if ready
-          // For combatants: only attack if not already in attack animation
+          // For animated units: only attack if not already in attack animation
           // (animation length is the natural cooldown for melee)
           // For towers: also check if turret is aimed
           const canFire = isTower ? attacker.isAimedAtTarget : true;
-          const combatantCanAttack = !combatant || !isAttackingCombatant;
+          const canAttackAnim = !attackLockComp || !isAttackLocked;
 
-          if (attack.canAttack() && canFire && combatantCanAttack) {
+          if (attack.canAttack() && canFire && canAttackAnim) {
             this.performAttack(attacker, target);
           }
         } else if (movement) {
           // Target detected but out of attack range - move toward target
           // But don't move if we're currently in an attack animation
-          if (isAttackingCombatant) {
+          if (isAttackLocked) {
             // Don't move while attacking, but keep facing target
             if (movement.isMoving) {
               movement.stop();
@@ -307,9 +319,10 @@ export class CombatSystem {
             // Move towards the target (use callback for lockstep)
             this.requestMove(attacker.id, target.position.clone());
 
-            // Notify combatant that movement started for animation sync
-            if (combatant) {
-              combatant.notifyMovementStarted();
+            // Notify via AnimationSystem that movement started for animation sync
+            const animCompMove = attacker.getComponent<AnimationComponent>(ComponentType.Animation);
+            if (animCompMove && this.animationSystem) {
+              this.animationSystem.notifyMovementStarted(animCompMove);
             }
           }
         }
@@ -330,11 +343,11 @@ export class CombatSystem {
           aggroTarget.position
         );
 
-        // Check if combatant is currently attacking
-        const combatant = isCombatant(attacker) ? attacker : null;
-        const isAttackingCombatant = combatant?.isCurrentlyAttacking ?? false;
+        // Check if entity is currently attack-locked (via component)
+        const attackLockAggro = attacker.getComponent<AttackLockComponent>(ComponentType.AttackLock);
+        const isAttackLockedAggro = attackLockAggro?.isLocked ?? false;
 
-        if (distance > attack.range && !isAttackingCombatant) {
+        if (distance > attack.range && !isAttackLockedAggro) {
           // Store original target if not already stored
           if (!this.storedMoveTargets.has(attacker.id) && movement.isMoving) {
             this.storedMoveTargets.set(
@@ -352,11 +365,12 @@ export class CombatSystem {
           // Move towards the aggro target (use callback for lockstep)
           this.requestMove(attacker.id, aggroTarget.position.clone());
 
-          // Notify combatant that movement started for animation sync
-          if (combatant) {
-            combatant.notifyMovementStarted();
+          // Notify via AnimationSystem that movement started for animation sync
+          const animCompAggro = attacker.getComponent<AnimationComponent>(ComponentType.Animation);
+          if (animCompAggro && this.animationSystem) {
+            this.animationSystem.notifyMovementStarted(animCompAggro);
           }
-        } else if (isAttackingCombatant && movement.isMoving) {
+        } else if (isAttackLockedAggro && movement.isMoving) {
           // Stop movement if attacking
           movement.stop();
         }
@@ -371,26 +385,27 @@ export class CombatSystem {
             attacker.setTargetPosition(null);
           }
 
-          // End combat mode for combatant so it can transition to idle/run
-          if (isCombatant(attacker)) {
-            attacker.endCombat();
+          // End combat mode for animated units so they can transition to idle/run
+          const animCompEnd = attacker.getComponent<AnimationComponent>(ComponentType.Animation);
+          if (animCompEnd && this.animationSystem) {
+            this.animationSystem.endCombat(animCompEnd);
           }
         }
 
         // Try to resume movement to original destination
         const storedTarget = this.storedMoveTargets.get(attacker.id);
-        // Don't resume movement if combatant is still in attack animation
-        const combatant = isCombatant(attacker) ? attacker : null;
-        const isAttackingCombatant = combatant?.isCurrentlyAttacking ?? false;
+        // Don't resume movement if entity is still attack-locked
+        const attackLockResume = attacker.getComponent<AttackLockComponent>(ComponentType.AttackLock);
+        const isAttackLockedResume = attackLockResume?.isLocked ?? false;
 
-        if (storedTarget && movement && !isAttackingCombatant) {
+        if (storedTarget && movement && !isAttackLockedResume) {
           // Resume movement (use callback for lockstep)
           this.requestMove(attacker.id, storedTarget);
           this.storedMoveTargets.delete(attacker.id);
 
-          // Orient combatant along movement direction
-          if (combatant) {
-            combatant.orientToMovementDirection();
+          // Orient entity along movement direction via AnimationSystem
+          if (this.animationSystem) {
+            this.animationSystem.orientToMovementDirection(attacker);
           }
         }
       }
@@ -439,8 +454,9 @@ export class CombatSystem {
 
     // If we have an aggro target in attack range, prioritize it (unless dying)
     if (aggroTarget) {
-      // Skip dying entities as aggro targets
-      const isDying = hasDeathSequence(aggroTarget) && aggroTarget.isDying;
+      // Skip dying entities as aggro targets (check via AnimationComponent)
+      const aggroAnimComp = aggroTarget.getComponent<AnimationComponent>(ComponentType.Animation);
+      const isDying = aggroAnimComp?.isDying ?? false;
       const aggroHealth = aggroTarget.getComponent<HealthComponent>(
         ComponentType.Health
       );
@@ -466,8 +482,9 @@ export class CombatSystem {
       );
       if (health?.isDestroyed) continue;
 
-      // Skip dying entities as potential targets
-      if (hasDeathSequence(potential) && potential.isDying) continue;
+      // Skip dying entities as potential targets (check via AnimationComponent)
+      const potentialAnimComp = potential.getComponent<AnimationComponent>(ComponentType.Animation);
+      if (potentialAnimComp?.isDying) continue;
 
       const targetTeam = potential.getComponent<TeamComponent>(
         ComponentType.Team
@@ -556,11 +573,17 @@ export class CombatSystem {
       sourceId: attacker.id,
     });
 
-    // For combatants: trigger attack animation (purely visual, no damage callback)
-    if (isCombatant(attacker)) {
+    // Trigger attack animation via AnimationSystem (purely visual)
+    const animComp = attacker.getComponent<AnimationComponent>(ComponentType.Animation);
+    const attackLockComp = attacker.getComponent<AttackLockComponent>(ComponentType.AttackLock);
+
+    if (animComp && this.animationSystem) {
       // Start attack animation without damage callback - damage already applied above
-      attacker.playAttackAnimation();
-      attacker.startAttackLock(); // Deterministic movement lock
+      this.animationSystem.playAttackAnimation(animComp);
+    }
+
+    if (attackLockComp) {
+      attackLockComp.startLock(); // Deterministic movement lock
     }
   }
 
@@ -580,9 +603,8 @@ export class CombatSystem {
 
     if (attacker instanceof Tower) {
       // Use barrel tip position for towers, but calculate direction to target
-      const tower = attacker;
-      origin = tower.getBarrelTipPosition();
-      // Calculate direction from barrel tip to target (not just horizontal barrel direction)
+      origin = attacker.getBarrelTipPosition();
+      // Calculate the direction from barrel tip to target (not just horizontal barrel direction)
       direction = target.position.subtract(origin).normalize();
     } else {
       // Standard attack origin for other entities
