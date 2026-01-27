@@ -55,14 +55,16 @@ export class LobbyScene {
    * Setup UI event listeners
    */
   private setupEventListeners(): void {
-    this.connectButton.addEventListener('click', () => this.handleConnect());
+    this.connectButton.addEventListener('click', () => {
+      void this.handleConnect();
+    });
 
     // Support both keyboard enter and mobile users
     this.usernameInput.addEventListener('keypress', (e) => {
       if (e.key === 'Enter') {
         // Blur input to close mobile keyboard
         this.usernameInput.blur();
-        this.handleConnect();
+        void this.handleConnect();
       }
     });
 

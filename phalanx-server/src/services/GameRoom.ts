@@ -10,6 +10,17 @@ import type {
 } from '../types/index.js';
 
 /**
+ * Socket data interface for type safety
+ */
+interface SocketData {
+  matchId?: string;
+  playerId?: string;
+  teamId?: number;
+  teammates?: string[];
+  opponents?: string[];
+}
+
+/**
  * Game Room
  * Handles a single match with tick synchronization and command broadcasting
  */
@@ -101,16 +112,17 @@ export class GameRoom {
         const socket = this.io.sockets.sockets.get(player.socketId);
         if (socket) {
           // Assign match data to socket
-          socket.data.matchId = this.id;
-          socket.data.playerId = player.playerId;
-          socket.data.teamId = teamId;
-          socket.data.teammates = teammateIds.filter(
+          const socketData = socket.data as SocketData;
+          socketData.matchId = this.id;
+          socketData.playerId = player.playerId;
+          socketData.teamId = teamId;
+          socketData.teammates = teammateIds.filter(
             (id) => id !== player.playerId
           );
-          socket.data.opponents = opponentIds;
+          socketData.opponents = opponentIds;
 
           // Join the room
-          socket.join(this.roomId);
+          void socket.join(this.roomId);
         }
       });
     });
@@ -671,9 +683,10 @@ export class GameRoom {
     // Join the room
     const socket = this.io.sockets.sockets.get(socketId);
     if (socket) {
-      socket.join(this.roomId);
-      socket.data.matchId = this.id;
-      socket.data.playerId = playerId;
+      void socket.join(this.roomId);
+      const socketData = socket.data as SocketData;
+      socketData.matchId = this.id;
+      socketData.playerId = playerId;
 
       // Send reconnect-state with command history (NET-2)
       const fromTick = Math.max(

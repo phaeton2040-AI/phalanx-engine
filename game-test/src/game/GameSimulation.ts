@@ -4,7 +4,7 @@
 
 import { Unit } from './Unit';
 import { FIXED_TIMESTEP } from './constants';
-import type { GameCommand, MoveCommand } from './types';
+import type { GameCommand } from './types';
 
 export class GameSimulation {
   private units: Map<string, Unit> = new Map();
@@ -52,13 +52,15 @@ export class GameSimulation {
    */
   private processCommand(command: GameCommand): void {
     if (command.type === 'move') {
-      const moveCmd = command as MoveCommand;
+      const moveCmd = command;
       const playerId = moveCmd.playerId;
       if (playerId) {
         const unit = this.units.get(playerId);
         if (unit) {
           // Support both direct properties and nested data object
-          const data = moveCmd.data ?? (moveCmd as unknown as { targetX?: number; targetZ?: number });
+          const data =
+            moveCmd.data ??
+            (moveCmd as unknown as { targetX?: number; targetZ?: number });
           const targetX = data.targetX ?? 0;
           const targetZ = data.targetZ ?? 0;
           unit.setTarget(targetX, targetZ);

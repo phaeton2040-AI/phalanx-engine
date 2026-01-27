@@ -1,9 +1,9 @@
-import {Engine, Vector3} from '@babylonjs/core';
-import {Entity} from '../entities/Entity';
-import {Tower} from '../entities/Tower';
-import {EntityManager} from '../core/EntityManager';
-import {EventBus} from '../core/EventBus';
-import {GameRandom} from '../core/GameRandom';
+import { Engine, Vector3 } from '@babylonjs/core';
+import { Entity } from '../entities/Entity';
+import { Tower } from '../entities/Tower';
+import { EntityManager } from '../core/EntityManager';
+import { EventBus } from '../core/EventBus';
+import { GameRandom } from '../core/GameRandom';
 import {
   AnimationComponent,
   AttackComponent,
@@ -14,10 +14,14 @@ import {
   RotationComponent,
   TeamComponent,
 } from '../components';
-import type {DamageAppliedEvent, DamageRequestedEvent, ProjectileSpawnedEvent,} from '../events';
-import {createEvent, GameEvents} from '../events';
-import {networkConfig} from '../config/constants';
-import type {AnimationSystem} from './AnimationSystem';
+import type {
+  DamageAppliedEvent,
+  DamageRequestedEvent,
+  ProjectileSpawnedEvent,
+} from '../events';
+import { createEvent, GameEvents } from '../events';
+import { networkConfig } from '../config/constants';
+import type { AnimationSystem } from './AnimationSystem';
 
 /**
  * Combat system configuration for deterministic simulation
@@ -198,7 +202,9 @@ export class CombatSystem {
       if (health?.isDestroyed) continue;
 
       // Skip dying entities - check via AnimationComponent
-      const animComp = attacker.getComponent<AnimationComponent>(ComponentType.Animation);
+      const animComp = attacker.getComponent<AnimationComponent>(
+        ComponentType.Animation
+      );
       if (animComp?.isDying) continue;
 
       const attack = attacker.getComponent<AttackComponent>(
@@ -212,7 +218,9 @@ export class CombatSystem {
       attack.updateCooldown(deltaTime);
 
       // Update attack lock timer (deterministic)
-      const attackLock = attacker.getComponent<AttackLockComponent>(ComponentType.AttackLock);
+      const attackLock = attacker.getComponent<AttackLockComponent>(
+        ComponentType.AttackLock
+      );
       if (attackLock) {
         attackLock.update(deltaTime);
       }
@@ -265,8 +273,12 @@ export class CombatSystem {
         }
 
         // Check if entity is currently attack-locked (via component)
-        const attackLockComp = attacker.getComponent<AttackLockComponent>(ComponentType.AttackLock);
-        const rotationComp = attacker.getComponent<RotationComponent>(ComponentType.Rotation);
+        const attackLockComp = attacker.getComponent<AttackLockComponent>(
+          ComponentType.AttackLock
+        );
+        const rotationComp = attacker.getComponent<RotationComponent>(
+          ComponentType.Rotation
+        );
         const isAttackLocked = attackLockComp?.isLocked ?? false;
 
         // Orient units toward their target only when:
@@ -320,7 +332,9 @@ export class CombatSystem {
             this.requestMove(attacker.id, target.position.clone());
 
             // Notify via AnimationSystem that movement started for animation sync
-            const animCompMove = attacker.getComponent<AnimationComponent>(ComponentType.Animation);
+            const animCompMove = attacker.getComponent<AnimationComponent>(
+              ComponentType.Animation
+            );
             if (animCompMove && this.animationSystem) {
               this.animationSystem.notifyMovementStarted(animCompMove);
             }
@@ -344,7 +358,9 @@ export class CombatSystem {
         );
 
         // Check if entity is currently attack-locked (via component)
-        const attackLockAggro = attacker.getComponent<AttackLockComponent>(ComponentType.AttackLock);
+        const attackLockAggro = attacker.getComponent<AttackLockComponent>(
+          ComponentType.AttackLock
+        );
         const isAttackLockedAggro = attackLockAggro?.isLocked ?? false;
 
         if (distance > attack.range && !isAttackLockedAggro) {
@@ -366,7 +382,9 @@ export class CombatSystem {
           this.requestMove(attacker.id, aggroTarget.position.clone());
 
           // Notify via AnimationSystem that movement started for animation sync
-          const animCompAggro = attacker.getComponent<AnimationComponent>(ComponentType.Animation);
+          const animCompAggro = attacker.getComponent<AnimationComponent>(
+            ComponentType.Animation
+          );
           if (animCompAggro && this.animationSystem) {
             this.animationSystem.notifyMovementStarted(animCompAggro);
           }
@@ -386,7 +404,9 @@ export class CombatSystem {
           }
 
           // End combat mode for animated units so they can transition to idle/run
-          const animCompEnd = attacker.getComponent<AnimationComponent>(ComponentType.Animation);
+          const animCompEnd = attacker.getComponent<AnimationComponent>(
+            ComponentType.Animation
+          );
           if (animCompEnd && this.animationSystem) {
             this.animationSystem.endCombat(animCompEnd);
           }
@@ -395,7 +415,9 @@ export class CombatSystem {
         // Try to resume movement to original destination
         const storedTarget = this.storedMoveTargets.get(attacker.id);
         // Don't resume movement if entity is still attack-locked
-        const attackLockResume = attacker.getComponent<AttackLockComponent>(ComponentType.AttackLock);
+        const attackLockResume = attacker.getComponent<AttackLockComponent>(
+          ComponentType.AttackLock
+        );
         const isAttackLockedResume = attackLockResume?.isLocked ?? false;
 
         if (storedTarget && movement && !isAttackLockedResume) {
@@ -455,7 +477,9 @@ export class CombatSystem {
     // If we have an aggro target in attack range, prioritize it (unless dying)
     if (aggroTarget) {
       // Skip dying entities as aggro targets (check via AnimationComponent)
-      const aggroAnimComp = aggroTarget.getComponent<AnimationComponent>(ComponentType.Animation);
+      const aggroAnimComp = aggroTarget.getComponent<AnimationComponent>(
+        ComponentType.Animation
+      );
       const isDying = aggroAnimComp?.isDying ?? false;
       const aggroHealth = aggroTarget.getComponent<HealthComponent>(
         ComponentType.Health
@@ -483,7 +507,9 @@ export class CombatSystem {
       if (health?.isDestroyed) continue;
 
       // Skip dying entities as potential targets (check via AnimationComponent)
-      const potentialAnimComp = potential.getComponent<AnimationComponent>(ComponentType.Animation);
+      const potentialAnimComp = potential.getComponent<AnimationComponent>(
+        ComponentType.Animation
+      );
       if (potentialAnimComp?.isDying) continue;
 
       const targetTeam = potential.getComponent<TeamComponent>(
@@ -574,8 +600,12 @@ export class CombatSystem {
     });
 
     // Trigger attack animation via AnimationSystem (purely visual)
-    const animComp = attacker.getComponent<AnimationComponent>(ComponentType.Animation);
-    const attackLockComp = attacker.getComponent<AttackLockComponent>(ComponentType.AttackLock);
+    const animComp = attacker.getComponent<AnimationComponent>(
+      ComponentType.Animation
+    );
+    const attackLockComp = attacker.getComponent<AttackLockComponent>(
+      ComponentType.AttackLock
+    );
 
     if (animComp && this.animationSystem) {
       // Start attack animation without damage callback - damage already applied above

@@ -38,7 +38,9 @@ export class AnimationSystem {
     const entities = this.entityManager.queryEntities(ComponentType.Animation);
 
     for (const entity of entities) {
-      const anim = entity.getComponent<AnimationComponent>(ComponentType.Animation);
+      const anim = entity.getComponent<AnimationComponent>(
+        ComponentType.Animation
+      );
       if (!anim || !anim.isModelLoaded) continue;
 
       this.updateEntityAnimation(anim);
@@ -50,7 +52,11 @@ export class AnimationSystem {
    */
   private updateEntityAnimation(anim: AnimationComponent): void {
     // Skip if dying or dead
-    if (anim.isDying || anim.currentState === AnimationState.Dying || anim.currentState === AnimationState.Dead) {
+    if (
+      anim.isDying ||
+      anim.currentState === AnimationState.Dying ||
+      anim.currentState === AnimationState.Dead
+    ) {
       return;
     }
 
@@ -136,7 +142,8 @@ export class AnimationSystem {
    */
   public playAttackAnimation(anim: AnimationComponent): boolean {
     if (!anim.isModelLoaded) return false;
-    if (anim.isDying || anim.currentState === AnimationState.Dying) return false;
+    if (anim.isDying || anim.currentState === AnimationState.Dying)
+      return false;
     if (anim.isAttacking) return false;
 
     // Alternate between attack animations for variety
@@ -180,7 +187,10 @@ export class AnimationSystem {
    * @param anim Animation component
    * @param onComplete Callback when death animation finishes
    */
-  public startDeathSequence(anim: AnimationComponent, onComplete: () => void): void {
+  public startDeathSequence(
+    anim: AnimationComponent,
+    onComplete: () => void
+  ): void {
     if (anim.isDying) return;
 
     anim.isDying = true;
@@ -203,7 +213,10 @@ export class AnimationSystem {
       return;
     }
 
-    if (anim.currentState === AnimationState.Dying || anim.currentState === AnimationState.Dead) {
+    if (
+      anim.currentState === AnimationState.Dying ||
+      anim.currentState === AnimationState.Dead
+    ) {
       return;
     }
 
@@ -310,7 +323,9 @@ export class AnimationSystem {
    * Orient entity to face a target position (sets rotation target)
    */
   public orientToTarget(entity: Entity, targetPosition: Vector3): void {
-    const rotation = entity.getComponent<RotationComponent>(ComponentType.Rotation);
+    const rotation = entity.getComponent<RotationComponent>(
+      ComponentType.Rotation
+    );
     if (!rotation || !rotation.transformNode) return;
 
     // Calculate direction from entity to target
@@ -328,8 +343,12 @@ export class AnimationSystem {
    * Orient entity along its default movement direction and trigger run animation
    */
   public orientToMovementDirection(entity: Entity): void {
-    const rotation = entity.getComponent<RotationComponent>(ComponentType.Rotation);
-    const anim = entity.getComponent<AnimationComponent>(ComponentType.Animation);
+    const rotation = entity.getComponent<RotationComponent>(
+      ComponentType.Rotation
+    );
+    const anim = entity.getComponent<AnimationComponent>(
+      ComponentType.Animation
+    );
 
     if (rotation) {
       rotation.setTargetRotation(rotation.defaultRotationY);

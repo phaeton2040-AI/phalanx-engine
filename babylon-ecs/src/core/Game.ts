@@ -6,7 +6,7 @@ import { LockstepManager } from './LockstepManager';
 import { EntityFactory } from './EntityFactory';
 import { UIManager } from './UIManager';
 import { InputManager } from '../systems/InputManager';
-import { SelectionSystem } from '../systems/SelectionSystem';
+import { SelectionSystem, type ISelectableEntity } from '../systems/SelectionSystem';
 import { MovementSystem } from '../systems/MovementSystem';
 import { PhysicsSystem } from '../systems/PhysicsSystem';
 import { HealthSystem } from '../systems/HealthSystem';
@@ -37,6 +37,8 @@ import type {
   WaveDeploymentEvent,
   FormationModeEnteredEvent,
   FormationPlacementFailedEvent,
+  FormationPlacementRequestedEvent,
+  FormationUnitMoveRequestedEvent,
 } from '../events';
 import type { PhalanxClient, MatchFoundEvent } from 'phalanx-client';
 import type {
@@ -84,7 +86,6 @@ export class Game {
   private rotationSystem: RotationSystem;
   private healthBarSystem!: HealthBarSystem;
   private cameraController!: CameraController;
-  // @ts-ignore - InputManager registers event listeners in constructor
   private inputManager: InputManager;
 
   // Managers
@@ -357,35 +358,41 @@ export class Game {
     });
 
     // Formation placement requests
-    this.eventBus.on(GameEvents.FORMATION_PLACEMENT_REQUESTED, (event: any) => {
-      if (event.playerId === this.matchData.playerId) {
-        const command: NetworkPlaceUnitCommand = {
-          type: 'placeUnit',
-          data: {
-            unitType: event.unitType,
-            gridX: event.gridX,
-            gridZ: event.gridZ,
-          },
-        };
-        this.lockstepManager.queueCommand(command);
+    this.eventBus.on<FormationPlacementRequestedEvent>(
+      GameEvents.FORMATION_PLACEMENT_REQUESTED,
+      (event) => {
+        if (event.playerId === this.matchData.playerId) {
+          const command: NetworkPlaceUnitCommand = {
+            type: 'placeUnit',
+            data: {
+              unitType: event.unitType,
+              gridX: event.gridX,
+              gridZ: event.gridZ,
+            },
+          };
+          this.lockstepManager.queueCommand(command);
+        }
       }
-    });
+    );
 
     // Formation unit move requests (repositioning units on the grid)
-    this.eventBus.on(GameEvents.FORMATION_UNIT_MOVE_REQUESTED, (event: any) => {
-      if (event.playerId === this.matchData.playerId) {
-        const command: NetworkMoveGridUnitCommand = {
-          type: 'moveGridUnit',
-          data: {
-            fromGridX: event.fromGridX,
-            fromGridZ: event.fromGridZ,
-            toGridX: event.toGridX,
-            toGridZ: event.toGridZ,
-          },
-        };
-        this.lockstepManager.queueCommand(command);
+    this.eventBus.on<FormationUnitMoveRequestedEvent>(
+      GameEvents.FORMATION_UNIT_MOVE_REQUESTED,
+      (event) => {
+        if (event.playerId === this.matchData.playerId) {
+          const command: NetworkMoveGridUnitCommand = {
+            type: 'moveGridUnit',
+            data: {
+              fromGridX: event.fromGridX,
+              fromGridZ: event.fromGridZ,
+              toGridX: event.toGridX,
+              toGridZ: event.toGridZ,
+            },
+          };
+          this.lockstepManager.queueCommand(command);
+        }
       }
-    });
+    );
 
     // Formation changes (UI updates)
     this.eventBus.on(GameEvents.FORMATION_UNIT_PLACED, () => {
@@ -479,7 +486,7 @@ export class Game {
    */
   private setupMoveCommandInterceptor(): void {
     this.eventBus.on<MoveRequestedEvent>(GameEvents.MOVE_REQUESTED, (event) => {
-      if ((event as any)._fromNetwork) return;
+      if (event._fromNetwork) return;
 
       const entity = this.entityManager.getEntity(event.entityId);
       if (!entity) return;
@@ -815,8 +822,13 @@ export class Game {
       this.interpolationSystem.unregisterEntity(entity.id);
       this.healthBarSystem.unregisterEntity(entity.id);
 
-      if (typeof (entity as any).canBeSelected === 'function') {
-        this.selectionSystem.unregisterSelectable(entity as any);
+      if (
+        'canBeSelected' in entity &&
+        typeof entity.canBeSelected === 'function'
+      ) {
+        this.selectionSystem.unregisterSelectable(
+          entity as unknown as ISelectableEntity
+        );
       }
 
       entity.dispose();

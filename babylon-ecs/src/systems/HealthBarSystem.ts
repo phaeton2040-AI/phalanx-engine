@@ -1,11 +1,11 @@
-import { Scene } from '@babylonjs/core';
-import { AdvancedDynamicTexture, Rectangle, Control } from '@babylonjs/gui';
-import { EntityManager } from '../core/EntityManager';
-import { EventBus } from '../core/EventBus';
-import { ComponentType, HealthComponent } from '../components';
-import { Entity } from '../entities/Entity';
-import { GameEvents } from '../events';
-import type { DamageAppliedEvent } from '../events';
+import {Scene} from '@babylonjs/core';
+import {AdvancedDynamicTexture, Control, Rectangle} from '@babylonjs/gui';
+import {EntityManager} from '../core/EntityManager';
+import {EventBus} from '../core/EventBus';
+import {ComponentType, HealthComponent} from '../components';
+import {Entity} from '../entities/Entity';
+import type {DamageAppliedEvent, EntityDestroyedEvent, EntityDyingEvent,} from '../events';
+import {GameEvents} from '../events';
 
 interface HealthBar {
   entityId: number;
@@ -68,16 +68,19 @@ export class HealthBarSystem {
 
     // Listen for entity dying to remove health bar immediately (before death animation)
     this.unsubscribers.push(
-      this.eventBus.on(GameEvents.ENTITY_DYING, (event: any) => {
+      this.eventBus.on<EntityDyingEvent>(GameEvents.ENTITY_DYING, (event) => {
         this.removeHealthBar(event.entityId);
       })
     );
 
     // Listen for entity destruction to cleanup health bars
     this.unsubscribers.push(
-      this.eventBus.on(GameEvents.ENTITY_DESTROYED, (event: any) => {
-        this.removeHealthBar(event.entityId);
-      })
+      this.eventBus.on<EntityDestroyedEvent>(
+        GameEvents.ENTITY_DESTROYED,
+        (event) => {
+          this.removeHealthBar(event.entityId);
+        }
+      )
     );
   }
 
@@ -219,8 +222,7 @@ export class HealthBarSystem {
     healthBar: HealthBar,
     healthPercent: number
   ): void {
-    const shouldShow = healthPercent < 1;
-    healthBar.container.isVisible = shouldShow;
+    healthBar.container.isVisible = healthPercent < 1;
   }
 
   /**

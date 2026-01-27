@@ -12,8 +12,11 @@
  * Generic event emitter with type-safe event handling
  * @typeParam TEvents - Interface mapping event names to handler signatures
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export class EventEmitter<TEvents extends { [K in keyof TEvents]: (...args: any[]) => void }> {
+
+export class EventEmitter<
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  TEvents extends { [K in keyof TEvents]: (...args: any[]) => void },
+> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private handlers: Map<keyof TEvents, Set<any>> = new Map();
 
@@ -42,7 +45,7 @@ export class EventEmitter<TEvents extends { [K in keyof TEvents]: (...args: any[
    */
   once<K extends keyof TEvents>(event: K, handler: TEvents[K]): void {
     const wrapper = ((...args: Parameters<TEvents[K]>) => {
-      this.off(event, wrapper as TEvents[K]);
+      this.off(event, wrapper);
       (handler as (...args: Parameters<TEvents[K]>) => void)(...args);
     }) as TEvents[K];
 

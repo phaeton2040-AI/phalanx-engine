@@ -27,8 +27,14 @@ export class RotationSystem {
     const entities = this.entityManager.queryEntities(ComponentType.Rotation);
 
     for (const entity of entities) {
-      const rotation = entity.getComponent<RotationComponent>(ComponentType.Rotation);
-      if (!rotation || !rotation.transformNode || rotation.targetRotationY === null) {
+      const rotation = entity.getComponent<RotationComponent>(
+        ComponentType.Rotation
+      );
+      if (
+        !rotation ||
+        !rotation.transformNode ||
+        rotation.targetRotationY === null
+      ) {
         continue;
       }
 
@@ -39,7 +45,10 @@ export class RotationSystem {
   /**
    * Update rotation interpolation for a single entity
    */
-  private updateEntityRotation(rotation: RotationComponent, deltaTime: number): void {
+  private updateEntityRotation(
+    rotation: RotationComponent,
+    deltaTime: number
+  ): void {
     const transformNode = rotation.transformNode;
     if (!transformNode || rotation.targetRotationY === null) return;
 
@@ -66,7 +75,8 @@ export class RotationSystem {
 
     // Interpolate towards target rotation
     const maxRotation = rotation.rotationSpeed * deltaTime;
-    const rotationStep = Math.sign(diff) * Math.min(Math.abs(diff), maxRotation);
+    const rotationStep =
+      Math.sign(diff) * Math.min(Math.abs(diff), maxRotation);
 
     transformNode.rotation.y = currentRotation + rotationStep;
   }

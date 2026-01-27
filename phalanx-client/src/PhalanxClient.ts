@@ -198,9 +198,8 @@ export class PhalanxClient extends EventEmitter<PhalanxClientEvents> {
 
   /**
    * Destroy the client and clean up all resources
-   * @returns Promise that resolves when cleanup is complete
    */
-  async destroy(): Promise<void> {
+  destroy(): void {
     this.renderLoop.dispose();
     this.disconnect();
     this.removeAllListeners();

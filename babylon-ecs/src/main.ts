@@ -28,7 +28,7 @@ function returnToLobby(): void {
 // Handle game start
 lobbyScene.setOnGameStart(
   (client: PhalanxClient, matchData: MatchFoundEvent) => {
-    console.log('Game starting!', matchData);
+    console.warn('Game starting!', matchData);
 
     const canvas = document.getElementById('app') as HTMLCanvasElement;
 
@@ -40,11 +40,11 @@ lobbyScene.setOnGameStart(
     game = new Game(canvas, client, matchData);
     game.setOnExit(returnToLobby);
 
-    game.initialize().then(() => {
+    void game.initialize().then(() => {
       game?.start();
     });
   }
 );
 
 // Log startup
-console.log('Babylon RTS Demo initialized');
+console.warn('Babylon RTS Demo initialized');

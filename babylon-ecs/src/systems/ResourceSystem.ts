@@ -11,6 +11,8 @@ import type {
   UnitPurchaseCompletedEvent,
   UnitPurchaseFailedEvent,
   TowerDestroyedEvent,
+  AggressionBonusActivatedEvent,
+  AggressionBonusDeactivatedEvent,
 } from '../events';
 
 /**
@@ -100,15 +102,18 @@ export class ResourceSystem {
 
     // Listen for aggression bonus events
     this.unsubscribers.push(
-      this.eventBus.on(GameEvents.AGGRESSION_BONUS_ACTIVATED, (event: any) => {
-        this.setAggressionBonus(event.team, true, event.bonusMultiplier);
-      })
+      this.eventBus.on<AggressionBonusActivatedEvent>(
+        GameEvents.AGGRESSION_BONUS_ACTIVATED,
+        (event) => {
+          this.setAggressionBonus(event.team, true, event.bonusMultiplier);
+        }
+      )
     );
 
     this.unsubscribers.push(
-      this.eventBus.on(
+      this.eventBus.on<AggressionBonusDeactivatedEvent>(
         GameEvents.AGGRESSION_BONUS_DEACTIVATED,
-        (event: any) => {
+        (event) => {
           this.setAggressionBonus(event.team, false);
         }
       )

@@ -1,4 +1,4 @@
-import { Vector3 } from '@babylonjs/core';
+import { Vector3, AbstractMesh } from '@babylonjs/core';
 import type { TeamTag } from '../enums/TeamTag';
 
 /**
@@ -89,6 +89,7 @@ export interface EntityDestroyedEvent extends GameEvent {
 export interface MoveRequestedEvent extends GameEvent {
   entityId: number;
   target: Vector3;
+  _fromNetwork?: boolean;
 }
 
 export interface MoveStartedEvent extends GameEvent {
@@ -118,7 +119,7 @@ export interface DeselectEntityRequestedEvent extends GameEvent {
   entityId: number;
 }
 
-export interface DeselectAllRequestedEvent extends GameEvent {}
+export type DeselectAllRequestedEvent = GameEvent;
 
 export interface EntitySelectedEvent extends GameEvent {
   entityId: number;
@@ -137,12 +138,12 @@ export interface SelectionClearedEvent extends GameEvent {
 // ============================================
 
 export interface LeftClickEvent extends GameEvent {
-  pickedMesh: any;
+  pickedMesh: AbstractMesh | null;
   pickedPoint: Vector3 | null;
 }
 
 export interface RightClickEvent extends GameEvent {
-  pickedMesh: any;
+  pickedMesh: AbstractMesh | null;
   pickedPoint: Vector3 | null;
 }
 
@@ -173,7 +174,7 @@ export interface ShowDestinationMarkerEvent extends GameEvent {
   position: Vector3;
 }
 
-export interface HideDestinationMarkerEvent extends GameEvent {}
+export type HideDestinationMarkerEvent = GameEvent;
 
 // ============================================
 // Resource Events
@@ -264,6 +265,14 @@ export interface TowerDestroyedEvent extends GameEvent {
 // ============================================
 // Formation Events
 // ============================================
+
+export interface FormationPlacementRequestedEvent extends GameEvent {
+  playerId: string;
+  team: TeamTag;
+  unitType: FormationUnitType;
+  gridX: number;
+  gridZ: number;
+}
 
 export interface FormationModeEnteredEvent extends GameEvent {
   playerId: string;
