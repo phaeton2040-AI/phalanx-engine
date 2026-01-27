@@ -1,4 +1,8 @@
-import type { AnimationGroup, TransformNode, AbstractMesh } from '@babylonjs/core';
+import type {
+  AnimationGroup,
+  TransformNode,
+  AbstractMesh,
+} from '@babylonjs/core';
 import type { IComponent } from './Component';
 import { ComponentType } from './Component';
 
@@ -13,7 +17,8 @@ export const AnimationState = {
   Dead: 'dead',
 } as const;
 
-export type AnimationStateType = (typeof AnimationState)[keyof typeof AnimationState];
+export type AnimationStateType =
+  (typeof AnimationState)[keyof typeof AnimationState];
 
 /**
  * Configuration for animation names per unit type
@@ -57,10 +62,7 @@ export class AnimationComponent implements IComponent {
   public isDying: boolean = false;
   public onDeathComplete: (() => void) | null = null;
 
-  constructor(
-    animationNames: AnimationNames,
-    blendSpeed: number = 0.15
-  ) {
+  constructor(animationNames: AnimationNames, blendSpeed: number = 0.15) {
     this.animationNames = animationNames;
     this.animationBlendSpeed = blendSpeed;
   }

@@ -20,10 +20,7 @@ export class RotationComponent implements IComponent {
   // Reference to the transform node to rotate (usually the model root)
   public transformNode: TransformNode | null = null;
 
-  constructor(
-    defaultRotationY: number = 0,
-    rotationSpeed: number = 8.0
-  ) {
+  constructor(defaultRotationY: number = 0, rotationSpeed: number = 8.0) {
     this.defaultRotationY = defaultRotationY;
     this.rotationSpeed = rotationSpeed;
   }

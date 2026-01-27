@@ -1,4 +1,4 @@
-import type { PhalanxConfig, GameModePreset } from '../types/index.js';
+import type { PhalanxConfig } from '../types/index.js';
 import { DEFAULT_CONFIG, GAME_MODES } from './defaults.js';
 
 /**

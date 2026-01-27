@@ -1,5 +1,9 @@
 import { Vector3 } from '@babylonjs/core';
-import type { PhalanxClient, PlayerCommand, CommandsBatch } from 'phalanx-client';
+import type {
+  PhalanxClient,
+  PlayerCommand,
+  CommandsBatch,
+} from 'phalanx-client';
 import type { EventBus } from './EventBus';
 import type { MovementSystem } from '../systems/MovementSystem';
 import type { PhysicsSystem } from '../systems/PhysicsSystem';
@@ -145,8 +149,11 @@ export class LockstepManager {
   /**
    * Extract playerId from command, logging a warning if missing
    */
-  private getCommandPlayerId(cmd: PlayerCommand, commandType: string): string | null {
-    const playerId = (cmd as any).playerId as string | undefined;
+  private getCommandPlayerId(
+    cmd: PlayerCommand,
+    commandType: string
+  ): string | null {
+    const playerId = cmd.playerId;
     if (!playerId) {
       console.warn(
         `[Lockstep] ${commandType} command missing playerId:`,
@@ -199,7 +206,14 @@ export class LockstepManager {
       `[Lockstep] Executing placeUnit for player ${playerId}: ${unitType} at (${gridX}, ${gridZ})`
     );
 
-    if (this.systems.formationGridSystem.placeUnit(playerId, gridX, gridZ, unitType)) {
+    if (
+      this.systems.formationGridSystem.placeUnit(
+        playerId,
+        gridX,
+        gridZ,
+        unitType
+      )
+    ) {
       const team = this.getTeamForPlayer(playerId);
 
       this.systems.eventBus.emit(GameEvents.UNIT_PURCHASE_REQUESTED, {
@@ -221,7 +235,8 @@ export class LockstepManager {
 
     console.log(`[Lockstep] Executing deployUnits for player ${playerId}`);
 
-    const unitCount = this.systems.formationGridSystem.commitFormation(playerId);
+    const unitCount =
+      this.systems.formationGridSystem.commitFormation(playerId);
 
     if (playerId === this.callbacks.getLocalPlayerId()) {
       if (unitCount > 0) {

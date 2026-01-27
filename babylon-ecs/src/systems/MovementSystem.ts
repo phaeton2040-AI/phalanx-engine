@@ -23,7 +23,7 @@ import type {
  * not for direct execution (to ensure lockstep synchronization).
  */
 export class MovementSystem {
-  // @ts-ignore
+  // @ts-expect-error - engine stored for future use
   private engine: Engine;
   private entityManager: EntityManager;
   private eventBus: EventBus;

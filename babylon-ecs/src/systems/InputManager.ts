@@ -1,4 +1,9 @@
-import { Scene, PointerEventTypes } from '@babylonjs/core';
+import {
+  Scene,
+  PointerEventTypes,
+  PointerInfo,
+  PickingInfo,
+} from '@babylonjs/core';
 import { EventBus } from '../core/EventBus';
 import type { SelectionSystem } from './SelectionSystem';
 import type { SceneManager } from '../core/SceneManager';
@@ -63,7 +68,7 @@ export class InputManager {
     );
   }
 
-  private handlePointerDown(pointerInfo: any): void {
+  private handlePointerDown(pointerInfo: PointerInfo): void {
     const evt = pointerInfo.event as PointerEvent;
     const pickResult = pointerInfo.pickInfo;
 
@@ -76,7 +81,7 @@ export class InputManager {
     }
   }
 
-  private handleLeftClick(pickResult: any): void {
+  private handleLeftClick(pickResult: PickingInfo): void {
     const pickedMesh = pickResult.pickedMesh;
     const ground = this.sceneManager.getGround();
 

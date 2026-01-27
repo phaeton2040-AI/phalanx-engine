@@ -38,7 +38,11 @@ export default tseslint.config(
       '**/*.js',
       '**/*.cjs',
       '**/*.mjs',
-      '!eslint.config.js',
+      '**/*.d.ts',
+      '**/vite.config.ts',
+      '**/vitest.config.ts',
+      '**/tests/**',
+      'eslint.config.js',
     ],
   }
 );

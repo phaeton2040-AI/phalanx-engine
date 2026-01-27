@@ -1,5 +1,12 @@
-import {Color3, Mesh, MeshBuilder, Scene, StandardMaterial, Vector3,} from '@babylonjs/core';
-import {Entity} from './Entity';
+import {
+  Color3,
+  Mesh,
+  MeshBuilder,
+  Scene,
+  StandardMaterial,
+  Vector3,
+} from '@babylonjs/core';
+import { Entity } from './Entity';
 import {
   AnimationComponent,
   AttackComponent,
@@ -12,8 +19,8 @@ import {
   UnitType,
   UnitTypeComponent,
 } from '../components';
-import {TeamTag} from '../enums/TeamTag';
-import {AssetManager} from '../core/AssetManager';
+import { TeamTag } from '../enums/TeamTag';
+import { AssetManager } from '../core/AssetManager';
 
 /**
  * Animation names for the Mutant model
@@ -179,7 +186,8 @@ export class MutantUnit extends Entity {
     instance.rootNode.rotationQuaternion = null;
 
     // Rotate the model root to face the correct direction based on team
-    instance.rootNode.rotation.y = this._team === TeamTag.Team1 ? Math.PI / 2 : -Math.PI / 2;
+    instance.rootNode.rotation.y =
+      this._team === TeamTag.Team1 ? Math.PI / 2 : -Math.PI / 2;
 
     // Hide placeholder visual but keep it for physics/position tracking
     this.placeholderMesh.visibility = 0;
@@ -314,7 +322,9 @@ export class MutantUnit extends Entity {
    * Reads from AttackLockComponent
    */
   public get isCurrentlyAttacking(): boolean {
-    const attackLock = this.getComponent<AttackLockComponent>(ComponentType.AttackLock);
+    const attackLock = this.getComponent<AttackLockComponent>(
+      ComponentType.AttackLock
+    );
     return attackLock?.isLocked ?? false;
   }
 
@@ -333,7 +343,9 @@ export class MutantUnit extends Entity {
     }
 
     // Clear animation component data
-    const animComponent = this.getComponent<AnimationComponent>(ComponentType.Animation);
+    const animComponent = this.getComponent<AnimationComponent>(
+      ComponentType.Animation
+    );
     if (animComponent) {
       animComponent.clear();
     }
@@ -343,7 +355,6 @@ export class MutantUnit extends Entity {
       this.modelDisposeFunc();
       this.modelDisposeFunc = null;
     }
-
 
     // Dispose placeholder
     this.placeholderMesh.dispose();

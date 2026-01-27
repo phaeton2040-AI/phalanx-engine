@@ -1,6 +1,11 @@
 import { EntityManager } from '../core/EntityManager';
 import { EventBus } from '../core/EventBus';
-import { ComponentType, HealthComponent, AnimationComponent, MovementComponent } from '../components';
+import {
+  ComponentType,
+  HealthComponent,
+  AnimationComponent,
+  MovementComponent,
+} from '../components';
 import { Entity } from '../entities/Entity';
 import { GameEvents, createEvent } from '../events';
 import type {
@@ -77,7 +82,9 @@ export class HealthSystem {
     const wasDestroyed = health.takeDamage(amount);
 
     // Show blood effect via AnimationSystem if available
-    const animComp = entity.getComponent<AnimationComponent>(ComponentType.Animation);
+    const animComp = entity.getComponent<AnimationComponent>(
+      ComponentType.Animation
+    );
     if (animComp && this.animationSystem) {
       this.animationSystem.showBloodEffect(entity);
     }
@@ -96,7 +103,9 @@ export class HealthSystem {
       // Handle death differently for entities with AnimationComponent
       if (animComp && this.animationSystem) {
         // Stop any ongoing movement immediately
-        const movement = entity.getComponent<MovementComponent>(ComponentType.Movement);
+        const movement = entity.getComponent<MovementComponent>(
+          ComponentType.Movement
+        );
         if (movement) {
           movement.stop();
         }

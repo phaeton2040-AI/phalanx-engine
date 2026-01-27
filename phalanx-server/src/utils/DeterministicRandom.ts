@@ -137,7 +137,9 @@ export class DeterministicRandom {
    * Uses crypto module for secure random seed generation
    */
   static generateSeed(): number {
-    const crypto = require('crypto');
+    // Use dynamic import to avoid issues in environments without crypto
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const crypto = require('crypto') as typeof import('crypto');
     return crypto.randomBytes(4).readUInt32BE();
   }
 

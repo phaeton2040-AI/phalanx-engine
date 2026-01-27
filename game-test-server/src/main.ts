@@ -73,17 +73,15 @@ async function main() {
   }
 
   // Handle shutdown
-  process.on('SIGINT', async () => {
-    console.log('\nShutting down...');
-    await phalanx.stop();
-    process.exit(0);
+  process.on('SIGINT', () => {
+    console.warn('\nShutting down...');
+    void phalanx.stop().then(() => process.exit(0));
   });
 
-  process.on('SIGTERM', async () => {
-    console.log('\nShutting down...');
-    await phalanx.stop();
-    process.exit(0);
+  process.on('SIGTERM', () => {
+    console.warn('\nShutting down...');
+    void phalanx.stop().then(() => process.exit(0));
   });
 }
 
-main();
+void main();
