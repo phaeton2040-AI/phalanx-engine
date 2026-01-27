@@ -1,39 +1,28 @@
+import {Color3, Mesh, MeshBuilder, Scene, StandardMaterial, Vector3,} from '@babylonjs/core';
+import {Entity} from './Entity';
 import {
-  Scene,
-  Vector3,
-  MeshBuilder,
-  StandardMaterial,
-  Color3,
-  Mesh,
-  AnimationGroup,
-  TransformNode,
-  AbstractMesh,
-} from '@babylonjs/core';
-import { Entity } from './Entity';
-import {
-  ComponentType,
-  TeamComponent,
-  HealthComponent,
+  AnimationComponent,
   AttackComponent,
+  AttackLockComponent,
+  ComponentType,
+  HealthComponent,
   MovementComponent,
-  UnitTypeComponent,
+  RotationComponent,
+  TeamComponent,
   UnitType,
+  UnitTypeComponent,
 } from '../components';
-import { TeamTag } from '../enums/TeamTag';
-import { AssetManager } from '../core/AssetManager';
-import { BloodEffect } from '../effects/BloodEffect';
-import type { IPhysicsIgnorable } from '../interfaces';
-import type { ICombatant, IDeathSequence, IAnimated } from '../interfaces';
+import {TeamTag} from '../enums/TeamTag';
+import {AssetManager} from '../core/AssetManager';
 
 /**
  * Animation names for the Mutant model
  */
 const MutantAnimations = {
-  Idle: 'Mutant Idle 2_6',
-  Run: 'Mutant Run_5',
-  Death: 'Mutant Dying_3',
-  Attack1: 'Standing Melee Attack Backhand_2',
-  Attack2: 'Mutant Swiping_4',
+  idle: 'Mutant Idle 2_6',
+  run: 'Mutant Run_5',
+  death: 'Mutant Dying_3',
+  attacks: ['Standing Melee Attack Backhand_2', 'Mutant Swiping_4'],
 } as const;
 
 export interface MutantUnitConfig {
@@ -49,78 +38,30 @@ export interface MutantUnitConfig {
 }
 
 /**
- * Animation state for the Mutant unit
- */
-const MutantAnimationState = {
-  Idle: 'idle',
-  Running: 'running',
-  Attacking: 'attacking',
-  Dying: 'dying',
-  Dead: 'dead',
-} as const;
-
-type MutantAnimationState =
-  (typeof MutantAnimationState)[keyof typeof MutantAnimationState];
-
-/**
- * MutantUnit entity - A melee combat unit with animated model
+ * MutantUnit entity - A thin ECS entity for a melee combat unit
  *
- * Features:
- * - GLB model with multiple animations (idle, run, attack, death)
- * - Large detection radius, small attack radius
- * - Two random attack animations
- * - Blood particle effect on damage
- * - Smooth animation transitions
+ * Following ECS architecture:
+ * - Entity is a container for components and mesh references
+ * - All animation/combat/rotation logic is handled by systems
+ * - Components store the data, systems process it
  *
- * Implements:
- * - IPhysicsIgnorable: Physics system ignores dying units
- * - ICombatant: Combat animation and state management
- * - IDeathSequence: Death animation handling
- * - IAnimated: Per-frame animation updates
+ * Components:
+ * - TeamComponent: Team affiliation
+ * - HealthComponent: Health points
+ * - AttackComponent: Attack stats (range, damage, cooldown)
+ * - MovementComponent: Movement speed and target
+ * - UnitTypeComponent: Unit type identifier
+ * - AnimationComponent: Animation state and model references
+ * - RotationComponent: Rotation interpolation state
+ * - AttackLockComponent: Deterministic attack lock timing
  */
-export class MutantUnit
-  extends Entity
-  implements IPhysicsIgnorable, ICombatant, IDeathSequence, IAnimated
-{
+export class MutantUnit extends Entity {
   private selectionIndicator: Mesh;
   private rangeIndicator: Mesh | null = null;
   private _isSelected: boolean = false;
   private _debug: boolean;
   private _color: Color3;
   private _team: TeamTag;
-
-  // Model and animations
-  private modelRoot: TransformNode | null = null;
-  private modelMeshes: AbstractMesh[] = [];
-  private animationGroups: AnimationGroup[] = [];
-  private currentAnimState: MutantAnimationState = MutantAnimationState.Idle;
-  private isModelLoaded: boolean = false;
-
-  // Attack state (visual animation)
-  private isAttacking: boolean = false;
-  private lastAttackAnimIndex: number = -1; // Track last attack anim to alternate
-
-  // Deterministic attack lock timer (for simulation - prevents movement during attack)
-  // This is separate from visual animation to ensure determinism across clients
-  private attackLockTimer: number = 0;
-  private readonly attackLockDuration: number = 0.8; // Seconds to lock movement after attack starts
-
-  // Combat state - when true, chain attacks without going to idle
-  private _isInCombat: boolean = false;
-
-  // Death sequence state
-  private _isDying: boolean = false;
-  private onDeathAnimationComplete: (() => void) | null = null;
-
-  // Animation sync flag - set when movement starts to force run animation
-  private _shouldForceRunAnimation: boolean = false;
-
-  // Rotation interpolation
-  private targetRotationY: number | null = null;
-  private readonly rotationSpeed: number = 8.0; // Radians per second
-
-  // Animation blending
-  private readonly animationBlendSpeed: number = 0.15; // Blend weight per frame (0-1)
 
   // Placeholder mesh while model loads
   private placeholderMesh: Mesh;
@@ -149,6 +90,10 @@ export class MutantUnit
     // Sync simulation position with mesh position
     this.syncSimulationPosition();
 
+    // Calculate default rotation based on team
+    const defaultRotationY =
+      this._team === TeamTag.Team1 ? Math.PI / 2 : -Math.PI / 2;
+
     // Add components - melee unit with big detection, small attack range
     this.addComponent(new TeamComponent(this._team));
     this.addComponent(new HealthComponent(config.health ?? 50));
@@ -163,6 +108,11 @@ export class MutantUnit
     );
     this.addComponent(new MovementComponent(config.moveSpeed ?? 8));
     this.addComponent(new UnitTypeComponent(UnitType.Mutant));
+
+    // Add animation-related components
+    this.addComponent(new AnimationComponent(MutantAnimations, 0.15));
+    this.addComponent(new RotationComponent(defaultRotationY, 8.0));
+    this.addComponent(new AttackLockComponent(0.8));
 
     if (this._debug) {
       this.createRangeIndicator();
@@ -212,40 +162,30 @@ export class MutantUnit
       return;
     }
 
-    // Store the model data
-    this.modelRoot = instance.rootNode;
-    this.modelMeshes = instance.meshes;
-    this.animationGroups = instance.animationGroups;
+    // Store dispose function
     this.modelDisposeFunc = instance.dispose;
 
     // Parent the model root directly to the placeholder mesh
-    this.modelRoot.parent = this.placeholderMesh;
+    instance.rootNode.parent = this.placeholderMesh;
 
     // Reset local position (relative to parent)
-    this.modelRoot.position = Vector3.Zero();
+    instance.rootNode.position = Vector3.Zero();
 
     // Scale the model appropriately for 2x2 grid size
-    this.modelRoot.scaling = new Vector3(0.06, 0.06, 0.06);
+    instance.rootNode.scaling = new Vector3(0.06, 0.06, 0.06);
 
     // GLB files use rotationQuaternion which overrides rotation (Euler angles)
     // We need to clear it to use rotation.y
-    this.modelRoot.rotationQuaternion = null;
+    instance.rootNode.rotationQuaternion = null;
 
     // Rotate the model root to face the correct direction based on team
-    // The model faces along Z axis by default, but units move along X axis
-    // Team1 faces +X (towards enemy on right) - rotate -90 degrees
-    // Team2 faces -X (towards enemy on left) - rotate +90 degrees
-    if (this._team === TeamTag.Team1) {
-      this.modelRoot.rotation.y = Math.PI / 2; // Face +X
-    } else {
-      this.modelRoot.rotation.y = -Math.PI / 2; // Face -X
-    }
+    instance.rootNode.rotation.y = this._team === TeamTag.Team1 ? Math.PI / 2 : -Math.PI / 2;
 
     // Hide placeholder visual but keep it for physics/position tracking
     this.placeholderMesh.visibility = 0;
 
     // Make meshes pickable and store entity reference
-    for (const m of this.modelMeshes) {
+    for (const m of instance.meshes) {
       m.isPickable = true;
       // Store reference to parent entity for selection
       (m as unknown as { entityRef: MutantUnit }).entityRef = this;
@@ -255,458 +195,28 @@ export class MutantUnit
     this.selectionIndicator.parent = this.placeholderMesh;
     this.selectionIndicator.position.y = 0.1;
 
-    this.isModelLoaded = true;
-
-    // Start idle animation
-    this.playIdleAnimation();
-  }
-
-  /**
-   * Get animation group by name
-   */
-  private getAnimation(name: string): AnimationGroup | undefined {
-    return this.animationGroups.find((ag) => ag.name.includes(name));
-  }
-
-  /**
-   * Play idle animation with crossfade
-   */
-  public playIdleAnimation(): void {
-    if (!this.isModelLoaded) return;
-    if (this._isDying || this.currentAnimState === MutantAnimationState.Dying)
-      return;
-    if (this.currentAnimState === MutantAnimationState.Idle) return;
-
-    const anim = this.getAnimation(MutantAnimations.Idle);
-    if (anim) {
-      this.crossFadeToAnimation(anim, true, 1.0);
-      this.currentAnimState = MutantAnimationState.Idle;
-    }
-  }
-
-  /**
-   * Play run animation with crossfade
-   */
-  public playRunAnimation(): void {
-    if (!this.isModelLoaded) return;
-    if (this._isDying || this.currentAnimState === MutantAnimationState.Dying)
-      return;
-    if (this.currentAnimState === MutantAnimationState.Running) return;
-    if (this.isAttacking) return; // Don't interrupt attack animation
-
-    const anim = this.getAnimation(MutantAnimations.Run);
-    if (anim) {
-      this.crossFadeToAnimation(anim, true, 1.0);
-      this.currentAnimState = MutantAnimationState.Running;
-    }
-  }
-
-  /**
-   * Play attack animation with crossfade
-   * Chains attack animations when in combat (alternates between Attack1 and Attack2)
-   *
-   * NOTE: This is purely VISUAL. Damage is applied deterministically in CombatSystem
-   * during the simulation tick, not at the animation hit point. This ensures
-   * all clients apply damage at the exact same simulation tick.
-   *
-   * @param _onDealDamage Deprecated - damage is now applied immediately in CombatSystem
-   * @returns true if attack animation started
-   */
-  public playAttackAnimation(_onDealDamage?: () => void): boolean {
-    if (!this.isModelLoaded) return false;
-    if (this._isDying || this.currentAnimState === MutantAnimationState.Dying)
-      return false;
-
-    // If already attacking, don't start another attack
-    // This makes animation length act as natural cooldown
-    if (this.isAttacking) return false;
-
-    // Alternate between attack animations for variety (purely visual)
-    // We don't use GameRandom here because animation choice doesn't affect game logic
-    // and we don't want to consume deterministic random values for visual effects
-    const attackAnims = [MutantAnimations.Attack1, MutantAnimations.Attack2];
-    const animIndex = (this.lastAttackAnimIndex + 1) % attackAnims.length;
-
-    this.lastAttackAnimIndex = animIndex;
-    const attackAnimName = attackAnims[animIndex];
-
-    const anim = this.getAnimation(attackAnimName);
-    if (!anim) return false;
-
-    // Mark as attacking and in combat
-    this.isAttacking = true;
-    this._isInCombat = true;
-    this.currentAnimState = MutantAnimationState.Attacking;
-
-    // Use crossfade to smoothly transition to attack animation
-    this.crossFadeToAnimation(anim, false, 1.2);
-
-    // On animation end, allow next attack or transition out
-    anim.onAnimationGroupEndObservable.addOnce(() => {
-      // Don't transition if dying
-      if (
-        this._isDying ||
-        this.currentAnimState === MutantAnimationState.Dying
-      ) {
-        this.isAttacking = false;
-        this._isInCombat = false;
-        return;
-      }
-
-      // Clear attacking flag to allow next attack
-      this.isAttacking = false;
-
-      // Don't go to idle - stay in attacking state
-      // Combat system will either trigger another attack or movement will resume
-      // The updateAnimation() will handle transition to run/idle if we leave combat
-    });
-
-    return true;
-  }
-
-  /**
-   * Signal that combat has ended (no more targets in range)
-   * This allows transition back to idle/run
-   */
-  public endCombat(): void {
-    this._isInCombat = false;
-  }
-
-  /**
-   * Check if unit is currently in combat mode
-   */
-  public get isInCombat(): boolean {
-    return this._isInCombat;
-  }
-
-  // ==========================================
-  // IPhysicsIgnorable Implementation
-  // ==========================================
-
-  /**
-   * Check if physics should ignore this entity.
-   * Returns true when the unit is dying.
-   */
-  public shouldIgnorePhysics(): boolean {
-    return this._isDying;
-  }
-
-  // ==========================================
-  // IDeathSequence Implementation
-  // ==========================================
-
-  /**
-   * Check if the unit is currently dying (playing death animation)
-   */
-  public get isDying(): boolean {
-    return this._isDying;
-  }
-
-  /**
-   * Start the death sequence
-   * @param onComplete Callback when death animation finishes and unit should be removed
-   */
-  public startDeathSequence(onComplete: () => void): void {
-    if (this._isDying) return;
-
-    this._isDying = true;
-    this.onDeathAnimationComplete = onComplete;
-
-    // Stop any current actions
-    this.isAttacking = false;
-    this.attackLockTimer = 0;
-    this.targetRotationY = null; // Stop any rotation interpolation
-
-    // Stop movement
-    const movement = this.getComponent<MovementComponent>(
-      ComponentType.Movement
+    // Update components with model data
+    const animComponent = this.getComponent<AnimationComponent>(
+      ComponentType.Animation
     );
-    if (movement) {
-      movement.stop();
+    if (animComponent) {
+      animComponent.setModelData(
+        instance.rootNode,
+        instance.meshes,
+        instance.animationGroups
+      );
     }
 
-    // Play death animation
-    this.playDeathAnimation();
-  }
-
-  /**
-   * Play death animation
-   */
-  private playDeathAnimation(): void {
-    if (!this.isModelLoaded) {
-      // If model not loaded, complete immediately
-      this.onDeathAnimationComplete?.();
-      return;
+    const rotationComponent = this.getComponent<RotationComponent>(
+      ComponentType.Rotation
+    );
+    if (rotationComponent) {
+      rotationComponent.setTransformNode(instance.rootNode);
     }
 
-    if (
-      this.currentAnimState === MutantAnimationState.Dying ||
-      this.currentAnimState === MutantAnimationState.Dead
-    )
-      return;
-
-    this.stopAllAnimations();
-    const anim = this.getAnimation(MutantAnimations.Death);
-    if (anim) {
-      anim.start(false, 1.0);
-      this.currentAnimState = MutantAnimationState.Dying;
-
-      anim.onAnimationGroupEndObservable.addOnce(() => {
-        this.currentAnimState = MutantAnimationState.Dead;
-        // Call the completion callback to remove the unit
-        this.onDeathAnimationComplete?.();
-      });
-    } else {
-      // No animation found, complete immediately
-      this.onDeathAnimationComplete?.();
-    }
+    // Start idle animation via AnimationSystem (will be picked up on next update)
+    // The AnimationSystem will handle this based on component state
   }
-
-  /**
-   * Stop all animations immediately (used for death)
-   */
-  private stopAllAnimations(): void {
-    for (const anim of this.animationGroups) {
-      anim.stop();
-    }
-  }
-
-  /**
-   * Crossfade to a target animation for smooth transitions
-   * @param targetAnim Animation to transition to
-   * @param loop Whether the target animation should loop
-   * @param speed Playback speed of the target animation
-   */
-  private crossFadeToAnimation(
-    targetAnim: AnimationGroup,
-    loop: boolean,
-    speed: number = 1.0
-  ): void {
-    // Start the target animation if not already playing
-    if (!targetAnim.isPlaying) {
-      targetAnim.start(loop, speed);
-      targetAnim.setWeightForAllAnimatables(0);
-    }
-
-    // Fade out other animations while fading in target
-    const fadeIn = () => {
-      let allFaded = true;
-
-      for (const anim of this.animationGroups) {
-        if (anim === targetAnim) {
-          // Fade in target animation
-          const currentWeight = anim.animatables[0]?.weight ?? 0;
-          const newWeight = Math.min(
-            1,
-            currentWeight + this.animationBlendSpeed
-          );
-          anim.setWeightForAllAnimatables(newWeight);
-          if (newWeight < 1) allFaded = false;
-        } else if (anim.isPlaying) {
-          // Fade out other animations
-          const currentWeight = anim.animatables[0]?.weight ?? 1;
-          const newWeight = Math.max(
-            0,
-            currentWeight - this.animationBlendSpeed
-          );
-          anim.setWeightForAllAnimatables(newWeight);
-          if (newWeight > 0) {
-            allFaded = false;
-          } else {
-            anim.stop();
-          }
-        }
-      }
-
-      if (!allFaded && targetAnim.isPlaying) {
-        requestAnimationFrame(fadeIn);
-      }
-    };
-
-    requestAnimationFrame(fadeIn);
-  }
-
-  /**
-   * Show blood effect when taking damage
-   */
-  public showBloodEffect(): void {
-    const position = this.position.clone();
-    position.y += 1; // Blood at chest height
-    new BloodEffect(this.scene, position);
-  }
-
-  /**
-   * Update animation based on movement state
-   * Should be called by the game update loop
-   */
-  public updateAnimation(): void {
-    if (!this.isModelLoaded) return;
-    if (
-      this._isDying ||
-      this.currentAnimState === MutantAnimationState.Dying ||
-      this.currentAnimState === MutantAnimationState.Dead
-    )
-      return;
-
-    // Check if we need to force run animation (set by combat system when movement starts)
-    // This takes priority over other checks to ensure smooth transition from combat to run
-    if (this._shouldForceRunAnimation) {
-      this._shouldForceRunAnimation = false;
-      // Force run animation - bypass isAttacking check since combat just ended
-      this.forcePlayRunAnimation();
-      return;
-    }
-
-    // Don't interrupt active attack animation
-    if (this.isAttacking) return;
-
-    // Don't transition to idle while in combat - stay in attack state
-    // Combat system will trigger next attack
-    if (this._isInCombat) return;
-
-    if (this.currentAnimState !== MutantAnimationState.Running) {
-      this.playRunAnimation();
-    }
-  }
-
-  /**
-   * Force play run animation - used when transitioning from combat to movement
-   * Bypasses normal checks to ensure immediate transition
-   */
-  private forcePlayRunAnimation(): void {
-    if (!this.isModelLoaded) return;
-    if (this._isDying || this.currentAnimState === MutantAnimationState.Dying)
-      return;
-    if (this.currentAnimState === MutantAnimationState.Running) return;
-
-    // Clear combat state
-    this._isInCombat = false;
-    this.isAttacking = false;
-
-    const anim = this.getAnimation(MutantAnimations.Run);
-    if (anim) {
-      this.crossFadeToAnimation(anim, true, 1.0);
-      this.currentAnimState = MutantAnimationState.Running;
-    }
-  }
-
-  /**
-   * Check if the unit is currently attack-locked (deterministic for simulation)
-   *
-   * IMPORTANT FOR DETERMINISM: This uses ONLY the attackLockTimer, not the visual
-   * animation state (isAttacking). The timer is updated with fixed timesteps in
-   * the simulation tick, ensuring all clients agree on attack lock state.
-   *
-   * The visual animation (isAttacking) may end at different times on different
-   * machines, but the simulation uses this deterministic timer.
-   */
-  public get isCurrentlyAttacking(): boolean {
-    return this.attackLockTimer > 0;
-  }
-
-  /**
-   * Start the attack lock timer (called when attack is performed)
-   * This ensures movement is blocked for a deterministic duration
-   */
-  public startAttackLock(): void {
-    this.attackLockTimer = this.attackLockDuration;
-  }
-
-  /**
-   * Update the attack lock timer (called during simulation tick)
-   * @param deltaTime Fixed timestep from simulation
-   */
-  public updateAttackLock(deltaTime: number): void {
-    if (this.attackLockTimer > 0) {
-      this.attackLockTimer = Math.max(0, this.attackLockTimer - deltaTime);
-    }
-  }
-
-  /**
-   * Orient the mutant to face a target position (smooth interpolation)
-   * @param targetPosition The position to face toward
-   */
-  public orientToTarget(targetPosition: Vector3): void {
-    if (!this.modelRoot) return;
-
-    // Calculate direction from mutant to target
-    const direction = targetPosition.subtract(this.position);
-    direction.y = 0; // Ignore vertical difference
-
-    if (direction.lengthSquared() < 0.001) return; // Too close, skip rotation
-
-    // Calculate the angle to face the target
-    // atan2(x, z) gives the angle from the positive Z axis to the direction vector
-    // The model's default forward is along Z axis, so we use this angle directly
-    this.targetRotationY = Math.atan2(direction.x, direction.z);
-  }
-
-  /**
-   * Update rotation interpolation for smooth orientation changes
-   * Should be called every frame with deltaTime in seconds
-   */
-  public updateRotation(deltaTime: number): void {
-    if (!this.modelRoot || this.targetRotationY === null) return;
-
-    // Clear quaternion if set
-    this.modelRoot.rotationQuaternion = null;
-
-    const currentRotation = this.modelRoot.rotation.y;
-    const targetRotation = this.targetRotationY;
-
-    // Calculate the shortest rotation direction
-    let diff = targetRotation - currentRotation;
-
-    // Normalize to [-PI, PI] for shortest path
-    while (diff > Math.PI) diff -= Math.PI * 2;
-    while (diff < -Math.PI) diff += Math.PI * 2;
-
-    // Check if we're close enough to snap
-    const snapThreshold = 0.01;
-    if (Math.abs(diff) < snapThreshold) {
-      this.modelRoot.rotation.y = targetRotation;
-      this.targetRotationY = null; // Clear target, we've reached it
-      return;
-    }
-
-    // Interpolate towards target rotation
-    const maxRotation = this.rotationSpeed * deltaTime;
-    const rotationStep =
-      Math.sign(diff) * Math.min(Math.abs(diff), maxRotation);
-
-    this.modelRoot.rotation.y = currentRotation + rotationStep;
-  }
-
-  /**
-   * Orient the mutant along its movement direction (based on team)
-   * Team1 moves towards +X, Team2 moves towards -X
-   * Also triggers run animation
-   */
-  public orientToMovementDirection(): void {
-    if (!this.modelRoot) return;
-
-    // Set target rotation for smooth interpolation
-    // Team1 faces +X (towards enemy on right) - rotate to face +X
-    // Team2 faces -X (towards enemy on left) - rotate to face -X
-    if (this._team === TeamTag.Team1) {
-      this.targetRotationY = Math.PI / 2; // Face +X
-    } else {
-      this.targetRotationY = -Math.PI / 2; // Face -X
-    }
-
-    // Force run animation on next update
-    this._shouldForceRunAnimation = true;
-  }
-
-  /**
-   * Notify that movement has started - triggers run animation
-   * Called by combat system when resuming movement
-   */
-  public notifyMovementStarted(): void {
-    this._shouldForceRunAnimation = true;
-  }
-
-  // Note: position updates automatically move the model since it's parented to the placeholder mesh
 
   private createRangeIndicator(): void {
     const attack = this.getComponent<AttackComponent>(ComponentType.Attack);
@@ -788,10 +298,44 @@ export class MutantUnit
     }
   }
 
+  // Convenience getters that read from components
+  // These provide backward compatibility and easy access to component data
+
+  /**
+   * Check if the unit is currently dying (from AnimationComponent)
+   */
+  public get isDying(): boolean {
+    const anim = this.getComponent<AnimationComponent>(ComponentType.Animation);
+    return anim?.isDying ?? false;
+  }
+
+  /**
+   * Check if the unit is currently attack-locked (deterministic for simulation)
+   * Reads from AttackLockComponent
+   */
+  public get isCurrentlyAttacking(): boolean {
+    const attackLock = this.getComponent<AttackLockComponent>(ComponentType.AttackLock);
+    return attackLock?.isLocked ?? false;
+  }
+
+  /**
+   * Check if the unit is in combat mode (from AnimationComponent)
+   */
+  public get isInCombat(): boolean {
+    const anim = this.getComponent<AnimationComponent>(ComponentType.Animation);
+    return anim?.isInCombat ?? false;
+  }
+
   public override dispose(): void {
     this.selectionIndicator.dispose();
     if (this.rangeIndicator) {
       this.rangeIndicator.dispose();
+    }
+
+    // Clear animation component data
+    const animComponent = this.getComponent<AnimationComponent>(ComponentType.Animation);
+    if (animComponent) {
+      animComponent.clear();
     }
 
     // Dispose the model instance (handles animations and meshes)
@@ -800,9 +344,6 @@ export class MutantUnit
       this.modelDisposeFunc = null;
     }
 
-    this.animationGroups = [];
-    this.modelMeshes = [];
-    this.modelRoot = null;
 
     // Dispose placeholder
     this.placeholderMesh.dispose();

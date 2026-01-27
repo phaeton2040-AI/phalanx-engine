@@ -1,5 +1,5 @@
 import { Scene, Vector3, Mesh } from '@babylonjs/core';
-import type { IComponent } from '../components/Component';
+import type { IComponent } from '../components';
 
 let entityIdCounter = 0;
 
@@ -30,9 +30,27 @@ export abstract class Entity {
   // Simulation position (authoritative, used by physics/combat)
   private _simulationPosition: Vector3 = new Vector3();
 
+  // Physics ignore flag - when true, physics system will skip this entity
+  // Used for dying units, phasing units, etc.
+  private _ignorePhysics: boolean = false;
+
   constructor(scene: Scene) {
     this.id = ++entityIdCounter;
     this.scene = scene;
+  }
+
+  /**
+   * Check if physics system should ignore this entity
+   */
+  public get ignorePhysics(): boolean {
+    return this._ignorePhysics;
+  }
+
+  /**
+   * Set whether physics system should ignore this entity
+   */
+  public set ignorePhysics(value: boolean) {
+    this._ignorePhysics = value;
   }
 
   /**

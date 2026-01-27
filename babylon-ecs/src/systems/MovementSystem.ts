@@ -95,6 +95,9 @@ export class MovementSystem {
     const entity = this.entityManager.getEntity(entityId);
     if (!entity) return false;
 
+    // Don't allow entities ignored by physics to move (e.g., dying units)
+    if (entity.ignorePhysics) return false;
+
     const movement = entity.getComponent<MovementComponent>(
       ComponentType.Movement
     );
