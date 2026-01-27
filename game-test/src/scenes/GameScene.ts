@@ -1,5 +1,6 @@
 /**
  * Game Scene - Babylon.js rendering and game logic
+ * Using simplified Phalanx Client API
  */
 
 import {
@@ -19,14 +20,13 @@ import {
 } from '@babylonjs/core';
 import {
   PhalanxClient,
-  MatchFoundEvent,
-  CommandsBatchEvent,
-  PlayerCommand,
+  type MatchFoundEvent,
+  type CommandsBatch,
+  type Unsubscribe,
 } from 'phalanx-client';
-import { GameLoop } from '../game/GameLoop';
 import { GameSimulation } from '../game/GameSimulation';
 import { GROUND_WIDTH, GROUND_DEPTH, UNIT_RADIUS } from '../game/constants';
-import type { MoveCommand } from '../game/types';
+import type { GameCommand } from '../game/types';
 
 interface UnitMesh {
   playerId: string;
@@ -42,18 +42,18 @@ export class GameScene {
   private client: PhalanxClient;
   private matchData: MatchFoundEvent;
 
-  private gameLoop: GameLoop;
   private simulation: GameSimulation;
 
   private unitMeshes: Map<string, UnitMesh> = new Map();
   private ground: Mesh | null = null;
 
-  private pendingLocalCommands: MoveCommand[] = [];
-  private receivedCommands: PlayerCommand[] = [];
   private notificationTimeout: number | null = null;
   private beforeUnloadHandler:
     | ((e: BeforeUnloadEvent) => string | undefined)
     | null = null;
+
+  // Event unsubscribe functions
+  private unsubscribers: Unsubscribe[] = [];
 
   // Callbacks
   private onExit: (() => void) | null = null;
@@ -67,10 +67,6 @@ export class GameScene {
     this.scene = this.createScene();
 
     this.simulation = new GameSimulation();
-    this.gameLoop = new GameLoop(
-      () => this.fixedUpdate(),
-      (alpha) => this.render(alpha)
-    );
 
     this.setupNetworkHandlers();
     this.setupInput();
@@ -166,7 +162,7 @@ export class GameScene {
     const allPlayers = [
       {
         playerId: this.matchData.playerId,
-        username: this.client.getUsername(),
+        username: 'You',
       },
       ...this.matchData.teammates,
       ...this.matchData.opponents,
@@ -317,44 +313,73 @@ export class GameScene {
   }
 
   /**
-   * Setup network event handlers
+   * Setup network event handlers using simplified API
    */
   private setupNetworkHandlers(): void {
-    // Handle incoming commands from server
-    this.client.on('commands', (event: CommandsBatchEvent) => {
-      this.receivedCommands.push(...event.commands);
-    });
+    // Handle incoming ticks with commands from server
+    const unsubTick = this.client.onTick(
+      (tick: number, commandsBatch: CommandsBatch) => {
+        this.handleTick(tick, commandsBatch);
+      }
+    );
+    this.unsubscribers.push(unsubTick);
 
-    // Handle player disconnect - this happens when other player reloads/closes the page
-    this.client.on('playerDisconnected', (event) => {
-      console.log(`Player ${event.playerId} disconnected`);
-      this.showNotification('Other player left the game', 'warning');
-      // Return to lobby after delay since they won't reconnect
-      setTimeout(() => {
-        this.removeBeforeUnloadWarning();
-        this.onExit?.();
-      }, 3000);
+    // Handle render frames with interpolation
+    // Client manages the render loop internally
+    const unsubFrame = this.client.onFrame((alpha: number, _dt: number) => {
+      this.updateMeshPositions(alpha);
+      this.scene.render();
     });
-
-    // Handle player reconnect
-    this.client.on('playerReconnected', (event) => {
-      console.log(`Player ${event.playerId} reconnected`);
-      this.showNotification('Other player reconnected', 'info');
-    });
+    this.unsubscribers.push(unsubFrame);
 
     // Handle match end
-    this.client.on('matchEnd', (event) => {
+    const unsubMatchEnd = this.client.on('matchEnd', (event) => {
       console.log(`Match ended: ${event.reason}`);
       this.removeBeforeUnloadWarning();
-      this.gameLoop.stop();
-      if (event.reason === 'player-exit') {
-        this.showNotification('Other player exited the game', 'warning');
+
+      if (
+        event.reason === 'player-exit' ||
+        event.reason === 'player-disconnected'
+      ) {
+        this.showNotification('Other player left the game', 'warning');
         // Return to lobby after delay
         setTimeout(() => {
           this.onExit?.();
         }, 2000);
       }
     });
+    this.unsubscribers.push(unsubMatchEnd);
+  }
+
+  /**
+   * Handle a simulation tick with commands
+   */
+  private handleTick(_tick: number, commandsBatch: CommandsBatch): void {
+    // Store previous positions for interpolation
+    for (const [playerId, unitMesh] of this.unitMeshes) {
+      const unit = this.simulation.getUnit(playerId);
+      if (unit) {
+        unitMesh.prevX = unit.x;
+        unitMesh.prevZ = unit.z;
+      }
+    }
+
+    // Convert commands batch to flat array with player IDs
+    const commands: GameCommand[] = [];
+    for (const [playerId, playerCommands] of Object.entries(
+      commandsBatch.commands
+    )) {
+      for (const cmd of playerCommands) {
+        commands.push({
+          ...cmd,
+          playerId,
+        } as GameCommand);
+      }
+    }
+
+    // Queue commands and update simulation
+    this.simulation.queueCommands(commands);
+    this.simulation.update();
   }
 
   /**
@@ -381,59 +406,27 @@ export class GameScene {
   }
 
   /**
-   * Issue a move command
+   * Issue a move command using simplified API
    */
   private issueMove(targetX: number, targetZ: number): void {
-    const command: MoveCommand = {
-      type: 'move',
-      data: { targetX, targetZ },
-    };
-
-    this.pendingLocalCommands.push(command);
+    this.client.sendCommand('move', {
+      targetX,
+      targetZ,
+    });
   }
 
   /**
-   * Fixed timestep update
+   * Start the game
    */
-  private fixedUpdate(): void {
-    // Send pending local commands
-    if (this.pendingLocalCommands.length > 0) {
-      this.client.submitCommandsAsync(
-        this.client.getCurrentTick(),
-        this.pendingLocalCommands
-      );
-      this.pendingLocalCommands = [];
-    }
-
-    // Process received commands
-    if (this.receivedCommands.length > 0) {
-      const commandsWithPlayer = this.receivedCommands.map((cmd) => ({
-        ...cmd,
-        playerId:
-          (cmd as PlayerCommand & { playerId?: string }).playerId || cmd.type,
-      }));
-      this.simulation.queueCommands(commandsWithPlayer as MoveCommand[]);
-      this.receivedCommands = [];
-    }
-
-    // Store previous positions for interpolation
-    for (const [playerId, unitMesh] of this.unitMeshes) {
-      const unit = this.simulation.getUnit(playerId);
-      if (unit) {
-        unitMesh.prevX = unit.x;
-        unitMesh.prevZ = unit.z;
-      }
-    }
-
-    // Update simulation
-    this.simulation.update();
+  start(): void {
+    this.setupExitButton();
+    // Rendering is handled by onFrame callback - no need for Babylon's render loop
   }
 
   /**
-   * Render with interpolation
+   * Update mesh positions based on interpolation
    */
-  private render(alpha: number): void {
-    // Interpolate unit positions for smooth rendering
+  private updateMeshPositions(alpha: number): void {
     for (const [playerId, unitMesh] of this.unitMeshes) {
       const unit = this.simulation.getUnit(playerId);
       if (unit) {
@@ -443,17 +436,6 @@ export class GameScene {
         unitMesh.mesh.position.z = z;
       }
     }
-
-    // Render the scene
-    this.scene.render();
-  }
-
-  /**
-   * Start the game
-   */
-  start(): void {
-    this.setupExitButton();
-    this.gameLoop.start();
   }
 
   /**
@@ -480,7 +462,6 @@ export class GameScene {
    */
   private handleExit(): void {
     this.removeBeforeUnloadWarning();
-    this.gameLoop.stop();
     this.client.disconnect();
     this.onExit?.();
   }
@@ -548,7 +529,13 @@ export class GameScene {
    */
   stop(): void {
     this.removeBeforeUnloadWarning();
-    this.gameLoop.stop();
+
+    // Unsubscribe from all client events
+    for (const unsub of this.unsubscribers) {
+      unsub();
+    }
+    this.unsubscribers = [];
+
     this.engine.dispose();
   }
 }

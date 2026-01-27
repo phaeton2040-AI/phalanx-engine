@@ -52,12 +52,16 @@ export class GameSimulation {
    */
   private processCommand(command: GameCommand): void {
     if (command.type === 'move') {
-      const moveCmd = command as MoveCommand & { playerId?: string };
+      const moveCmd = command as MoveCommand;
       const playerId = moveCmd.playerId;
       if (playerId) {
         const unit = this.units.get(playerId);
         if (unit) {
-          unit.setTarget(moveCmd.data.targetX, moveCmd.data.targetZ);
+          // Support both direct properties and nested data object
+          const data = moveCmd.data ?? (moveCmd as unknown as { targetX?: number; targetZ?: number });
+          const targetX = data.targetX ?? 0;
+          const targetZ = data.targetZ ?? 0;
+          unit.setTarget(targetX, targetZ);
         }
       }
     }

@@ -45,6 +45,18 @@ export interface PhalanxClientConfig {
    * @default 10000
    */
   connectionTimeoutMs?: number;
+
+  /**
+   * Tick rate (ticks per second) - should match server configuration
+   * @default 20
+   */
+  tickRate?: number;
+
+  /**
+   * Enable debug logging
+   * @default false
+   */
+  debug?: boolean;
 }
 
 /**
@@ -203,6 +215,31 @@ export type ClientState =
   | 'playing'
   | 'reconnecting'
   | 'finished';
+
+/**
+ * Commands grouped by player ID (for easier processing in game logic)
+ */
+export interface CommandsBatch {
+  tick: number;
+  commands: {
+    [playerId: string]: PlayerCommand[];
+  };
+}
+
+/**
+ * Tick handler callback type
+ */
+export type TickHandler = (tick: number, commands: CommandsBatch) => void;
+
+/**
+ * Frame handler callback type
+ */
+export type FrameHandler = (alpha: number, dt: number) => void;
+
+/**
+ * Unsubscribe function type
+ */
+export type Unsubscribe = () => void;
 
 /**
  * Events emitted by PhalanxClient

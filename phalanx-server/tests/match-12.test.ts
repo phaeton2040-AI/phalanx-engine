@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { io, Socket } from 'socket.io-client';
 import { Phalanx, PlayerCommand } from '../src/index.js';
+import type { MatchFoundEvent, TickSyncEvent } from '../src/types/index.js';
 
 const TEST_PORT = 3032;
 const SERVER_URL = `http://localhost:${TEST_PORT}`;
@@ -40,7 +41,7 @@ describe('NET-2: Server Handles Player Reconnection', () => {
 
     // Join queue and wait for match
     const matchPromise = new Promise<string>((resolve) => {
-      socket1.once('match-found', (data) => {
+      socket1.once('match-found', (data: MatchFoundEvent) => {
         matchId = data.matchId;
         resolve(data.matchId);
       });
@@ -216,7 +217,7 @@ describe('NET-2: Server Handles Player Reconnection', () => {
     await new Promise<void>((resolve) => newSocket.on('connect', resolve));
 
     await new Promise<void>((resolve) => {
-      newSocket.once('reconnect-status', (data) => {
+      newSocket.once('reconnect-status', (data: { success: boolean }) => {
         if (data.success) resolve();
       });
       newSocket.emit('reconnect-match', { playerId: 'player2', matchId });
@@ -224,7 +225,7 @@ describe('NET-2: Server Handles Player Reconnection', () => {
 
     // Wait for a tick
     const currentTick = await new Promise<number>((resolve) => {
-      newSocket.once('tick-sync', (data) => resolve(data.tick));
+      newSocket.once('tick-sync', (data: TickSyncEvent) => resolve(data.tick));
     });
 
     // Submit command with reconnected socket
