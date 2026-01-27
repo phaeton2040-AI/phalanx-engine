@@ -13,52 +13,58 @@ npm install phalanx-client
 ```typescript
 import { PhalanxClient } from 'phalanx-client';
 
-// Create client instance
-const client = new PhalanxClient({
+// Create and connect client
+const client = await PhalanxClient.create({
   serverUrl: 'http://localhost:3000',
   playerId: 'player-123',
   username: 'MyPlayer',
 });
 
-// Connect to server
-await client.connect();
+// Subscribe to match events
+client.on('matchFound', (match) => {
+  console.log(`Match found: ${match.matchId}`);
+});
+
+client.on('countdown', (event) => {
+  console.log(`Starting in ${event.seconds}...`);
+});
+
+client.on('gameStart', () => {
+  console.log('Game started!');
+});
 
 // Join matchmaking queue
-const queueStatus = await client.joinQueue();
-console.log(`Queue position: ${queueStatus.position}`);
+await client.joinQueue();
 
-// Wait for match
-const match = await client.waitForMatch();
-console.log(`Match found: ${match.matchId}`);
-console.log(`Your team: ${match.teamId}`);
-console.log(`Teammates: ${match.teammates.map((t) => t.username).join(', ')}`);
-console.log(`Opponents: ${match.opponents.map((o) => o.username).join(', ')}`);
+// --- SIMPLIFIED GAME LOOP API ---
 
-// Wait for countdown
-await client.waitForCountdown((countdown) => {
-  console.log(`Starting in ${countdown.seconds}...`);
+// Register tick handler - called for each server tick with all player commands
+client.onTick((tick, commands) => {
+  // Process commands from all players
+  for (const [playerId, playerCommands] of Object.entries(commands.commands)) {
+    for (const cmd of playerCommands) {
+      processCommand(playerId, cmd);
+    }
+  }
+  // Run deterministic simulation
+  simulation.step();
 });
 
-// Wait for game start
-await client.waitForGameStart();
-console.log('Game started!');
-
-// Listen for tick updates
-client.on('tick', (data) => {
-  console.log(`Tick ${data.tick}`);
+// Register frame handler - called every animation frame (~60fps)
+client.onFrame((alpha, dt) => {
+  // Interpolate positions for smooth rendering
+  for (const entity of entities) {
+    entity.position = lerp(entity.prevPosition, entity.currPosition, alpha);
+  }
+  // Render the scene
+  renderer.render();
 });
 
-// Submit commands
-const ack = await client.submitCommands(client.getCurrentTick() + 1, [
-  { type: 'move', data: { x: 10, y: 20 } },
-]);
-
-if (ack.accepted) {
-  console.log('Commands accepted');
-}
+// Send commands - automatically batched and sent each frame
+client.sendCommand('move', { targetX: 10, targetZ: 20 });
 
 // Disconnect when done
-client.disconnect();
+await client.destroy();
 ```
 
 ## API Reference
@@ -74,17 +80,30 @@ interface PhalanxClientConfig {
   maxReconnectAttempts?: number; // Max reconnection attempts (default: 5)
   reconnectDelayMs?: number; // Delay between attempts (default: 1000)
   connectionTimeoutMs?: number; // Connection timeout (default: 10000)
+  tickRate?: number; // Ticks per second, must match server (default: 20)
+  debug?: boolean; // Enable debug logging (default: false)
 }
 ```
 
 ### Connection
 
 ```typescript
-// Connect to server
+// Recommended: Create and connect in one step
+const client = await PhalanxClient.create({
+  serverUrl: 'http://localhost:3000',
+  playerId: 'player-123',
+  username: 'MyPlayer',
+});
+
+// Alternative: Manual connection
+const client = new PhalanxClient(config);
 await client.connect();
 
-// Disconnect
+// Disconnect (stops render loop, clears handlers)
 client.disconnect();
+
+// Destroy (disconnect + cleanup all resources)
+await client.destroy();
 
 // Check connection status
 const connected = client.isConnected();
@@ -133,6 +152,84 @@ const ack = await client.submitCommands(tick, [
 // Submit commands without waiting for ack (fire and forget)
 client.submitCommandsAsync(tick, commands);
 ```
+
+### Simplified Game Loop API (Recommended)
+
+The `onTick` and `onFrame` methods provide a simplified API for building game loops. They handle timing, command batching, and interpolation automatically.
+
+#### onTick(handler): Unsubscribe
+
+Register a callback for simulation ticks. Called when the server sends a tick with commands from all players.
+
+```typescript
+const unsubscribe = client.onTick((tick, commands) => {
+  // tick: current tick number
+  // commands: { tick, commands: { [playerId]: PlayerCommand[] } }
+
+  // Process commands from all players
+  for (const [playerId, playerCommands] of Object.entries(commands.commands)) {
+    for (const cmd of playerCommands) {
+      if (cmd.type === 'move') {
+        moveEntity(playerId, cmd.data.targetX, cmd.data.targetZ);
+      }
+    }
+  }
+
+  // Run deterministic simulation step
+  physics.update();
+  combat.update();
+});
+
+// Later: stop receiving tick events
+unsubscribe();
+```
+
+#### onFrame(handler): Unsubscribe
+
+Register a callback for render frames. Called every animation frame (~60fps) with interpolation alpha for smooth rendering. The render loop starts automatically when the first handler is registered.
+
+```typescript
+const unsubscribe = client.onFrame((alpha, dt) => {
+  // alpha: interpolation value 0-1 (progress between ticks)
+  // dt: delta time in seconds since last frame
+
+  // Interpolate entity positions for smooth visuals
+  for (const entity of entities) {
+    entity.mesh.position.x = lerp(entity.prevX, entity.currX, alpha);
+    entity.mesh.position.z = lerp(entity.prevZ, entity.currZ, alpha);
+  }
+
+  // Render the scene
+  scene.render();
+});
+
+// Later: stop receiving frame events (render loop stops when no handlers remain)
+unsubscribe();
+```
+
+#### sendCommand(type, data): void
+
+Queue a command to be sent to the server. Commands are automatically batched and sent each frame.
+
+```typescript
+// Send movement command
+client.sendCommand('move', { targetX: 10, targetZ: 20 });
+
+// Send attack command
+client.sendCommand('attack', { targetId: 'enemy-123' });
+
+// Commands are automatically flushed to the server each frame
+```
+
+#### Interpolation Explained
+
+The `alpha` value in `onFrame` represents how far we are between the last tick and the next expected tick:
+
+- `alpha = 0`: Render at the position from the last received tick
+- `alpha = 0.5`: Render halfway between last tick and expected next tick
+- `alpha = 1`: Render at the expected next tick position
+
+This allows smooth 60fps rendering even though the server only sends 20 ticks per second.
 
 ### Reconnection
 
@@ -212,7 +309,9 @@ The client tracks its lifecycle state:
 | `reconnecting` | Attempting to reconnect to match   |
 | `finished`     | Match has ended                    |
 
-## TickSimulation
+## TickSimulation (Advanced)
+
+> **Note:** For most use cases, the simplified `onTick` and `onFrame` API is recommended. Use `TickSimulation` only if you need more granular control over tick buffering, simulation timing, or custom render loop management.
 
 The `TickSimulation` class provides a higher-level abstraction for managing deterministic lockstep simulation. It handles:
 
@@ -323,12 +422,159 @@ simulation.reset(); // Reset for new match
 simulation.dispose(); // Cleanup
 ```
 
-## Example: Complete Game Loop
+## Example: Complete Game Loop (Simplified API)
+
+```typescript
+import { PhalanxClient, type CommandsBatch } from 'phalanx-client';
+
+class GameClient {
+  private client: PhalanxClient | null = null;
+  private entities: Map<string, Entity> = new Map();
+  private unsubscribers: (() => void)[] = [];
+
+  async start(serverUrl: string, playerId: string, username: string): Promise<void> {
+    // Create and connect client
+    this.client = await PhalanxClient.create({
+      serverUrl,
+      playerId,
+      username,
+      autoReconnect: true,
+    });
+
+    // Subscribe to match lifecycle events
+    this.unsubscribers.push(
+      this.client.on('matchFound', (match) => {
+        console.log(`Match found: ${match.matchId}`);
+        this.initializeEntities(match);
+      })
+    );
+
+    this.unsubscribers.push(
+      this.client.on('gameStart', () => {
+        console.log('Game started!');
+      })
+    );
+
+    this.unsubscribers.push(
+      this.client.on('matchEnd', ({ reason }) => {
+        console.log(`Match ended: ${reason}`);
+        this.stop();
+      })
+    );
+
+    // Register tick handler - deterministic simulation
+    this.unsubscribers.push(
+      this.client.onTick((tick, commands) => {
+        this.handleTick(tick, commands);
+      })
+    );
+
+    // Register frame handler - rendering with interpolation
+    this.unsubscribers.push(
+      this.client.onFrame((alpha, dt) => {
+        this.handleFrame(alpha, dt);
+      })
+    );
+
+    // Join matchmaking queue
+    await this.client.joinQueue();
+  }
+
+  private initializeEntities(match: MatchFoundEvent): void {
+    // Create entities for all players
+    const allPlayers = [
+      { playerId: match.playerId, username: 'You' },
+      ...match.teammates,
+      ...match.opponents,
+    ];
+    for (const player of allPlayers) {
+      this.entities.set(player.playerId, new Entity(player.playerId));
+    }
+  }
+
+  private handleTick(tick: number, commands: CommandsBatch): void {
+    // Store previous positions for interpolation
+    for (const entity of this.entities.values()) {
+      entity.prevX = entity.currX;
+      entity.prevZ = entity.currZ;
+    }
+
+    // Process commands from all players
+    for (const [playerId, playerCommands] of Object.entries(commands.commands)) {
+      for (const cmd of playerCommands) {
+        this.processCommand(playerId, cmd);
+      }
+    }
+
+    // Run deterministic simulation step
+    this.simulate();
+  }
+
+  private handleFrame(alpha: number, dt: number): void {
+    // Interpolate entity positions for smooth 60fps rendering
+    for (const entity of this.entities.values()) {
+      entity.renderX = lerp(entity.prevX, entity.currX, alpha);
+      entity.renderZ = lerp(entity.prevZ, entity.currZ, alpha);
+    }
+
+    // Render the scene
+    renderer.render();
+  }
+
+  private processCommand(playerId: string, cmd: PlayerCommand): void {
+    const entity = this.entities.get(playerId);
+    if (!entity) return;
+
+    if (cmd.type === 'move') {
+      entity.targetX = cmd.data.targetX;
+      entity.targetZ = cmd.data.targetZ;
+    }
+  }
+
+  private simulate(): void {
+    // Move entities toward their targets
+    for (const entity of this.entities.values()) {
+      entity.moveTowardTarget();
+    }
+  }
+
+  // Call this when player clicks to move
+  move(targetX: number, targetZ: number): void {
+    this.client?.sendCommand('move', { targetX, targetZ });
+  }
+
+  async stop(): Promise<void> {
+    // Unsubscribe from all events
+    for (const unsub of this.unsubscribers) {
+      unsub();
+    }
+    this.unsubscribers = [];
+
+    // Cleanup client
+    await this.client?.destroy();
+    this.client = null;
+  }
+}
+
+// Usage
+const game = new GameClient();
+await game.start('http://localhost:3000', 'player-1', 'Alice');
+
+// Handle player input
+canvas.addEventListener('click', (e) => {
+  const worldPos = screenToWorld(e.clientX, e.clientY);
+  game.move(worldPos.x, worldPos.z);
+});
+```
+
+## Example: Legacy Event-Based API
+
+For more control or backward compatibility, you can use the event-based API:
 
 ```typescript
 import { PhalanxClient, TickSyncEvent, PlayerCommand } from 'phalanx-client';
 
-class GameClient {
+class LegacyGameClient {
   private client: PhalanxClient;
   private pendingCommands: PlayerCommand[] = [];
 
@@ -356,6 +602,9 @@ class GameClient {
     this.client.on('matchEnd', ({ reason }) => {
       console.log(`Match ended: ${reason}`);
     });
+
+    // Start your own render loop
+    this.startRenderLoop();
   }
 
   private handleTick(event: TickSyncEvent): void {
@@ -366,10 +615,7 @@ class GameClient {
     }
   }
 
-  private handleCommands(event: {
-    tick: number;
-    commands: PlayerCommand[];
-  }): void {
+  private handleCommands(event: { tick: number; commands: PlayerCommand[] }): void {
     // Process commands from all players for deterministic simulation
     for (const command of event.commands) {
       this.processCommand(command);
@@ -377,8 +623,15 @@ class GameClient {
   }
 
   private processCommand(command: PlayerCommand): void {
-    // Implement your game logic here
     console.log('Processing command:', command);
+  }
+
+  private startRenderLoop(): void {
+    const loop = () => {
+      // Your rendering logic here
+      requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
   }
 
   addCommand(type: string, data: unknown): void {

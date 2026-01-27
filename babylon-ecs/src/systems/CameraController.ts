@@ -83,8 +83,7 @@ export class CameraController {
     // Setup touch controls for mobile
     this.setupTouchControls();
 
-    // Start the update loop
-    this.setupUpdateLoop();
+    // Note: Update loop is now driven externally via update(dt) calls
   }
 
   /**
@@ -348,20 +347,11 @@ export class CameraController {
   }
 
   /**
-   * Setup the per-frame update loop for camera movement
-   */
-  private setupUpdateLoop(): void {
-    this.scene.onBeforeRenderObservable.add(() => {
-      this.update();
-    });
-  }
-
-  /**
    * Update camera position based on input
+   * Should be called each frame with the delta time in seconds
    */
-  private update(): void {
-    const deltaTime = this.scene.getEngine().getDeltaTime() / 1000;
-    const moveSpeed = cameraConfig.moveSpeed * deltaTime;
+  public update(dt: number): void {
+    const moveSpeed = cameraConfig.moveSpeed * dt;
 
     // Screen-relative movement (before rotation)
     let screenDeltaX = 0; // Left/Right on screen
