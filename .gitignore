@@ -13,7 +13,6 @@ dist/
 # Exception: keep config files that are meant to be JS
 !*.config.js
 !vite.config.js
-!vitest.config.js
 !eslint.config.js
 
 # WASM files copied to public folders (generated)

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { Phalanx } from '../../phalanx-server/src/index.js';
-import { PhalanxClient } from '../src/PhalanxClient.js';
+import { Phalanx } from 'phalanx-server';
+import { PhalanxClient } from '../src/index.js';
 import type {
   MatchFoundEvent,
   CountdownEvent,
@@ -8,7 +8,7 @@ import type {
 } from '../src/types.js';
 
 /**
- * Integration tests for PhalanxClient with real Phalanx server
+ * Integration tests for PhalanxClient with the real Phalanx server
  */
 describe('PhalanxClient Integration Tests', () => {
   let server: Phalanx;
