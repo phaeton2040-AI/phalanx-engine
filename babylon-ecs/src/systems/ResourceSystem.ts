@@ -72,12 +72,7 @@ export class ResourceSystem {
       baseGenerationRate: resourceConfig.baseGenerationRate,
       currentGenerationRate: resourceConfig.baseGenerationRate,
       hasAggressionBonus: false,
-    });
-
-    console.log(
-      `[ResourceSystem] Initialized player ${playerId} with ${resourceConfig.initialResources} resources`
-    );
-  }
+    });  }
 
   private setupEventListeners(): void {
     // Listen for tower destruction to grant bonus
@@ -194,12 +189,7 @@ export class ResourceSystem {
             oldAmount,
             newAmount: resources.currentResources,
           }
-        );
-
-        console.log(
-          `[ResourceSystem] Player ${playerId} received ${event.resourceBonus} tower destruction bonus`
-        );
-      }
+        );      }
     }
   }
 
@@ -267,12 +257,7 @@ export class ResourceSystem {
         entityId: 0, // Will be set by formation system
         cost,
       }
-    );
-
-    console.log(
-      `[ResourceSystem] Player ${resources.playerId} purchased ${event.unitType} for ${cost} resources`
-    );
-  }
+    );  }
 
   /**
    * Set aggression bonus for a team
@@ -291,9 +276,6 @@ export class ResourceSystem {
         } else {
           resources.currentGenerationRate = resources.baseGenerationRate;
         }
-        console.log(
-          `[ResourceSystem] Team ${team} aggression bonus: ${active}, rate: ${resources.currentGenerationRate}`
-        );
       }
     }
   }

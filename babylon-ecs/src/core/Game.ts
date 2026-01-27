@@ -247,21 +247,18 @@ export class Game {
    * Setup network event handlers (disconnect, reconnect, match end)
    */
   private setupNetworkEventHandlers(): void {
-    this.client.on('playerDisconnected', (event) => {
-      console.log(`Player ${event.playerId} disconnected`);
+    this.client.on('playerDisconnected', (_event) => {
       this.uiManager.showNotification('Opponent disconnected', 'warning');
       setTimeout(() => {
         this.handleExit();
       }, 3000);
     });
 
-    this.client.on('playerReconnected', (event) => {
-      console.log(`Player ${event.playerId} reconnected`);
+    this.client.on('playerReconnected', (_event) => {
       this.uiManager.showNotification('Opponent reconnected', 'info');
     });
 
     this.client.on('matchEnd', (event) => {
-      console.log(`Match ended: ${event.reason}`);
       this.uiManager.showNotification(`Match ended: ${event.reason}`, 'info');
       setTimeout(() => {
         this.handleExit();
@@ -319,11 +316,6 @@ export class Game {
       const isWinner = event.winnerTeam === this.localTeam;
       const message = isWinner ? '🎉 Victory!' : '💀 Defeat!';
       this.uiManager.showNotification(message, isWinner ? 'info' : 'warning');
-
-      console.log(
-        `[Game] Game Over! Winner: Team ${event.winnerTeam}, Reason: ${event.reason}`
-      );
-
       setTimeout(() => {
         this.handleExit();
       }, 5000);
@@ -456,11 +448,7 @@ export class Game {
     this.eventBus.on<WaveDeploymentEvent>(
       GameEvents.WAVE_DEPLOYMENT,
       (event) => {
-        if (event.totalUnitsDeployed > 0) {
-          console.log(
-            `[Game] Wave ${event.waveNumber}: Deployed ${event.totalUnitsDeployed} total units`
-          );
-        }
+        if (event.totalUnitsDeployed > 0) {        }
       }
     );
   }
@@ -519,7 +507,6 @@ export class Game {
     this.selectionSystem.selectEntity = (
       entity: import('../systems/SelectionSystem').ISelectableEntity
     ) => {
-      console.log(`[Selection] Selecting entity ${entity.id} for info view`);
       originalSelectEntity(entity);
     };
   }
@@ -643,10 +630,6 @@ export class Game {
       this.uiManager.updateResourceUI();
       this.uiManager.updateFormationInfo();
     }, 100);
-
-    console.log(
-      `[Game] Gameplay systems initialized for players: ${team1PlayerId} (Team1), ${team2PlayerId} (Team2)`
-    );
   }
 
   /**
@@ -668,11 +651,6 @@ export class Game {
       team1OwnerId = opponentId;
       team2OwnerId = this.matchData.playerId;
     }
-
-    console.log(
-      `[Setup] Team 1 owner: ${team1OwnerId}, Team 2 owner: ${team2OwnerId}`
-    );
-
     // Create Team 1 entities
     const team1Base = this.entityFactory.createBase(
       {
@@ -722,11 +700,6 @@ export class Game {
       this.entityFactory.setOwnership(tower.id, team2OwnerId);
       this.victorySystem.registerTower(tower.id, TeamTag.Team2);
     }
-
-    console.log(
-      `[Setup] Entity ownership map:`,
-      this.entityFactory.getOwnershipMap()
-    );
   }
 
   /**
@@ -798,7 +771,6 @@ export class Game {
   public start(): void {
     // PhalanxClient manages the render loop via onFrame callback
     // No need for engine.runRenderLoop() anymore
-    console.log('[Game] Game started - render loop managed by PhalanxClient');
   }
 
   /**

@@ -512,12 +512,7 @@ export class FormationInputHandler {
         playerId,
         unitType,
       }
-    );
-
-    console.log(
-      `[FormationInputHandler] Player ${playerId} entered placement mode for ${unitType}`
-    );
-  }
+    );  }
 
   /**
    * Exit placement mode
@@ -586,10 +581,6 @@ export class FormationInputHandler {
         gridZ,
         unitType,
       }
-    );
-
-    console.log(
-      `[FormationInputHandler] Player ${playerId} entered update mode for ${unitType} at (${gridX}, ${gridZ})`
     );
   }
 

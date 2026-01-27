@@ -333,9 +333,7 @@ export class GameScene {
     this.unsubscribers.push(unsubFrame);
 
     // Handle match end
-    const unsubMatchEnd = this.client.on('matchEnd', (event) => {
-      console.log(`Match ended: ${event.reason}`);
-      this.removeBeforeUnloadWarning();
+    const unsubMatchEnd = this.client.on('matchEnd', (event) => {      this.removeBeforeUnloadWarning();
 
       if (
         event.reason === 'player-exit' ||

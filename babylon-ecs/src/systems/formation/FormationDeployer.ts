@@ -141,9 +141,6 @@ export class FormationDeployer {
       }
     }
 
-    console.log(
-      `[FormationDeployer] Committed ${unitCount} units for player ${playerId}`
-    );
     return unitCount;
   }
 

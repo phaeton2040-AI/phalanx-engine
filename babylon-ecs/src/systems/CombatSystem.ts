@@ -561,9 +561,6 @@ export class CombatSystem {
       isCritical = GameRandom.boolean(this.config.criticalHitChance);
       if (isCritical) {
         damage = Math.floor(damage * this.config.criticalHitMultiplier);
-        console.log(
-          `[Combat] Critical hit! ${damage} damage (${this.config.criticalHitMultiplier}x)`
-        );
       }
     }
 
