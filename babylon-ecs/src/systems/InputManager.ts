@@ -73,9 +73,6 @@ export class InputManager {
       case 0: // Left click - Selection
         this.handleLeftClick(pickResult);
         break;
-      case 2: // Right click - Move command
-        this.handleRightClick(pickResult);
-        break;
     }
   }
 
@@ -99,48 +96,6 @@ export class InputManager {
       // Clicked on empty ground - deselect all
       this.selectionSystem.deselectAll();
     }
-  }
-
-  private handleRightClick(_pickResult: any): void {
-    // Movement commands are disabled for Direct Strike mode
-    // Units automatically move towards enemy base after spawning
-    // Player cannot manually control unit movement
-    return;
-
-    /* Original movement command code - disabled
-        const ground = this.sceneManager.getGround();
-
-        if (!this.selectionSystem.hasSelection()) return;
-        if (_pickResult.pickedMesh !== ground) return;
-
-        const targetPosition = _pickResult.pickedPoint!.clone();
-
-        // Show destination marker via event (SceneManager listens for this)
-        this.eventBus.emit<ShowDestinationMarkerEvent>(GameEvents.SHOW_DESTINATION_MARKER, {
-            ...createEvent(),
-            position: targetPosition.clone(),
-        });
-
-        // Issue move command to all selected entities that have Movement component
-        const selectedEntities = this.selectionSystem.getSelectedEntities();
-
-        // Clear moving entities tracking
-        this.movingEntities.clear();
-
-        for (const entity of selectedEntities) {
-            if (entity.hasComponent(ComponentType.Movement)) {
-                // Track this entity as moving
-                this.movingEntities.add(entity.id);
-
-                // Emit move request event instead of calling MovementSystem directly
-                this.eventBus.emit<MoveRequestedEvent>(GameEvents.MOVE_REQUESTED, {
-                    ...createEvent(),
-                    entityId: entity.id,
-                    target: targetPosition.clone(),
-                });
-            }
-        }
-        */
   }
 
   /**

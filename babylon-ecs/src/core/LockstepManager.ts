@@ -115,122 +115,142 @@ export class LockstepManager {
    * Commands from ALL players are executed - no skipping of "own" commands
    */
   public executeTickCommands(commands: PlayerCommand[]): void {
+    for (const cmd of commands) {
+      this.executeCommand(cmd);
+    }
+  }
+
+  /**
+   * Execute a single command by dispatching to the appropriate handler
+   */
+  private executeCommand(cmd: PlayerCommand): void {
+    switch (cmd.type) {
+      case 'move':
+        this.handleMoveCommand(cmd as NetworkMoveCommand);
+        break;
+      case 'placeUnit':
+        this.handlePlaceUnitCommand(cmd as NetworkPlaceUnitCommand);
+        break;
+      case 'deployUnits':
+        this.handleDeployUnitsCommand(cmd);
+        break;
+      case 'moveGridUnit':
+        this.handleMoveGridUnitCommand(cmd as NetworkMoveGridUnitCommand);
+        break;
+      default:
+        console.warn(`[Lockstep] Unknown command type: ${cmd.type}`);
+    }
+  }
+
+  /**
+   * Extract playerId from command, logging a warning if missing
+   */
+  private getCommandPlayerId(cmd: PlayerCommand, commandType: string): string | null {
+    const playerId = (cmd as any).playerId as string | undefined;
+    if (!playerId) {
+      console.warn(
+        `[Lockstep] ${commandType} command missing playerId:`,
+        JSON.stringify(cmd)
+      );
+      return null;
+    }
+    return playerId;
+  }
+
+  /**
+   * Determine team for a player based on whether they are local or opponent
+   */
+  private getTeamForPlayer(playerId: string): TeamTag {
     const localTeam = this.callbacks.getLocalTeam();
     const localPlayerId = this.callbacks.getLocalPlayerId();
+    return playerId === localPlayerId
+      ? localTeam
+      : localTeam === TeamTag.Team1
+        ? TeamTag.Team2
+        : TeamTag.Team1;
+  }
 
-    for (const cmd of commands) {
-      if (cmd.type === 'move') {
-        const moveCmd = cmd as NetworkMoveCommand;
-        const data = moveCmd.data;
+  /**
+   * Handle move command - directs an entity to a target position
+   */
+  private handleMoveCommand(cmd: NetworkMoveCommand): void {
+    const { entityId, targetX, targetY, targetZ } = cmd.data;
 
-        console.log(
-          `[Lockstep] Executing move for entity ${data.entityId} to (${data.targetX}, ${data.targetY}, ${data.targetZ})`
-        );
+    console.log(
+      `[Lockstep] Executing move for entity ${entityId} to (${targetX}, ${targetY}, ${targetZ})`
+    );
 
-        // Execute move command for ANY entity (not just opponent's)
-        this.systems.movementSystem.moveEntityTo(
-          data.entityId,
-          new Vector3(data.targetX, data.targetY, data.targetZ)
-        );
-      } else if (cmd.type === 'placeUnit') {
-        const placeCmd = cmd as NetworkPlaceUnitCommand;
-        const data = placeCmd.data;
-        const commandPlayerId = (cmd as any).playerId as string | undefined;
+    this.systems.movementSystem.moveEntityTo(
+      entityId,
+      new Vector3(targetX, targetY, targetZ)
+    );
+  }
 
-        if (!commandPlayerId) {
-          console.warn(
-            `[Lockstep] placeUnit command missing playerId:`,
-            JSON.stringify(cmd)
-          );
-          continue;
-        }
+  /**
+   * Handle place unit command - places a unit on the formation grid
+   */
+  private handlePlaceUnitCommand(cmd: NetworkPlaceUnitCommand): void {
+    const playerId = this.getCommandPlayerId(cmd, 'placeUnit');
+    if (!playerId) return;
 
-        console.log(
-          `[Lockstep] Executing placeUnit for player ${commandPlayerId}: ${data.unitType} at (${data.gridX}, ${data.gridZ})`
-        );
+    const { unitType, gridX, gridZ } = cmd.data;
 
-        // Place unit on the player's grid
-        if (
-          this.systems.formationGridSystem.placeUnit(
-            commandPlayerId,
-            data.gridX,
-            data.gridZ,
-            data.unitType
-          )
-        ) {
-          // Determine team based on player
-          const team =
-            commandPlayerId === localPlayerId
-              ? localTeam
-              : localTeam === TeamTag.Team1
-                ? TeamTag.Team2
-                : TeamTag.Team1;
+    console.log(
+      `[Lockstep] Executing placeUnit for player ${playerId}: ${unitType} at (${gridX}, ${gridZ})`
+    );
 
-          // Deduct resources
-          this.systems.eventBus.emit(GameEvents.UNIT_PURCHASE_REQUESTED, {
-            ...createEvent(),
-            playerId: commandPlayerId,
-            team: team,
-            unitType: data.unitType,
-            gridPosition: { x: data.gridX, z: data.gridZ },
-          });
-        }
-      } else if (cmd.type === 'deployUnits') {
-        const commandPlayerId = (cmd as any).playerId as string | undefined;
+    if (this.systems.formationGridSystem.placeUnit(playerId, gridX, gridZ, unitType)) {
+      const team = this.getTeamForPlayer(playerId);
 
-        if (!commandPlayerId) {
-          console.warn(
-            `[Lockstep] deployUnits command missing playerId:`,
-            JSON.stringify(cmd)
-          );
-          continue;
-        }
-
-        console.log(
-          `[Lockstep] Executing deployUnits for player ${commandPlayerId}`
-        );
-
-        // Commit the player's formation
-        const unitCount =
-          this.systems.formationGridSystem.commitFormation(commandPlayerId);
-
-        // Show notification for local player
-        if (commandPlayerId === localPlayerId) {
-          if (unitCount > 0) {
-            this.callbacks.onNotification(
-              `Deployed ${unitCount} units!`,
-              'info'
-            );
-          }
-          this.callbacks.onCommitButtonUpdate();
-        }
-      } else if (cmd.type === 'moveGridUnit') {
-        const moveGridCmd = cmd as NetworkMoveGridUnitCommand;
-        const data = moveGridCmd.data;
-        const commandPlayerId = (cmd as any).playerId as string | undefined;
-
-        if (!commandPlayerId) {
-          console.warn(
-            `[Lockstep] moveGridUnit command missing playerId:`,
-            JSON.stringify(cmd)
-          );
-          continue;
-        }
-
-        console.log(
-          `[Lockstep] Executing moveGridUnit for player ${commandPlayerId}: from (${data.fromGridX}, ${data.fromGridZ}) to (${data.toGridX}, ${data.toGridZ})`
-        );
-
-        // Move unit on the player's grid
-        this.systems.formationGridSystem.moveUnit(
-          commandPlayerId,
-          data.fromGridX,
-          data.fromGridZ,
-          data.toGridX,
-          data.toGridZ
-        );
-      }
+      this.systems.eventBus.emit(GameEvents.UNIT_PURCHASE_REQUESTED, {
+        ...createEvent(),
+        playerId,
+        team,
+        unitType,
+        gridPosition: { x: gridX, z: gridZ },
+      });
     }
+  }
+
+  /**
+   * Handle deploy units command - commits all pending units from formation grid
+   */
+  private handleDeployUnitsCommand(cmd: PlayerCommand): void {
+    const playerId = this.getCommandPlayerId(cmd, 'deployUnits');
+    if (!playerId) return;
+
+    console.log(`[Lockstep] Executing deployUnits for player ${playerId}`);
+
+    const unitCount = this.systems.formationGridSystem.commitFormation(playerId);
+
+    if (playerId === this.callbacks.getLocalPlayerId()) {
+      if (unitCount > 0) {
+        this.callbacks.onNotification(`Deployed ${unitCount} units!`, 'info');
+      }
+      this.callbacks.onCommitButtonUpdate();
+    }
+  }
+
+  /**
+   * Handle move grid unit command - moves a unit from one grid cell to another
+   */
+  private handleMoveGridUnitCommand(cmd: NetworkMoveGridUnitCommand): void {
+    const playerId = this.getCommandPlayerId(cmd, 'moveGridUnit');
+    if (!playerId) return;
+
+    const { fromGridX, fromGridZ, toGridX, toGridZ } = cmd.data;
+
+    console.log(
+      `[Lockstep] Executing moveGridUnit for player ${playerId}: from (${fromGridX}, ${fromGridZ}) to (${toGridX}, ${toGridZ})`
+    );
+
+    this.systems.formationGridSystem.moveUnit(
+      playerId,
+      fromGridX,
+      fromGridZ,
+      toGridX,
+      toGridZ
+    );
   }
 
   /**
