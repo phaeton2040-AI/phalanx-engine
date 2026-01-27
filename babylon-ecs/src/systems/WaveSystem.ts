@@ -48,12 +48,7 @@ export class WaveSystem {
     );
     this.ticksForInitialWave = Math.floor(
       waveConfig.initialWaveDuration * networkConfig.tickRate
-    );
-
-    console.log(
-      `[WaveSystem] Initialized: ${waveConfig.waveDuration}s per wave (${this.ticksPerWave} ticks)`
-    );
-  }
+    );  }
 
   /**
    * Set the callback for deploying units
@@ -67,9 +62,7 @@ export class WaveSystem {
    */
   public registerPlayer(playerId: string): void {
     if (!this.playerIds.includes(playerId)) {
-      this.playerIds.push(playerId);
-      console.log(`[WaveSystem] Registered player: ${playerId}`);
-    }
+      this.playerIds.push(playerId);    }
   }
 
   /**
@@ -86,12 +79,7 @@ export class WaveSystem {
       ...createEvent(),
       waveNumber: 0,
       isPreparationWave: true,
-    });
-
-    console.log(
-      `[WaveSystem] Started at tick ${startTick}, Wave 0 (preparation)`
-    );
-  }
+    });  }
 
   /**
    * Process a simulation tick
@@ -132,11 +120,6 @@ export class WaveSystem {
     const previousWave = this.currentWave;
     this.currentWave++;
     this.waveStartTick = currentTick;
-
-    console.log(
-      `[WaveSystem] Wave ${this.currentWave} starting at tick ${currentTick}`
-    );
-
     // Emit wave started event
     this.eventBus.emit<WaveStartedEvent>(GameEvents.WAVE_STARTED, {
       ...createEvent(),
@@ -169,10 +152,6 @@ export class WaveSystem {
     for (const playerId of this.playerIds) {
       const unitCount = this.deployUnitsCallback(playerId);
       totalDeployed += unitCount;
-
-      console.log(
-        `[WaveSystem] Deployed ${unitCount} units for player ${playerId}`
-      );
     }
 
     // Emit deployment event

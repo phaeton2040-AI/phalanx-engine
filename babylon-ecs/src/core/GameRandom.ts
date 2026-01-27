@@ -41,7 +41,6 @@ class GameRandomInstance {
   reset(): void {
     if (this.seed !== 0) {
       this.rng = new DeterministicRandom(this.seed);
-      console.log(`[GameRandom] Reset to seed: ${this.seed}`);
     }
   }
 

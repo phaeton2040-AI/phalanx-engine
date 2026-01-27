@@ -20,8 +20,8 @@ const CORS_ORIGINS = process.env.CORS_ORIGINS
     ];
 
 async function main() {
-  console.log('Starting Phalanx Test Game Server...');
-  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.warn('Starting Phalanx Test Game Server...');
+  console.warn(`Environment: ${process.env.NODE_ENV || 'development'}`);
 
   const phalanx = new Phalanx({
     port: PORT,
@@ -37,36 +37,33 @@ async function main() {
 
   // Event handlers
   phalanx.on('match-created', (match) => {
-    console.log(`Match created: ${match.id}`);
+    console.warn(`Match created: ${match.id}`);
   });
 
   phalanx.on('match-started', (match) => {
-    console.log(`Match started: ${match.id}`);
+    console.warn(`Match started: ${match.id}`);
   });
 
   phalanx.on('match-ended', (matchId: string, reason: string) => {
-    console.log(`Match ended: ${matchId}, reason: ${reason}`);
+    console.warn(`Match ended: ${matchId}, reason: ${reason}`);
   });
 
   phalanx.on('player-command', (playerId: string, command: unknown) => {
     // Validate commands if needed
-    console.log(`Command from ${playerId}:`, command);
+    console.warn(`Command from ${playerId}:`, command);
     return true; // Accept command
   });
 
   phalanx.on('player-disconnected', (playerId: string, matchId: string) => {
-    console.log(`Player ${playerId} disconnected from match ${matchId}`);
+    console.warn(`Player ${playerId} disconnected from match ${matchId}`);
   });
 
   phalanx.on('player-reconnected', (playerId: string, matchId: string) => {
-    console.log(`Player ${playerId} reconnected to match ${matchId}`);
+    console.warn(`Player ${playerId} reconnected to match ${matchId}`);
   });
 
   try {
     await phalanx.start();
-    console.log(`Phalanx server running on port ${PORT}`);
-    console.log(`CORS origins: ${CORS_ORIGINS.join(', ')}`);
-    console.log('Waiting for players to connect...');
   } catch (error) {
     console.error('Failed to start server:', error);
     process.exit(1);

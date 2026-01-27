@@ -214,12 +214,7 @@ export class TickSimulation {
     if (this.pendingOutgoingCommands.length > 0) {
       const tick = this.client.getCurrentTick();
 
-      if (this.config.debug) {
-        console.log(
-          `[TickSimulation] Sending ${this.pendingOutgoingCommands.length} commands at tick ${tick}:`,
-          JSON.stringify(this.pendingOutgoingCommands)
-        );
-      }
+      if (this.config.debug) {      }
 
       this.client.submitCommandsAsync(tick, this.pendingOutgoingCommands);
       this.pendingOutgoingCommands = [];
@@ -308,12 +303,7 @@ export class TickSimulation {
     const unsubCommands = this.client.on(
       'commands',
       (event: CommandsBatchEvent) => {
-        if (this.config.debug) {
-          console.log(
-            `[TickSimulation] Received ${event.commands.length} commands for tick ${event.tick}:`,
-            JSON.stringify(event.commands)
-          );
-        }
+        if (this.config.debug) {        }
 
         // Store commands for this tick
         this.pendingTickCommands.set(event.tick, event.commands);

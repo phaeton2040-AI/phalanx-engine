@@ -7,8 +7,6 @@ import { Phalanx } from 'phalanx-server';
 const PORT = 3000;
 
 async function main() {
-  console.log('Starting Phalanx Test Game Server...');
-
   const phalanx = new Phalanx({
     port: PORT,
     cors: {
@@ -22,36 +20,33 @@ async function main() {
   });
 
   // Event handlers
-  phalanx.on('match-created', (match) => {
-    console.log(`Match created: ${match.id}`);
+  phalanx.on('match-created', (_match) => {
+    // Match created
   });
 
-  phalanx.on('match-started', (match) => {
-    console.log(`Match started: ${match.id}`);
+  phalanx.on('match-started', (_match) => {
+    // Match started
   });
 
-  phalanx.on('match-ended', (matchId: string, reason: string) => {
-    console.log(`Match ended: ${matchId}, reason: ${reason}`);
+  phalanx.on('match-ended', (_matchId: string, _reason: string) => {
+    // Match ended
   });
 
-  phalanx.on('player-command', (playerId: string, command: unknown) => {
+  phalanx.on('player-command', (_playerId: string, _command: unknown) => {
     // Validate commands if needed
-    console.log(`Command from ${playerId}:`, command);
     return true; // Accept command
   });
 
-  phalanx.on('player-disconnected', (playerId: string, matchId: string) => {
-    console.log(`Player ${playerId} disconnected from match ${matchId}`);
+  phalanx.on('player-disconnected', (_playerId: string, _matchId: string) => {
+    // Player disconnected
   });
 
-  phalanx.on('player-reconnected', (playerId: string, matchId: string) => {
-    console.log(`Player ${playerId} reconnected to match ${matchId}`);
+  phalanx.on('player-reconnected', (_playerId: string, _matchId: string) => {
+    // Player reconnected
   });
 
   try {
     await phalanx.start();
-    console.log(`Phalanx server running on port ${PORT}`);
-    console.log('Waiting for players to connect...');
   } catch (error) {
     console.error('Failed to start server:', error);
     process.exit(1);

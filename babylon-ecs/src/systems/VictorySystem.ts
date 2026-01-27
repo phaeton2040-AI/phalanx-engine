@@ -37,7 +37,6 @@ export class VictorySystem {
    */
   public registerBase(entityId: number, team: TeamTag): void {
     this.baseEntities.set(team, entityId);
-    console.log(`[VictorySystem] Registered base ${entityId} for team ${team}`);
   }
 
   /**
@@ -45,9 +44,6 @@ export class VictorySystem {
    */
   public registerTower(entityId: number, team: TeamTag): void {
     this.towerEntities.set(entityId, team);
-    console.log(
-      `[VictorySystem] Registered tower ${entityId} for team ${team}`
-    );
   }
 
   /**
@@ -115,8 +111,6 @@ export class VictorySystem {
       winnerPlayerId,
       reason: 'base_destroyed',
     });
-
-    console.log(`[VictorySystem] GAME OVER! Team ${winnerTeam} wins!`);
   }
 
   /**
@@ -133,10 +127,6 @@ export class VictorySystem {
 
     // Remove from tracking
     this.towerEntities.delete(entityId);
-
-    console.log(
-      `[VictorySystem] Tower ${entityId} (team ${destroyedTeam}) destroyed! Bonus: ${resourceConfig.towerDestructionBonus}`
-    );
   }
 
   /**
@@ -181,10 +171,6 @@ export class VictorySystem {
       winnerPlayerId,
       reason,
     });
-
-    console.log(
-      `[VictorySystem] GAME OVER! Team ${winnerTeam} wins by ${reason}!`
-    );
   }
 
   /**

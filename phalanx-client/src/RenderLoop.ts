@@ -196,6 +196,7 @@ export class RenderLoop {
       this.rafId = null;
 
       if (this.config.debug) {
+        // eslint-disable-next-line no-console
         console.log('[RenderLoop] Stopped');
       }
     }

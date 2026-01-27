@@ -166,9 +166,7 @@ export class TerritorySystem {
           team,
           bonusMultiplier: resourceConfig.aggressionBonusMultiplier,
         }
-      );
-      console.log(`[TerritorySystem] Team ${team} gained aggression bonus!`);
-    } else if (!shouldHaveBonus && state.hasAggressionBonus) {
+      );    } else if (!shouldHaveBonus && state.hasAggressionBonus) {
       state.hasAggressionBonus = false;
       this.eventBus.emit<AggressionBonusDeactivatedEvent>(
         GameEvents.AGGRESSION_BONUS_DEACTIVATED,
@@ -177,7 +175,6 @@ export class TerritorySystem {
           team,
         }
       );
-      console.log(`[TerritorySystem] Team ${team} lost aggression bonus.`);
     }
   }
 

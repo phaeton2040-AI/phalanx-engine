@@ -79,8 +79,6 @@ export class MatchmakingService {
     const position = this.queue.size;
     const waitTime = this.estimateWaitTime();
 
-    console.log(`[QUEUE] ${username} joined. Queue size: ${this.queue.size}`);
-
     socket.emit('queue-status', {
       position,
       waitTime,
@@ -115,9 +113,6 @@ export class MatchmakingService {
 
     this.queue.delete(playerId);
     socket.emit('queue-left');
-    console.log(
-      `[QUEUE] ${player.username} left. Queue size: ${this.queue.size}`
-    );
   }
 
   /**
@@ -205,11 +200,8 @@ export class MatchmakingService {
   /**
    * Log match creation with team composition
    */
-  private logMatchCreation(teams: QueuedPlayer[][], matchId: string): void {
-    const teamNames = teams.map(
-      (team, i) => `Team${i + 1}: [${team.map((p) => p.username).join(', ')}]`
-    );
-    console.log(`[MATCH] ${teamNames.join(' vs ')} (${matchId})`);
+  private logMatchCreation(_teams: QueuedPlayer[][], _matchId: string): void {
+    // Match creation logging removed - use event handlers instead
   }
 
   /**
@@ -252,9 +244,6 @@ export class MatchmakingService {
     for (const [playerId, player] of this.queue.entries()) {
       if (player.socketId === socketId) {
         this.queue.delete(playerId);
-        console.log(
-          `[QUEUE] ${player.username} disconnected. Queue size: ${this.queue.size}`
-        );
         break;
       }
     }

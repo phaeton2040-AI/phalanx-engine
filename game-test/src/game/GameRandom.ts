@@ -39,9 +39,7 @@ class GameRandomInstance {
    */
   initialize(seed: number): void {
     this.seed = seed;
-    this.rng = new DeterministicRandom(seed);
-    console.log(`[GameRandom] Initialized with seed: ${seed}`);
-  }
+    this.rng = new DeterministicRandom(seed);  }
 
   /**
    * Use Phalanx SDK's built-in RNG (new mode)
@@ -49,7 +47,6 @@ class GameRandomInstance {
    */
   usePhalanxRng(phalanx: PhalanxInstance): void {
     this.phalanxInstance = phalanx;
-    console.log('[GameRandom] Using Phalanx SDK Math.Random');
   }
 
   /**

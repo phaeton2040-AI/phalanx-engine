@@ -367,31 +367,23 @@ export class SocketManager {
   private setupEventHandlers(): void {
     if (!this.socket) return;
 
-    if (this.config.debug) {
-      console.log('[SocketManager] Setting up socket event handlers');
-    }
+    if (this.config.debug) {    }
 
     // Match found
     this.socket.on('match-found', (data: MatchFoundEvent) => {
-      if (this.config.debug) {
-        console.log('[SocketManager] Received match-found:', data);
-      }
+      if (this.config.debug) {      }
       this.callbacks.onMatchFound(data);
     });
 
     // Game start
     this.socket.on('game-start', (data: GameStartEvent) => {
-      if (this.config.debug) {
-        console.log('[SocketManager] Received game-start:', data);
-      }
+      if (this.config.debug) {      }
       this.callbacks.onGameStart(data);
     });
 
     // Countdown
     this.socket.on('countdown', (data: CountdownEvent) => {
-      if (this.config.debug) {
-        console.log('[SocketManager] Received countdown:', data);
-      }
+      if (this.config.debug) {      }
       this.callbacks.onCountdown(data);
     });
 

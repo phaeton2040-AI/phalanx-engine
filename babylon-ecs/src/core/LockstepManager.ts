@@ -182,11 +182,6 @@ export class LockstepManager {
    */
   private handleMoveCommand(cmd: NetworkMoveCommand): void {
     const { entityId, targetX, targetY, targetZ } = cmd.data;
-
-    console.log(
-      `[Lockstep] Executing move for entity ${entityId} to (${targetX}, ${targetY}, ${targetZ})`
-    );
-
     this.systems.movementSystem.moveEntityTo(
       entityId,
       new Vector3(targetX, targetY, targetZ)
@@ -201,11 +196,6 @@ export class LockstepManager {
     if (!playerId) return;
 
     const { unitType, gridX, gridZ } = cmd.data;
-
-    console.log(
-      `[Lockstep] Executing placeUnit for player ${playerId}: ${unitType} at (${gridX}, ${gridZ})`
-    );
-
     if (
       this.systems.formationGridSystem.placeUnit(
         playerId,
@@ -232,9 +222,6 @@ export class LockstepManager {
   private handleDeployUnitsCommand(cmd: PlayerCommand): void {
     const playerId = this.getCommandPlayerId(cmd, 'deployUnits');
     if (!playerId) return;
-
-    console.log(`[Lockstep] Executing deployUnits for player ${playerId}`);
-
     const unitCount =
       this.systems.formationGridSystem.commitFormation(playerId);
 
@@ -255,9 +242,6 @@ export class LockstepManager {
 
     const { fromGridX, fromGridZ, toGridX, toGridZ } = cmd.data;
 
-    console.log(
-      `[Lockstep] Executing moveGridUnit for player ${playerId}: from (${fromGridX}, ${fromGridZ}) to (${toGridX}, ${toGridZ})`
-    );
 
     this.systems.formationGridSystem.moveUnit(
       playerId,

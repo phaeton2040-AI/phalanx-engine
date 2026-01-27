@@ -535,10 +535,6 @@ export class CameraController {
 
     this.camera.position = new Vector3(cameraX, requiredHeight, targetZ);
     this.camera.setTarget(new Vector3(targetX, 0, targetZ));
-
-    console.log(
-      `[CameraController] Focused on formation grid at height ${requiredHeight.toFixed(1)}`
-    );
   }
 
   /**

@@ -121,12 +121,7 @@ export class FormationGridSystem {
   public initializeGrid(playerId: string, team: TeamTag): void {
     const grid = this.gridData.initializeGrid(playerId, team);
     this.renderer.createGridVisualization(playerId, grid);
-    this.renderer.createGridGroundPlane(playerId, grid);
-
-    console.log(
-      `[FormationGridSystem] Initialized grid for player ${playerId}, team ${team}`
-    );
-  }
+    this.renderer.createGridGroundPlane(playerId, grid);  }
 
   /**
    * Enter placement mode for a unit type
@@ -332,12 +327,7 @@ export class FormationGridSystem {
           toGridX,
           toGridZ,
         }
-      );
-
-      console.log(
-        `[FormationGridSystem] Moved ${result.unitType} from (${fromGridX}, ${fromGridZ}) to (${toGridX}, ${toGridZ})`
-      );
-    }
+      );    }
 
     return result.success;
   }
@@ -385,10 +375,6 @@ export class FormationGridSystem {
           gridX,
           gridZ,
         }
-      );
-
-      console.log(
-        `[FormationGridSystem] Placed ${unitType} at (${gridX}, ${gridZ})`
       );
     }
 

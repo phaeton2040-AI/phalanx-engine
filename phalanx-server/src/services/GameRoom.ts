@@ -219,11 +219,6 @@ export class GameRoom {
     // Emit match-started event
     this.eventEmitter('match-started', this.getMatchInfo());
 
-    // Log tick clock start
-    console.log(
-      `[TICK] Match ${this.id} started tick clock at ${this.config.tickRate} ticks/sec`
-    );
-
     // Start tick loop
     const tickIntervalMs = 1000 / this.config.tickRate;
     this.tickInterval = setInterval(() => {
@@ -243,11 +238,6 @@ export class GameRoom {
 
     // Check for lagging/disconnected players (LOCKSTEP-5)
     this.checkPlayerTimeouts();
-
-    // Log every second (every tickRate ticks)
-    if (this.currentTick % this.config.tickRate === 0) {
-      console.log(`[TICK] Match ${this.id}: Tick ${this.currentTick}`);
-    }
 
     const commands = this.pendingCommands.get(this.currentTick) || [];
 
@@ -333,9 +323,6 @@ export class GameRoom {
     const expectedSeq = lastSeq + 1;
 
     if (command.sequence !== expectedSeq) {
-      console.log(
-        `[SECURITY] Player ${playerId} invalid sequence: got ${command.sequence}, expected ${expectedSeq}`
-      );
       return false;
     }
 
@@ -368,9 +355,6 @@ export class GameRoom {
       tickDiff < -this.config.maxTickBehind ||
       tickDiff > this.config.maxTickAhead
     ) {
-      console.log(
-        `[LOCKSTEP] Player ${playerId} rejected: tick ${tick} out of range (current: ${this.currentTick})`
-      );
       return { accepted: false };
     }
 
@@ -382,9 +366,6 @@ export class GameRoom {
       for (const cmd of commands) {
         if (!this.validateCommandSequence(playerId, cmd)) {
           invalidCommands.push(cmd);
-          console.log(
-            `[LOCKSTEP] Player ${playerId} command rejected: invalid sequence ${cmd.sequence}`
-          );
         } else {
           validCommands.push(cmd);
         }
@@ -400,13 +381,6 @@ export class GameRoom {
     }
 
     const tickData = this.commandBuffer.get(tick)!;
-
-    // Check for duplicate submission
-    if (tickData[playerId] !== undefined) {
-      console.log(
-        `[LOCKSTEP] Player ${playerId} duplicate submission for tick ${tick} - overwriting`
-      );
-    }
 
     // Store commands for this player (can be empty array - this is valid)
     tickData[playerId] = validCommands;
@@ -431,10 +405,6 @@ export class GameRoom {
     for (const command of validCommands) {
       this.eventEmitter('player-command', playerId, command);
     }
-
-    console.log(
-      `[LOCKSTEP] Player ${playerId} submitted ${validCommands.length} command${validCommands.length !== 1 ? 's' : ''} for tick ${tick}${invalidCommands.length > 0 ? ` (${invalidCommands.length} rejected)` : ''}`
-    );
 
     return {
       accepted: true,
@@ -531,9 +501,6 @@ export class GameRoom {
           currentTick: this.currentTick,
           msSinceLastMessage,
         });
-        console.log(
-          `[LOCKSTEP] Player ${playerId} timed out: no message for ${msSinceLastMessage}ms`
-        );
 
         playerInfo.connected = false;
         this.laggingPlayers.delete(playerId);
@@ -547,9 +514,6 @@ export class GameRoom {
             currentTick: this.currentTick,
             msSinceLastMessage,
           });
-          console.log(
-            `[LOCKSTEP] Player ${playerId} lagging: no message for ${msSinceLastMessage}ms`
-          );
         }
       }
     }
@@ -647,10 +611,6 @@ export class GameRoom {
         matchId: this.id,
         gracePeriodMs: this.config.reconnectGracePeriodMs,
       });
-
-      console.log(
-        `[NET] Player ${playerId} disconnected from match ${this.id}`
-      );
     }
   }
 
@@ -705,9 +665,6 @@ export class GameRoom {
       socket.to(this.roomId).emit('player-reconnected', { playerId });
     }
 
-    console.log(
-      `[NET] Player ${playerId} reconnected to match ${this.id} at tick ${this.currentTick}`
-    );
     return true;
   }
 
@@ -794,11 +751,6 @@ export class GameRoom {
       hashes.forEach((hash, playerId) => {
         hashObject[playerId] = hash;
       });
-
-      console.log(
-        `[DESYNC] Detected at tick ${tick} in match ${this.id}:`,
-        hashObject
-      );
 
       // Emit desync event to server handlers
       this.eventEmitter('desync-detected', this.id, tick, hashObject);
