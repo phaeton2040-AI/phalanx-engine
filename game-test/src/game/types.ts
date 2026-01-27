@@ -2,12 +2,15 @@
  * Game types for the test game
  */
 
+export interface MoveCommandData {
+  targetX: number;
+  targetZ: number;
+}
+
 export interface MoveCommand {
   type: 'move';
-  data: {
-    targetX: number;
-    targetZ: number;
-  };
+  data: MoveCommandData;
+  playerId?: string;
 }
 
 export type GameCommand = MoveCommand;

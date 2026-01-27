@@ -1,6 +1,5 @@
 import { Vector3 } from '@babylonjs/core';
-import type { PhalanxClient, PlayerCommand } from 'phalanx-client';
-import { TickSimulation } from 'phalanx-client';
+import type { PhalanxClient, PlayerCommand, CommandsBatch } from 'phalanx-client';
 import type { EventBus } from './EventBus';
 import type { MovementSystem } from '../systems/MovementSystem';
 import type { PhysicsSystem } from '../systems/PhysicsSystem';
@@ -34,10 +33,6 @@ export interface LockstepCallbacks {
   getLocalTeam: () => TeamTag;
   /** Get the local player's ID */
   getLocalPlayerId: () => string;
-  /** Called before simulation tick to snapshot positions for interpolation */
-  onBeforeSimulationTick?: () => void;
-  /** Called after simulation tick to capture new positions for interpolation */
-  onAfterSimulationTick?: () => void;
 }
 
 /**
@@ -56,103 +51,70 @@ export interface LockstepSystems {
 }
 
 /**
- * LockstepManager - Handles deterministic lockstep synchronization
+ * LockstepManager - Handles deterministic command execution and simulation
  *
  * Responsible for:
- * - Receiving commands from the network (via TickSimulation)
- * - Executing commands at the correct tick
+ * - Executing commands received from the network
  * - Running deterministic simulation ticks
  * - Sending local commands to the server
- * - Providing interpolation timing for smooth visuals
  *
- * Network synchronization is delegated to TickSimulation from phalanx-client.
+ * Network synchronization and timing are delegated to PhalanxClient.
  */
 export class LockstepManager {
   private systems: LockstepSystems;
   private callbacks: LockstepCallbacks;
-
-  // Tick simulation from phalanx-client (handles network timing)
-  private tickSimulation: TickSimulation;
+  private client: PhalanxClient;
 
   constructor(
     client: PhalanxClient,
     systems: LockstepSystems,
     callbacks: LockstepCallbacks
   ) {
+    this.client = client;
     this.systems = systems;
     this.callbacks = callbacks;
-
-    // Initialize TickSimulation from phalanx-client
-    this.tickSimulation = new TickSimulation(client, {
-      tickRate: networkConfig.tickRate,
-      debug: false,
-    });
-
-    this.setupSimulationCallbacks();
   }
 
   /**
-   * Setup simulation callbacks for TickSimulation
+   * Process a tick with commands from all players
+   * This is called by PhalanxClient's onTick handler
    */
-  private setupSimulationCallbacks(): void {
-    // Before each tick: snapshot positions for interpolation
-    this.tickSimulation.onBeforeTick(() => {
-      this.callbacks.onBeforeSimulationTick?.();
-    });
+  public processTick(tick: number, commandsBatch: CommandsBatch): void {
+    // Flatten commands from all players
+    const allCommands: PlayerCommand[] = [];
+    for (const playerId in commandsBatch.commands) {
+      allCommands.push(...commandsBatch.commands[playerId]);
+    }
 
-    // Main simulation tick: execute commands and run game logic
-    this.tickSimulation.onSimulationTick((tick, commands) => {
-      // Execute all commands for this tick
-      this.executeTickCommands(commands);
+    // Execute all commands for this tick
+    this.executeTickCommands(allCommands);
 
-      // Run one tick of deterministic simulation
-      this.simulateTick();
+    // Run one tick of deterministic simulation
+    this.simulateTick();
 
-      // Process resources deterministically based on tick
-      this.systems.resourceSystem.processTick(tick);
+    // Process resources deterministically based on tick
+    this.systems.resourceSystem.processTick(tick);
 
-      // Process wave system (handles wave timing and auto-deployment)
-      this.systems.waveSystem.processTick(tick);
+    // Process wave system (handles wave timing and auto-deployment)
+    this.systems.waveSystem.processTick(tick);
 
-      // Cleanup destroyed entities
-      this.callbacks.onCleanupNeeded();
-    });
-
-    // After each tick: capture positions for interpolation
-    this.tickSimulation.onAfterTick(() => {
-      this.callbacks.onAfterSimulationTick?.();
-    });
+    // Cleanup destroyed entities
+    this.callbacks.onCleanupNeeded();
   }
 
   /**
    * Queue a command to be sent to the server
+   * Commands are automatically flushed by PhalanxClient each frame
    */
   public queueCommand(command: NetworkCommand): void {
-    this.tickSimulation.queueCommand(command);
-  }
-
-  /**
-   * Send pending commands to the server
-   * Called each frame from the render loop
-   */
-  public sendPendingCommands(): void {
-    this.tickSimulation.flushCommands();
-  }
-
-  /**
-   * Get the interpolation alpha for smooth visual rendering
-   * Returns a value between 0 and 1 representing progress between ticks
-   * 0 = at last tick position, 1 = at current tick position (ready for next)
-   */
-  public getInterpolationAlpha(): number {
-    return this.tickSimulation.getInterpolationAlpha();
+    this.client.sendCommand(command.type, command.data);
   }
 
   /**
    * Execute all commands for a single tick
    * Commands from ALL players are executed - no skipping of "own" commands
    */
-  private executeTickCommands(commands: PlayerCommand[]): void {
+  public executeTickCommands(commands: PlayerCommand[]): void {
     const localTeam = this.callbacks.getLocalTeam();
     const localPlayerId = this.callbacks.getLocalPlayerId();
 
@@ -275,7 +237,7 @@ export class LockstepManager {
    * Run one tick of deterministic game simulation
    * All systems update based on the fixed tick timestep
    */
-  private simulateTick(): void {
+  public simulateTick(): void {
     // Update physics (runs multiple substeps internally for accuracy)
     this.systems.physicsSystem.simulateTick();
 

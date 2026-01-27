@@ -1,10 +1,14 @@
 /**
  * Lobby Scene - connection and matchmaking UI
+ * Using simplified Phalanx Client API
  */
 
-import { PhalanxClient, MatchFoundEvent, CountdownEvent } from 'phalanx-client';
+import {
+  PhalanxClient,
+  type MatchFoundEvent,
+  type GameStartEvent,
+} from 'phalanx-client';
 import { SERVER_URL } from '../game/constants';
-import { GameRandom } from '../game/GameRandom';
 
 export class LobbyScene {
   private client: PhalanxClient | null = null;
@@ -54,11 +58,13 @@ export class LobbyScene {
    * Setup UI event listeners
    */
   private setupEventListeners(): void {
-    this.connectButton.addEventListener('click', () => this.handleConnect());
+    this.connectButton.addEventListener('click', () => {
+      void this.handleConnect();
+    });
 
     this.usernameInput.addEventListener('keypress', (e) => {
       if (e.key === 'Enter') {
-        this.handleConnect();
+        void this.handleConnect();
       }
     });
   }
@@ -90,66 +96,53 @@ export class LobbyScene {
   }
 
   /**
-   * Connect to server and start matchmaking
+   * Connect to server and start matchmaking using simplified API
    */
   private async connectToServer(username: string): Promise<void> {
     this.setStatus('Connecting to server...');
 
-    this.client = new PhalanxClient({
+    // Create and connect client
+    this.client = await PhalanxClient.create({
       serverUrl: SERVER_URL,
       playerId: this.playerId,
       username: username,
+      debug: true,
     });
 
-    // Setup event handlers
+    this.setStatus('Connected! Joining queue...');
+
+    // Subscribe to match found event
+    this.client.on('matchFound', (event: MatchFoundEvent) => {
+      this.matchData = event;
+      this.setStatus('Match found! Starting game...');
+    });
+
+    // Subscribe to game start event
+    this.client.on('gameStart', (_event: GameStartEvent) => {
+      // Transition to game scene
+      this.transitionToGame();
+    });
+
+    // Subscribe to countdown
+    this.client.on('countdown', (event) => {
+      this.setStatus(`Starting in ${event.seconds}...`);
+    });
+
+    // Subscribe to errors
+    this.client.on('error', (error) => {
+      this.setStatus(`Error: ${error.message}`, 'error');
+    });
+
+    // Subscribe to disconnection
     this.client.on('disconnected', () => {
       this.setStatus('Disconnected from server', 'error');
       this.connectButton.disabled = false;
       this.usernameInput.disabled = false;
     });
 
-    this.client.on('error', (error) => {
-      this.setStatus(`Error: ${error.message}`, 'error');
-    });
-
-    // Connect
-    await this.client.connect();
-    this.setStatus('Connected! Joining queue...');
-
-    // Join queue
+    // Join matchmaking queue
     await this.client.joinQueue();
     this.setStatus('In queue. Waiting for another player...');
-
-    // Wait for match
-    this.matchData = await this.client.waitForMatch();
-    this.setStatus('Match found! Starting countdown...');
-
-    // Wait for countdown
-    await this.client.waitForCountdown((event: CountdownEvent) => {
-      this.setStatus(`Game starting in ${event.seconds}...`);
-    });
-
-    // Wait for game start and initialize deterministic RNG
-    const gameStartEvent = await this.client.waitForGameStart();
-
-    // Initialize deterministic RNG with server-provided seed
-    if (gameStartEvent.randomSeed !== undefined) {
-      GameRandom.initialize(gameStartEvent.randomSeed);
-    } else {
-      // Fallback for backward compatibility - use match ID hash
-      console.warn(
-        '[LobbyScene] No randomSeed in game-start event, using fallback'
-      );
-      const fallbackSeed =
-        this.matchData.matchId
-          .split('')
-          .reduce((acc, char) => (acc << 5) - acc + char.charCodeAt(0), 0) >>>
-        0;
-      GameRandom.initialize(fallbackSeed);
-    }
-
-    // Transition to game scene
-    this.transitionToGame();
   }
 
   /**
@@ -181,7 +174,12 @@ export class LobbyScene {
     this.connectButton.disabled = false;
     this.usernameInput.disabled = false;
     this.setStatus('', 'info');
-    this.client = null;
+
+    // Cleanup previous instance
+    if (this.client) {
+      this.client.destroy().catch(console.error);
+      this.client = null;
+    }
     this.matchData = null;
   }
 }

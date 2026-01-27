@@ -5,6 +5,20 @@ pnpm-lock.yaml
 # Build output
 dist/
 
+# TypeScript compilation output (should not be committed)
+*.d.ts
+*.d.ts.map
+*.js
+*.js.map
+# Exception: keep config files that are meant to be JS
+!*.config.js
+!vite.config.js
+!vitest.config.js
+!eslint.config.js
+
+# WASM files copied to public folders (generated)
+public/wasm/
+
 # IDE
 .idea/
 .vscode/
