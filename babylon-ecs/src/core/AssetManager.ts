@@ -35,9 +35,10 @@ export interface ModelInstance {
 
 /**
  * Asset paths for preloading
+ * Note: Assets must be in the public folder to be available in production builds
  */
 export const AssetPaths = {
-  MUTANT_MODEL: '/src/visuals/characters/MutantMerged.glb',
+  MUTANT_MODEL: '/assets/characters/MutantMerged.glb',
 } as const;
 
 /**

@@ -30,6 +30,9 @@ const mimeTypes = {
     '.svg': 'image/svg+xml',
     '.ico': 'image/x-icon',
     '.json': 'application/json',
+    '.glb': 'model/gltf-binary',
+    '.gltf': 'model/gltf+json',
+    '.bin': 'application/octet-stream',
 };
 
 if (!bucketName || !accessKeyId || !secretAccessKey) {
