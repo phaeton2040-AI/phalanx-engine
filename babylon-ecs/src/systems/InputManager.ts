@@ -85,6 +85,10 @@ export class InputManager {
     const pickedMesh = pickResult.pickedMesh;
     const ground = this.sceneManager.getGround();
 
+    if (!pickedMesh) {
+      return;
+    }
+
     // Check if we clicked on a selectable entity
     const selectable = this.selectionSystem.findSelectableByMesh(pickedMesh);
 

@@ -342,7 +342,9 @@ export class AuthManager {
       this.refreshTimer = undefined;
     }
 
-    const token = this.state.token;
+    // Get stored data to retrieve access token for revocation
+    const stored = await this.storage.get();
+    const accessToken = stored?.accessToken;
 
     // Clear state first
     await this.storage.clear();
@@ -350,10 +352,10 @@ export class AuthManager {
     this.state.isLoading = false;
     this.updateState(this.state);
 
-    // Revoke token if supported
-    if (token && this.adapter.revokeToken) {
+    // Revoke access token if available (Google requires access token, not ID token)
+    if (accessToken && this.adapter.revokeToken) {
       try {
-        await this.adapter.revokeToken(token);
+        await this.adapter.revokeToken(accessToken);
         this.log('Token revoked successfully');
       } catch (error) {
         console.warn('[AuthManager] Failed to revoke token:', error);
@@ -491,6 +493,7 @@ export class AuthManager {
     const storedData: StoredAuthData = {
       user,
       token: result.token!,
+      accessToken: result.accessToken,
       refreshToken: result.refreshToken || existingRefreshToken,
       expiresAt: result.expiresAt,
       provider: result.provider!,

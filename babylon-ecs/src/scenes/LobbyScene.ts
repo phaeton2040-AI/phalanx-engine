@@ -3,21 +3,17 @@
  */
 
 import { PhalanxClient } from 'phalanx-client';
-import { AuthManager, type AuthUser } from 'phalanx-client/auth';
-import type { MatchFoundEvent, CountdownEvent } from 'phalanx-client';
+import type {
+  MatchFoundEvent,
+  CountdownEvent,
+  PhalanxAuthState,
+} from 'phalanx-client';
 import { SERVER_URL, authConfig } from '../config/constants';
 import { GameRandom } from '../core/GameRandom';
 
 export class LobbyScene {
-  private client: PhalanxClient | null = null;
-  private authManager: AuthManager | null = null;
-  private playerId: string;
+  private client: PhalanxClient;
   private matchData: MatchFoundEvent | null = null;
-
-  // Auth state
-  private isAuthenticated = false;
-  private currentUser: AuthUser | null = null;
-  private authToken: string | null = null;
 
   // DOM elements
   private lobbyElement: HTMLElement;
@@ -33,9 +29,6 @@ export class LobbyScene {
     | null = null;
 
   constructor() {
-    // Generate unique player ID (will be replaced by auth user ID when signed in)
-    this.playerId = `player-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-
     // Get DOM elements
     this.lobbyElement = document.getElementById('lobby')!;
     this.gameContainer = document.getElementById('game-container')!;
@@ -48,109 +41,40 @@ export class LobbyScene {
     this.userInfoElement = document.getElementById('user-info')!;
     this.statusElement = document.getElementById('status')!;
 
+    // Create PhalanxClient with auth configuration
+    this.client = new PhalanxClient({
+      serverUrl: SERVER_URL,
+      auth: authConfig.authEnabled ? {
+        provider: 'google',
+        google: {
+          clientId: authConfig.googleClientId,
+          tokenExchangeUrl: authConfig.tokenExchangeUrl,
+        },
+      } : undefined,
+    });
+
+    // Subscribe to auth events
+    this.client.on('authStateChanged', (state) => {
+      console.log('[LobbyScene] Auth state changed:', state);
+      this.updateUIForAuthState(state);
+    });
+
+    this.client.on('authError', (error) => {
+      console.error('[LobbyScene] Auth error:', error);
+      this.setStatus(`Auth error: ${error.message}`, 'error');
+      this.signInButton.disabled = false;
+    });
+
     this.setupEventListeners();
-    this.initializeAuth();
+
+    // Initial UI update
+    this.updateUIForAuthState(this.client.getAuthState());
   }
-
-  /**
-   * Initialize authentication
-   */
-  private initializeAuth(): void {
-    if (!authConfig.authEnabled || !authConfig.googleClientId) {
-      console.warn('[LobbyScene] Auth disabled - no Google Client ID configured');
-      this.updateUIForAuthState();
-      return;
-    }
-
-    this.authManager = new AuthManager({
-      provider: 'google',
-      google: {
-        clientId: authConfig.googleClientId,
-        scopes: ['openid', 'profile', 'email'],
-        // Use root URL as redirect URI
-        redirectUri: window.location.origin,
-        // Use backend for token exchange (keeps client_secret secure on server)
-        tokenExchangeUrl: authConfig.tokenExchangeUrl,
-      },
-      onAuthStateChange: (state) => {
-        console.log('[LobbyScene] Auth state changed:', state);
-        this.isAuthenticated = state.isAuthenticated;
-        this.currentUser = state.user;
-        this.authToken = state.token;
-
-        if (state.user) {
-          this.playerId = state.user.id;
-        }
-
-        this.updateUIForAuthState();
-      },
-      onAuthError: (error) => {
-        console.error('[LobbyScene] Auth error:', error);
-        this.setStatus(`Auth error: ${error.message}`, 'error');
-        this.signInButton.disabled = false;
-      },
-    });
-
-    // Handle OAuth callback if we're returning from a redirect
-    void this.handleAuthCallback().then(() => {
-      // After handling callback, check for existing session
-      return this.authManager!.checkSession();
-    }).then((hasSession) => {
-      if (hasSession) {
-        console.log('[LobbyScene] Session active');
-      }
-    });
-  }
-
-  /**
-   * Handle OAuth callback from redirect.
-   * This is called when user returns from Google OAuth.
-   */
-  private async handleAuthCallback(): Promise<void> {
-    const params = new URLSearchParams(window.location.search);
-    const code = params.get('code');
-    const state = params.get('state');
-    const error = params.get('error');
-
-    // Check if this is an OAuth callback (has code or error)
-    if (!code && !error) {
-      return;
-    }
-
-    console.log('[LobbyScene] Handling OAuth callback...');
-    this.setStatus('Completing sign-in...', 'info');
-
-    try {
-      if (this.authManager) {
-        const result = await this.authManager.handleCallback({
-          code: code || undefined,
-          state: state || undefined,
-          error: error || undefined,
-          errorDescription: params.get('error_description') || undefined,
-          url: window.location.href,
-        });
-
-        if (result.valid) {
-          this.setStatus('Signed in successfully!', 'info');
-        } else {
-          this.setStatus(result.error || 'Sign in failed', 'error');
-        }
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Sign in failed';
-      this.setStatus(message, 'error');
-    }
-
-    // Clean up URL by removing OAuth params
-    const cleanUrl = window.location.origin + window.location.pathname;
-    window.history.replaceState({}, document.title, cleanUrl);
-  }
-
 
   /**
    * Update UI based on authentication state
    */
-  private updateUIForAuthState(): void {
+  private updateUIForAuthState(authState: PhalanxAuthState): void {
     if (!authConfig.authEnabled) {
       // Auth disabled - show connect button directly (dev mode)
       this.signInButton.style.display = 'none';
@@ -160,7 +84,16 @@ export class LobbyScene {
       return;
     }
 
-    if (this.isAuthenticated && this.currentUser) {
+    if (authState.isLoading) {
+      // Still loading auth state
+      this.signInButton.style.display = 'none';
+      this.userInfoElement.style.display = 'none';
+      this.connectButton.style.display = 'none';
+      this.setStatus('Loading...', 'info');
+      return;
+    }
+
+    if (authState.isAuthenticated && authState.user) {
       // Signed in - show user info and Find Game button
       this.signInButton.style.display = 'none';
 
@@ -170,12 +103,12 @@ export class LobbyScene {
       const userName = this.userInfoElement.querySelector('#user-name') as HTMLSpanElement;
       const signOutBtn = this.userInfoElement.querySelector('#sign-out-btn') as HTMLButtonElement;
 
-      if (avatarImg && this.currentUser.avatarUrl) {
-        avatarImg.src = this.currentUser.avatarUrl;
+      if (avatarImg && authState.user.avatarUrl) {
+        avatarImg.src = authState.user.avatarUrl;
         avatarImg.style.display = 'block';
       }
       if (userName) {
-        userName.textContent = this.currentUser.username || this.currentUser.email || 'Player';
+        userName.textContent = authState.user.username || authState.user.email || 'Player';
       }
       if (signOutBtn) {
         signOutBtn.onclick = () => void this.handleSignOut();
@@ -198,36 +131,19 @@ export class LobbyScene {
   }
 
   /**
-   * Handle sign in button click - uses redirect flow
+   * Handle sign in button click
    */
   private handleSignIn(): void {
-    if (!this.authManager) {
-      this.setStatus('Auth not configured', 'error');
-      return;
-    }
-
     this.signInButton.disabled = true;
     this.setStatus('Redirecting to sign-in...', 'info');
-
-    // Use redirect flow (more reliable than popup which is often blocked)
-    this.authManager.login();
+    this.client.login();
   }
 
   /**
    * Handle sign out
    */
   private async handleSignOut(): Promise<void> {
-    if (this.authManager) {
-      await this.authManager.logout();
-    }
-
-    // Reset state
-    this.isAuthenticated = false;
-    this.currentUser = null;
-    this.authToken = null;
-    this.playerId = `player-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-
-    this.updateUIForAuthState();
+    await this.client.logout();
     this.setStatus('Signed out', 'info');
   }
 
@@ -251,7 +167,6 @@ export class LobbyScene {
     this.signInButton.addEventListener('click', () => {
       this.handleSignIn();
     });
-
 
     // Add touch feedback for better mobile UX
     this.connectButton.addEventListener('touchstart', () => {
@@ -284,46 +199,24 @@ export class LobbyScene {
    * Handle connect button click
    */
   private async handleConnect(): Promise<void> {
-    // Get username from auth or input field
-    let username: string;
-
-    if (authConfig.authEnabled && this.isAuthenticated && this.currentUser) {
-      username = this.currentUser.username || this.currentUser.email || 'Player';
-    } else {
-      username = this.usernameInput.value.trim();
-      if (!username) {
-        this.setStatus('Please enter a username', 'error');
-        return;
-      }
-    }
-
     this.connectButton.disabled = true;
-    this.usernameInput.disabled = true;
 
     try {
-      await this.connectToServer(username);
+      await this.connectToServer();
     } catch (error) {
       this.setStatus(
         `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
         'error'
       );
       this.connectButton.disabled = false;
-      this.usernameInput.disabled = false;
     }
   }
 
   /**
    * Connect to server and start matchmaking
    */
-  private async connectToServer(username: string): Promise<void> {
+  private async connectToServer(): Promise<void> {
     this.setStatus('Connecting to server...');
-
-    this.client = new PhalanxClient({
-      serverUrl: SERVER_URL,
-      playerId: this.playerId,
-      username: username,
-      authToken: this.authToken || undefined,
-    });
 
     // Setup event handlers
     this.client.on('disconnected', () => {
@@ -382,7 +275,7 @@ export class LobbyScene {
     this.lobbyElement.style.display = 'none';
     this.gameContainer.style.display = 'block';
 
-    if (this.onGameStart && this.client && this.matchData) {
+    if (this.onGameStart && this.matchData) {
       this.onGameStart(this.client, this.matchData);
     }
   }
@@ -404,10 +297,9 @@ export class LobbyScene {
     this.connectButton.disabled = false;
     this.signInButton.disabled = false;
     this.setStatus('', 'info');
-    this.client = null;
     this.matchData = null;
 
     // Refresh auth state
-    this.updateUIForAuthState();
+    this.updateUIForAuthState(this.client.getAuthState());
   }
 }

@@ -127,6 +127,11 @@ export type {
 export type {
   // Configuration
   PhalanxClientConfig,
+  PhalanxAuthConfig,
+
+  // Auth
+  PhalanxAuthState,
+  PhalanxAuthUser,
 
   // Commands
   PlayerCommand,

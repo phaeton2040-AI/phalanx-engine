@@ -190,8 +190,10 @@ export interface AuthState {
 export interface StoredAuthData {
   /** User information */
   user: AuthUser;
-  /** Auth token */
+  /** Auth token (ID token) */
   token: string;
+  /** Access token (for API calls and revocation) */
+  accessToken?: string;
   /** Refresh token (if available) */
   refreshToken?: string;
   /** Token expiration timestamp */

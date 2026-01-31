@@ -18,20 +18,29 @@ export interface PhalanxClientConfig {
   serverUrl: string;
 
   /**
-   * Unique identifier for this player
+   * Unique identifier for this player.
+   * If auth is enabled and user signs in, this will be overwritten with the auth user ID.
    */
-  playerId: string;
+  playerId?: string;
 
   /**
-   * Display name for this player
+   * Display name for this player.
+   * If auth is enabled and user signs in, this will be overwritten with the auth username.
    */
-  username: string;
+  username?: string;
 
   /**
    * Authentication token (e.g., Google ID token).
    * Required if server has authentication enabled.
+   * If using built-in auth, this is managed automatically.
    */
   authToken?: string;
+
+  /**
+   * Authentication configuration.
+   * If provided, the client will manage authentication internally.
+   */
+  auth?: PhalanxAuthConfig;
 
   /**
    * Whether to automatically attempt reconnection after disconnection
@@ -68,6 +77,42 @@ export interface PhalanxClientConfig {
    * @default false
    */
   debug?: boolean;
+}
+
+/**
+ * Authentication configuration for PhalanxClient
+ */
+export interface PhalanxAuthConfig {
+  /**
+   * OAuth provider to use
+   */
+  provider: 'google';
+
+  /**
+   * Google OAuth configuration
+   */
+  google?: {
+    /**
+     * Google OAuth Client ID
+     */
+    clientId: string;
+
+    /**
+     * OAuth scopes (default: ['openid', 'profile', 'email'])
+     */
+    scopes?: string[];
+
+    /**
+     * Redirect URI after auth (default: window.location.origin)
+     */
+    redirectUri?: string;
+
+    /**
+     * Backend endpoint URL for token exchange.
+     * Required for secure token exchange with client_secret on server.
+     */
+    tokenExchangeUrl?: string;
+  };
 }
 
 /**
@@ -265,6 +310,27 @@ export type FrameHandler = (alpha: number, dt: number) => void;
 export type Unsubscribe = () => void;
 
 /**
+ * Auth user information
+ */
+export interface PhalanxAuthUser {
+  id: string;
+  username?: string;
+  email?: string;
+  avatarUrl?: string;
+  provider: string;
+}
+
+/**
+ * Auth state
+ */
+export interface PhalanxAuthState {
+  isAuthenticated: boolean;
+  isLoading: boolean;
+  user: PhalanxAuthUser | null;
+  error?: string;
+}
+
+/**
  * Events emitted by PhalanxClient
  */
 export interface PhalanxClientEvents {
@@ -274,6 +340,10 @@ export interface PhalanxClientEvents {
   reconnecting: (attempt: number) => void;
   reconnectFailed: () => void;
   error: (error: PhalanxError) => void;
+
+  // Auth events
+  authStateChanged: (state: PhalanxAuthState) => void;
+  authError: (error: PhalanxError) => void;
 
   // Queue events
   queueJoined: (status: QueueStatusEvent) => void;

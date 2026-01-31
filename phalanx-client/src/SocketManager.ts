@@ -180,6 +180,15 @@ export class SocketManager {
     return this.connectionState;
   }
 
+  /**
+   * Update player credentials (after auth)
+   */
+  updateCredentials(playerId: string, username: string, authToken?: string): void {
+    this.config.playerId = playerId;
+    this.config.username = username;
+    this.config.authToken = authToken;
+  }
+
   // ============================================
   // QUEUE OPERATIONS
   // ============================================

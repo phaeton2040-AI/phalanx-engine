@@ -7,9 +7,13 @@ import { EventEmitter } from './EventEmitter.js';
 import { RenderLoop } from './RenderLoop.js';
 import { SocketManager } from './SocketManager.js';
 import { DesyncDetector, type DesyncConfig } from './DesyncDetector.js';
+import { AuthManager } from './auth/AuthManager.js';
+import type { AuthState, CallbackParams } from './auth/types.js';
 import type {
   PhalanxClientConfig,
   PhalanxClientEvents,
+  PhalanxAuthState,
+  PhalanxAuthUser,
   PlayerCommand,
   MatchFoundEvent,
   CountdownEvent,
@@ -50,21 +54,33 @@ import type {
  * ```
  */
 export class PhalanxClient extends EventEmitter<PhalanxClientEvents> {
-  private config: Omit<Required<PhalanxClientConfig>, 'authToken'> & Pick<PhalanxClientConfig, 'authToken'>;
+  private config: Required<Omit<PhalanxClientConfig, 'authToken' | 'auth' | 'playerId' | 'username'>> &
+    Pick<PhalanxClientConfig, 'authToken' | 'auth' | 'playerId' | 'username'>;
   private socketManager: SocketManager;
   private renderLoop: RenderLoop;
   private desyncDetector: DesyncDetector;
+  private authManager: AuthManager | null = null;
 
   // State
   private clientState: ClientState = 'idle';
   private currentMatchId: string | null = null;
   private currentTick: number = 0;
 
+  // Auth state
+  private authState: PhalanxAuthState = {
+    isAuthenticated: false,
+    isLoading: true,
+    user: null,
+  };
+
   // Pending commands queue
   private pendingCommands: PlayerCommand[] = [];
 
   constructor(config: PhalanxClientConfig) {
     super();
+
+    // Generate default player ID if not provided
+    const defaultPlayerId = `player-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 
     this.config = {
       autoReconnect: true,
@@ -74,14 +90,23 @@ export class PhalanxClient extends EventEmitter<PhalanxClientEvents> {
       tickRate: 20,
       debug: false,
       ...config,
+      playerId: config.playerId || defaultPlayerId,
+      username: config.username || `Player-${defaultPlayerId.slice(-6)}`,
     };
+
+    // Initialize auth if configured
+    if (config.auth) {
+      this.initializeAuth(config.auth);
+    } else {
+      this.authState.isLoading = false;
+    }
 
     // Initialize SocketManager with callbacks
     this.socketManager = new SocketManager(
       {
         serverUrl: this.config.serverUrl,
-        playerId: this.config.playerId,
-        username: this.config.username,
+        playerId: this.config.playerId!,
+        username: this.config.username!,
         authToken: this.config.authToken,
         connectionTimeoutMs: this.config.connectionTimeoutMs,
         autoReconnect: this.config.autoReconnect,
@@ -177,6 +202,167 @@ export class PhalanxClient extends EventEmitter<PhalanxClientEvents> {
 
     // Set up command flushing
     this.renderLoop.setCommandFlushCallback(() => this.flushPendingCommands());
+
+    // Handle OAuth callback if present in URL
+    if (config.auth && typeof window !== 'undefined') {
+      void this.handleAuthCallback();
+    }
+  }
+
+  // ============================================
+  // AUTHENTICATION
+  // ============================================
+
+  /**
+   * Initialize authentication manager
+   */
+  private initializeAuth(authConfig: NonNullable<PhalanxClientConfig['auth']>): void {
+    if (authConfig.provider !== 'google' || !authConfig.google) {
+      console.warn('[PhalanxClient] Invalid auth config - only Google is supported');
+      this.authState.isLoading = false;
+      return;
+    }
+
+    this.authManager = new AuthManager({
+      provider: 'google',
+      google: {
+        clientId: authConfig.google.clientId,
+        scopes: authConfig.google.scopes || ['openid', 'profile', 'email'],
+        redirectUri: authConfig.google.redirectUri || (typeof window !== 'undefined' ? window.location.origin : undefined),
+        tokenExchangeUrl: authConfig.google.tokenExchangeUrl,
+      },
+      debug: this.config.debug,
+      onAuthStateChange: (state: AuthState) => {
+        this.handleAuthStateChange(state);
+      },
+      onAuthError: (error: Error) => {
+        this.emit('authError', { message: error.message });
+      },
+    });
+
+    // Check for existing session
+    void this.authManager.checkSession().then(() => {
+      // Session check complete - state already updated via onAuthStateChange
+    });
+  }
+
+  /**
+   * Handle auth state changes from AuthManager
+   */
+  private handleAuthStateChange(state: AuthState): void {
+    const user: PhalanxAuthUser | null = state.user ? {
+      id: state.user.id,
+      username: state.user.username,
+      email: state.user.email,
+      avatarUrl: state.user.avatarUrl,
+      provider: state.provider || 'google',
+    } : null;
+
+    this.authState = {
+      isAuthenticated: state.isAuthenticated,
+      isLoading: state.isLoading,
+      user,
+    };
+
+    // Update config with auth user info
+    if (user) {
+      this.config.playerId = user.id;
+      this.config.username = user.username || user.email || `Player-${user.id.slice(-6)}`;
+      this.config.authToken = state.token || undefined;
+
+      // Update socket manager with new credentials
+      this.socketManager.updateCredentials(
+        user.id,
+        this.config.username,
+        state.token || undefined
+      );
+    }
+
+    this.emit('authStateChanged', this.authState);
+  }
+
+  /**
+   * Handle OAuth callback from redirect
+   */
+  private async handleAuthCallback(): Promise<void> {
+    if (!this.authManager) return;
+
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+    const error = params.get('error');
+
+    if (!code && !error) return;
+
+    this.log('Handling OAuth callback...');
+
+    try {
+      const result = await this.authManager.handleCallback({
+        code: code || undefined,
+        state: params.get('state') || undefined,
+        error: error || undefined,
+        errorDescription: params.get('error_description') || undefined,
+        url: window.location.href,
+      });
+
+      if (!result.valid) {
+        this.emit('authError', { message: result.error || 'Authentication failed' });
+      }
+    } catch (err) {
+      this.emit('authError', {
+        message: err instanceof Error ? err.message : 'Authentication failed'
+      });
+    }
+
+    // Clean up URL
+    const cleanUrl = window.location.origin + window.location.pathname;
+    window.history.replaceState({}, document.title, cleanUrl);
+  }
+
+  /**
+   * Start login flow (redirects to OAuth provider)
+   */
+  login(): void {
+    if (!this.authManager) {
+      this.emit('authError', { message: 'Authentication not configured' });
+      return;
+    }
+    this.authManager.login();
+  }
+
+  /**
+   * Log out the current user
+   */
+  async logout(): Promise<void> {
+    if (!this.authManager) return;
+
+    await this.authManager.logout();
+
+    // Reset to anonymous player
+    const defaultPlayerId = `player-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    this.config.playerId = defaultPlayerId;
+    this.config.username = `Player-${defaultPlayerId.slice(-6)}`;
+    this.config.authToken = undefined;
+  }
+
+  /**
+   * Get current authentication state
+   */
+  getAuthState(): PhalanxAuthState {
+    return { ...this.authState };
+  }
+
+  /**
+   * Check if user is authenticated
+   */
+  isAuthenticated(): boolean {
+    return this.authState.isAuthenticated;
+  }
+
+  /**
+   * Get current user info
+   */
+  getUser(): PhalanxAuthUser | null {
+    return this.authState.user;
   }
 
   // ============================================
@@ -485,14 +671,14 @@ export class PhalanxClient extends EventEmitter<PhalanxClientEvents> {
    * Get player ID configured for this client
    */
   getPlayerId(): string {
-    return this.config.playerId;
+    return this.config.playerId || '';
   }
 
   /**
    * Get username configured for this client
    */
   getUsername(): string {
-    return this.config.username;
+    return this.config.username || '';
   }
 
   // ============================================
@@ -520,6 +706,12 @@ export class PhalanxClient extends EventEmitter<PhalanxClientEvents> {
     this.ensureConnected();
     if (this.clientState !== 'playing' && this.clientState !== 'reconnecting') {
       throw new Error('Not in a game. Join a match first.');
+    }
+  }
+
+  private log(...args: unknown[]): void {
+    if (this.config.debug) {
+      console.log('[PhalanxClient]', ...args);
     }
   }
 }

@@ -1,4 +1,4 @@
-import { Mesh } from '@babylonjs/core';
+import { Mesh, AbstractMesh } from '@babylonjs/core';
 import { Entity } from '../entities/Entity';
 import { EntityManager } from '../core/EntityManager';
 import { EventBus } from '../core/EventBus';
@@ -219,8 +219,9 @@ export class SelectionSystem {
   /**
    * Find selectable entity by mesh
    */
-  public findSelectableByMesh(mesh: Mesh): ISelectableEntity | undefined {
-    return this.selectableCache.get(mesh);
+  public findSelectableByMesh(mesh: AbstractMesh): ISelectableEntity | undefined {
+    // The cache uses Mesh as key, but AbstractMesh is compatible for lookup
+    return this.selectableCache.get(mesh as Mesh);
   }
 
   /**
