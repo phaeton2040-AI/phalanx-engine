@@ -68,13 +68,59 @@ To use a local development server, create a `.env.local` file:
 ```bash
 # .env.local
 VITE_SERVER_URL=http://localhost:3000
+VITE_GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
 ```
 
 Available environment variables:
 
-| Variable          | Description             | Default                 |
-| ----------------- | ----------------------- | ----------------------- |
-| `VITE_SERVER_URL` | Phalanx game server URL | `http://localhost:3000` |
+| Variable                | Description                     | Default                 |
+| ----------------------- | ------------------------------- | ----------------------- |
+| `VITE_SERVER_URL`       | Phalanx game server URL         | `http://localhost:3000` |
+| `VITE_GOOGLE_CLIENT_ID` | Google OAuth Client ID for auth | (none - auth disabled)  |
+
+### Authentication Setup
+
+To enable Google Sign-In authentication:
+
+1. **Create a Google OAuth Client ID**:
+   - Go to [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
+   - Create a new OAuth 2.0 Client ID
+   - Set Application type to "Web application"
+   - Add Authorized JavaScript origins:
+     - `http://localhost:5173` (for development)
+     - Your production domain
+   - Add Authorized redirect URIs (same as origins):
+     - `http://localhost:5173`
+     - Your production domain
+   - Copy both the **Client ID** and **Client Secret**
+
+2. **Configure the client** (babylon-ecs):
+   - Create `.env.local` with:
+     ```bash
+     VITE_GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+     VITE_SERVER_URL=http://localhost:3000
+     ```
+
+3. **Configure the server** (game-test-server):
+   - Create `.env` with:
+     ```bash
+     GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+     GOOGLE_CLIENT_SECRET=your-client-secret
+     ```
+   - The client ID must match between client and server
+   - The client secret is kept secure on the server (never exposed to browser)
+
+**How it works:**
+1. User clicks "Sign in with Google" → redirected to Google OAuth
+2. After sign-in, Google redirects back with an authorization code
+3. Client sends code to server's `/auth/token` endpoint
+4. Server exchanges code for tokens using `client_secret` (secure!)
+5. Client receives ID token and uses it for game authentication
+
+When authentication is enabled:
+- Users see "Sign in with Google" button in the lobby
+- After signing in, "Find Game" button appears
+- JWT tokens are sent to the server with WebSocket connections
 
 ### Build for Production
 

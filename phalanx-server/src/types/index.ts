@@ -105,6 +105,8 @@ export interface AuthConfig {
   google?: {
     /** Your Google OAuth Client ID */
     clientId: string;
+    /** Your Google OAuth Client Secret (required for token exchange) */
+    clientSecret?: string;
     /** Allowed hosted domains (optional, for Google Workspace) */
     allowedDomains?: string[];
   };

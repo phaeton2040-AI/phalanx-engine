@@ -72,11 +72,38 @@ heroku logs --tail
 
 ### Environment Variables
 
-| Variable       | Description                                  | Default                                       |
-| -------------- | -------------------------------------------- | --------------------------------------------- |
-| `PORT`         | Server port (set automatically by Heroku)    | `3000`                                        |
-| `NODE_ENV`     | Environment mode                             | `development`                                 |
-| `CORS_ORIGINS` | Comma-separated list of allowed CORS origins | `http://localhost:3001,http://localhost:5173` |
+| Variable               | Description                                    | Default                                       |
+| ---------------------- | ---------------------------------------------- | --------------------------------------------- |
+| `PORT`                 | Server port (set automatically by Heroku)      | `3000`                                        |
+| `NODE_ENV`             | Environment mode                               | `development`                                 |
+| `CORS_ORIGINS`         | Comma-separated list of allowed CORS origins   | `http://localhost:3001,http://localhost:5173` |
+| `GOOGLE_CLIENT_ID`     | Google OAuth Client ID for JWT authentication  | (none - auth disabled)                        |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth Client Secret for token exchange  | (none)                                        |
+
+### Authentication
+
+The server supports Google OAuth authentication with secure server-side token exchange.
+
+**How it works:**
+1. Client redirects user to Google OAuth with PKCE
+2. User authenticates and is redirected back with an authorization code
+3. Client sends the code to `/auth/token` endpoint on this server
+4. Server exchanges the code for tokens using the `client_secret` (kept secure on server)
+5. Server returns the ID token to the client
+6. Client uses the ID token for WebSocket authentication
+
+**Setup:**
+```bash
+# Set both client ID and secret
+heroku config:set GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+heroku config:set GOOGLE_CLIENT_SECRET=your-client-secret
+
+# Or in .env file for local development
+GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=your-client-secret
+```
+
+**Important:** Never expose the `GOOGLE_CLIENT_SECRET` in client-side code!
 
 ## Scripts
 

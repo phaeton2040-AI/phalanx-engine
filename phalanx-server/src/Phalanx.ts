@@ -22,6 +22,10 @@ import type {
 import { validateConfig } from './config/validation.js';
 import { MatchmakingService } from './services/MatchmakingService.js';
 import { TokenValidatorService } from './services/TokenValidator.js';
+import {
+  OAuthExchangeService,
+  type TokenExchangeRequest,
+} from './services/OAuthExchangeService.js';
 
 /**
  * Socket data interface for type safety
@@ -47,6 +51,7 @@ export class Phalanx extends EventEmitter {
   private io: SocketIOServer | null = null;
   private matchmaking: MatchmakingService | null = null;
   private tokenValidator: TokenValidatorService | null = null;
+  private oauthExchange: OAuthExchangeService | null = null;
   private isRunning: boolean = false;
 
   constructor(config?: Partial<PhalanxConfig>) {
@@ -58,8 +63,18 @@ export class Phalanx extends EventEmitter {
    * Create HTTP or HTTPS server based on TLS configuration
    */
   private createServer(): HttpServer | HttpsServer {
-    const requestHandler = (req: IncomingMessage, res: ServerResponse) => {
+    const requestHandler = async (req: IncomingMessage, res: ServerResponse) => {
+      // Handle CORS preflight
+      if (req.method === 'OPTIONS') {
+        this.setCorsHeaders(res);
+        res.writeHead(204);
+        res.end();
+        return;
+      }
+
+      // Health check endpoint
       if (req.url === '/' || req.url === '/health') {
+        this.setCorsHeaders(res);
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(
           JSON.stringify({
@@ -68,10 +83,19 @@ export class Phalanx extends EventEmitter {
             tls: !!this.config.tls?.enabled,
           })
         );
-      } else {
-        res.writeHead(404, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Not found' }));
+        return;
       }
+
+      // OAuth token exchange endpoint
+      if (req.url === '/auth/token' && req.method === 'POST') {
+        await this.handleTokenExchange(req, res);
+        return;
+      }
+
+      // 404 for other routes
+      this.setCorsHeaders(res);
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Not found' }));
     };
 
     if (this.config.tls?.enabled) {
@@ -85,7 +109,7 @@ export class Phalanx extends EventEmitter {
         };
 
         console.log('[Phalanx] Starting with TLS enabled (WSS)');
-        return createHttpsServer(tlsOptions, requestHandler);
+        return createHttpsServer(tlsOptions, (req, res) => void requestHandler(req, res));
       } catch (error) {
         const message =
           error instanceof Error ? error.message : 'Unknown error';
@@ -94,7 +118,91 @@ export class Phalanx extends EventEmitter {
     }
 
     console.log('[Phalanx] Starting without TLS (development mode)');
-    return createHttpServer(requestHandler);
+    return createHttpServer((req, res) => void requestHandler(req, res));
+  }
+
+  /**
+   * Set CORS headers on response
+   */
+  private setCorsHeaders(res: ServerResponse): void {
+    const origins = Array.isArray(this.config.cors.origin)
+      ? this.config.cors.origin
+      : [this.config.cors.origin];
+
+    // For simplicity, allow all configured origins
+    // In production, you might want to check the Origin header
+    res.setHeader('Access-Control-Allow-Origin', origins[0] || '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    if (this.config.cors.credentials) {
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+    }
+  }
+
+  /**
+   * Handle OAuth token exchange request
+   */
+  private async handleTokenExchange(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    this.setCorsHeaders(res);
+
+    if (!this.oauthExchange) {
+      res.writeHead(503, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        success: false,
+        error: 'OAuth not configured',
+        errorCode: 'not_configured'
+      }));
+      return;
+    }
+
+    try {
+      // Read request body
+      const body = await this.readRequestBody(req);
+      const request = JSON.parse(body) as TokenExchangeRequest;
+
+      // Validate required fields
+      if (!request.code || !request.codeVerifier || !request.redirectUri || !request.provider) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          success: false,
+          error: 'Missing required fields: code, codeVerifier, redirectUri, provider',
+          errorCode: 'invalid_request'
+        }));
+        return;
+      }
+
+      // Exchange the code for tokens
+      const result = await this.oauthExchange.exchangeCode(request);
+
+      res.writeHead(result.success ? 200 : 400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(result));
+    } catch (error) {
+      console.error('[Phalanx] Token exchange error:', error);
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        success: false,
+        error: 'Internal server error',
+        errorCode: 'server_error'
+      }));
+    }
+  }
+
+  /**
+   * Read the full request body as a string
+   */
+  private readRequestBody(req: IncomingMessage): Promise<string> {
+    return new Promise((resolve, reject) => {
+      let body = '';
+      req.on('data', (chunk) => {
+        body += chunk.toString();
+        // Limit body size to 1MB
+        if (body.length > 1024 * 1024) {
+          reject(new Error('Request body too large'));
+        }
+      });
+      req.on('end', () => resolve(body));
+      req.on('error', reject);
+    });
   }
 
   /**
@@ -116,8 +224,12 @@ export class Phalanx extends EventEmitter {
     // Setup authentication if enabled
     if (this.config.auth?.enabled) {
       this.tokenValidator = new TokenValidatorService(this.config.auth);
+      this.oauthExchange = new OAuthExchangeService(this.config.auth);
       this.setupAuthMiddleware();
       console.log('[Phalanx] Authentication enabled');
+      if (this.config.auth.google?.clientSecret) {
+        console.log('[Phalanx] OAuth token exchange endpoint available at /auth/token');
+      }
     } else {
       console.log('[Phalanx] Authentication disabled (development mode)');
     }

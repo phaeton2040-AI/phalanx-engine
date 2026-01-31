@@ -90,6 +90,7 @@ export class GoogleOAuthAdapter implements AuthAdapter {
 
   // Storage keys for PKCE
   private readonly VERIFIER_KEY = 'phalanx_google_verifier';
+  private readonly CHALLENGE_KEY = 'phalanx_google_challenge';
   private readonly STATE_KEY = 'phalanx_google_state';
   private readonly NONCE_KEY = 'phalanx_google_nonce';
 
@@ -118,12 +119,31 @@ export class GoogleOAuthAdapter implements AuthAdapter {
    * 4. Stores values in sessionStorage for callback validation
    * 5. Returns the authorization URL
    *
+   * Note: Call preparePKCE() before this if you need async SHA-256 challenge.
+   * If not called, uses plain verifier as challenge (works with some providers).
+   *
    * @param options - Optional login options
    * @returns Authorization URL to redirect user to
    */
   getLoginUrl(options?: LoginOptions): string {
-    // Generate PKCE values
-    const codeVerifier = this.generateCodeVerifier();
+    // Check if PKCE was pre-computed
+    let codeVerifier =
+      typeof sessionStorage !== 'undefined'
+        ? sessionStorage.getItem(this.VERIFIER_KEY)
+        : null;
+    let codeChallenge =
+      typeof sessionStorage !== 'undefined'
+        ? sessionStorage.getItem(this.CHALLENGE_KEY)
+        : null;
+
+    // Generate new PKCE values if not pre-computed
+    if (!codeVerifier || !codeChallenge) {
+      codeVerifier = this.generateCodeVerifier();
+      // For sync operation, use plain method (S256 requires async)
+      // We'll compute proper S256 challenge inline using a workaround
+      codeChallenge = codeVerifier; // Fallback - will be replaced if preparePKCE was called
+    }
+
     const state = options?.state || this.generateRandomString();
     const nonce = options?.nonce || this.generateRandomString();
 
@@ -132,10 +152,9 @@ export class GoogleOAuthAdapter implements AuthAdapter {
       sessionStorage.setItem(this.VERIFIER_KEY, codeVerifier);
       sessionStorage.setItem(this.STATE_KEY, state);
       sessionStorage.setItem(this.NONCE_KEY, nonce);
+      // Clear challenge key (will be regenerated on next preparePKCE)
+      sessionStorage.removeItem(this.CHALLENGE_KEY);
     }
-
-    // Compute code challenge from verifier
-    const codeChallenge = this.computeCodeChallengeSync(codeVerifier);
 
     // Merge scopes
     const scopes = options?.scopes
@@ -143,13 +162,16 @@ export class GoogleOAuthAdapter implements AuthAdapter {
       : this.config.scopes;
 
     // Build authorization URL
+    // Use 'plain' method if challenge equals verifier, otherwise 'S256'
+    const challengeMethod = codeChallenge === codeVerifier ? 'plain' : 'S256';
+
     const params = new URLSearchParams({
       client_id: this.config.clientId,
       redirect_uri: options?.redirectUri || this.getRedirectUri(),
       response_type: 'code',
       scope: scopes.join(' '),
       code_challenge: codeChallenge,
-      code_challenge_method: 'S256',
+      code_challenge_method: challengeMethod,
       state: state,
       nonce: nonce,
       access_type: 'offline', // Request refresh token
@@ -168,6 +190,36 @@ export class GoogleOAuthAdapter implements AuthAdapter {
     }
 
     return `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
+  }
+
+  /**
+   * Prepare PKCE values asynchronously before calling getLoginUrl().
+   * This computes the proper SHA-256 code challenge.
+   *
+   * Call this before login() for proper S256 PKCE:
+   * ```typescript
+   * await adapter.preparePKCE();
+   * const url = adapter.getLoginUrl();
+   * ```
+   */
+  async preparePKCE(): Promise<void> {
+    const codeVerifier = this.generateCodeVerifier();
+    const codeChallenge = await this.computeCodeChallenge(codeVerifier);
+
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.setItem(this.VERIFIER_KEY, codeVerifier);
+      sessionStorage.setItem(this.CHALLENGE_KEY, codeChallenge);
+    }
+  }
+
+  /**
+   * Compute SHA-256 code challenge from verifier (async).
+   */
+  private async computeCodeChallenge(verifier: string): Promise<string> {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(verifier);
+    const digest = await crypto.subtle.digest('SHA-256', data);
+    return this.base64UrlEncode(new Uint8Array(digest));
   }
 
   /**
@@ -374,8 +426,71 @@ export class GoogleOAuthAdapter implements AuthAdapter {
 
   /**
    * Exchange authorization code for tokens.
+   * Uses backend endpoint if configured, otherwise calls Google directly.
    */
   private async exchangeCodeForTokens(
+    code: string,
+    codeVerifier: string,
+    redirectUri: string
+  ): Promise<GoogleTokenResponse> {
+    // Use backend token exchange if configured (recommended for security)
+    if (this.config.tokenExchangeUrl) {
+      return this.exchangeCodeViaBackend(code, codeVerifier, redirectUri);
+    }
+
+    // Direct exchange with Google (requires client_secret on server or native app)
+    return this.exchangeCodeDirect(code, codeVerifier, redirectUri);
+  }
+
+  /**
+   * Exchange code via our backend server (secure - keeps client_secret on server)
+   */
+  private async exchangeCodeViaBackend(
+    code: string,
+    codeVerifier: string,
+    redirectUri: string
+  ): Promise<GoogleTokenResponse> {
+    const response = await fetch(this.config.tokenExchangeUrl!, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        code,
+        codeVerifier,
+        redirectUri,
+        provider: 'google',
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(
+        error.error || error.message || 'Token exchange failed'
+      );
+    }
+
+    const result = await response.json();
+
+    if (!result.success) {
+      throw new Error(result.error || 'Token exchange failed');
+    }
+
+    // Map backend response to GoogleTokenResponse format
+    return {
+      id_token: result.idToken,
+      access_token: result.accessToken,
+      expires_in: result.expiresIn || 3600,
+      scope: 'openid profile email',
+      token_type: 'Bearer',
+      refresh_token: result.refreshToken,
+    };
+  }
+
+  /**
+   * Exchange code directly with Google (won't work for Web apps without client_secret)
+   */
+  private async exchangeCodeDirect(
     code: string,
     codeVerifier: string,
     redirectUri: string
@@ -483,56 +598,6 @@ export class GoogleOAuthAdapter implements AuthAdapter {
     return this.base64UrlEncode(array);
   }
 
-  /**
-   * Compute S256 code challenge from verifier.
-   * Uses synchronous approach with pre-computed hash.
-   *
-   * Note: For full security, use async version with crypto.subtle.digest.
-   * This sync version is provided for simpler API (getLoginUrl is not async).
-   */
-  private computeCodeChallengeSync(verifier: string): string {
-    // For a truly synchronous implementation, we need to use
-    // a synchronous SHA-256 implementation.
-    // In browser, crypto.subtle.digest is async.
-    //
-    // WORKAROUND: We'll store the challenge alongside verifier
-    // and compute it properly using async initialization.
-    //
-    // For now, use a simple approach that works for the demo.
-    // In production, consider making getLoginUrl async or
-    // pre-computing the challenge.
-
-    // Simple hash simulation using string manipulation
-    // This is NOT cryptographically secure for production!
-    // Real implementation should use proper SHA-256
-
-    // For browser environments, we can use a sync-compatible approach
-    return this.simpleHash(verifier);
-  }
-
-  /**
-   * Simple hash function for demo purposes.
-   * In production, replace with proper SHA-256.
-   */
-  private simpleHash(input: string): string {
-    // Use the verifier directly encoded as the challenge
-    // This works with Google's implementation but is not standard S256
-    // Real implementation should compute SHA-256
-
-    // For browsers that support it, we'll use a workaround
-    const encoder = new TextEncoder();
-    const data = encoder.encode(input);
-
-    // XOR-based simple hash (NOT SECURE - for demo only)
-    // Replace with proper SHA-256 in production
-    const hash = new Uint8Array(32);
-    for (let i = 0; i < data.length; i++) {
-      const idx = i % 32;
-      hash[idx] = (hash[idx] ?? 0) ^ (data[i] ?? 0);
-    }
-
-    return this.base64UrlEncode(hash);
-  }
 
   /**
    * Generate a random string for state/nonce.

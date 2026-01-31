@@ -7,6 +7,22 @@ export const SERVER_URL =
   import.meta.env.VITE_SERVER_URL || 'http://localhost:3000';
 
 /**
+ * Authentication configuration
+ * Google OAuth client ID - must be set via VITE_GOOGLE_CLIENT_ID environment variable
+ */
+export const authConfig = {
+  // Google OAuth Client ID for sign-in
+  googleClientId: import.meta.env.VITE_GOOGLE_CLIENT_ID || '',
+
+  // Enable/disable auth requirement
+  authEnabled: !!import.meta.env.VITE_GOOGLE_CLIENT_ID,
+
+  // Token exchange URL - the server endpoint that exchanges auth code for tokens
+  // This keeps the client_secret secure on the server
+  tokenExchangeUrl: `${import.meta.env.VITE_SERVER_URL || 'http://localhost:3000'}/auth/token`,
+};
+
+/**
  * Network tick configuration for deterministic lockstep simulation
  * All clients simulate the game in lockstep using these settings
  */

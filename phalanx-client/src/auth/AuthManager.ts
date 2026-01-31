@@ -196,6 +196,20 @@ export class AuthManager {
    */
   login(options?: LoginOptions): void {
     this.log('Starting login redirect flow...');
+
+    // Prepare PKCE asynchronously, then redirect
+    void this.prepareAndRedirect(options);
+  }
+
+  /**
+   * Prepare PKCE and redirect to OAuth provider.
+   */
+  private async prepareAndRedirect(options?: LoginOptions): Promise<void> {
+    // Prepare PKCE if the adapter supports it
+    if ('preparePKCE' in this.adapter && typeof this.adapter.preparePKCE === 'function') {
+      await (this.adapter as { preparePKCE: () => Promise<void> }).preparePKCE();
+    }
+
     const url = this.adapter.getLoginUrl(options);
 
     if (typeof window !== 'undefined') {
@@ -204,6 +218,7 @@ export class AuthManager {
       throw new Error('login() requires a browser environment');
     }
   }
+
 
   /**
    * Start login flow using popup.
@@ -217,6 +232,11 @@ export class AuthManager {
 
     if (typeof window === 'undefined') {
       throw new Error('loginWithPopup() requires a browser environment');
+    }
+
+    // Prepare PKCE if the adapter supports it
+    if ('preparePKCE' in this.adapter && typeof this.adapter.preparePKCE === 'function') {
+      await (this.adapter as { preparePKCE: () => Promise<void> }).preparePKCE();
     }
 
     return new Promise((resolve, reject) => {

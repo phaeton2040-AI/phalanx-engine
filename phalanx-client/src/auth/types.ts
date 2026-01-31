@@ -233,6 +233,18 @@ export interface GoogleOAuthConfig {
 
   /** Google Workspace domain to restrict to */
   hostedDomain?: string;
+
+  /**
+   * Backend endpoint URL for token exchange.
+   * The server exchanges the auth code for tokens using client_secret.
+   * This keeps the client_secret secure on the server.
+   *
+   * Example: 'https://your-game-server.com/auth/token'
+   *
+   * If not provided, the adapter will try to exchange directly with Google
+   * (which will fail for Web application clients that require client_secret).
+   */
+  tokenExchangeUrl?: string;
 }
 
 /**

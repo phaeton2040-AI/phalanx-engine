@@ -3,6 +3,7 @@
  * Configured for Heroku deployment
  */
 
+import 'dotenv/config';
 import { Phalanx } from 'phalanx-server';
 
 // Heroku provides PORT as an environment variable
@@ -19,9 +20,18 @@ const CORS_ORIGINS = process.env.CORS_ORIGINS
       'https://energoids.website.yandexcloud.net',
     ];
 
+// Google OAuth configuration for JWT validation and token exchange
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
+const AUTH_ENABLED = !!GOOGLE_CLIENT_ID;
+
 async function main() {
   console.warn('Starting Phalanx Test Game Server...');
   console.warn(`Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.warn(`Authentication: ${AUTH_ENABLED ? 'enabled' : 'disabled (no GOOGLE_CLIENT_ID)'}`);
+  if (AUTH_ENABLED && !GOOGLE_CLIENT_SECRET) {
+    console.warn('Warning: GOOGLE_CLIENT_SECRET not set - token exchange will not work');
+  }
 
   const phalanx = new Phalanx({
     port: PORT,
@@ -33,6 +43,18 @@ async function main() {
     gameMode: '1v1', // 2 players per match
     countdownSeconds: 3,
     matchmakingIntervalMs: 1000,
+    // Authentication configuration
+    auth: AUTH_ENABLED
+      ? {
+          enabled: true,
+          google: {
+            clientId: GOOGLE_CLIENT_ID!,
+            clientSecret: GOOGLE_CLIENT_SECRET,
+          },
+          // Allow unauthenticated connections in development
+          allowAnonymous: process.env.NODE_ENV !== 'production',
+        }
+      : undefined,
   });
 
   // Event handlers
