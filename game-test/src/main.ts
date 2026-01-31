@@ -1,6 +1,11 @@
 /**
  * Main entry point for the game client
  * Using simplified Phalanx Client API
+ *
+ * Authentication: Anonymous users (username only)
+ * - No OAuth/Google authentication required
+ * - Users simply enter a username in the lobby
+ * - Server is configured to accept anonymous connections
  */
 
 import { LobbyScene } from './scenes/LobbyScene';

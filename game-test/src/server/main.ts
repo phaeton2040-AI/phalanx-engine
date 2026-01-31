@@ -1,5 +1,8 @@
 /**
  * Game server using Phalanx Engine
+ *
+ * This is a simple test server that allows anonymous users.
+ * Players can join with just a username - no OAuth authentication required.
  */
 
 import { Phalanx } from 'phalanx-server';
@@ -7,11 +10,19 @@ import { Phalanx } from 'phalanx-server';
 const PORT = 3000;
 
 async function main() {
+  console.warn('Starting Phalanx Test Game Server...');
+  console.warn('Authentication: Anonymous users allowed (no OAuth required)');
+
   const phalanx = new Phalanx({
     port: PORT,
     cors: {
       origin: ['http://localhost:3001', 'http://localhost:5173'],
       credentials: true,
+    },
+    // Authentication disabled - anonymous users allowed
+    // Players connect with just a username, no tokens required
+    auth: {
+      enabled: false,
     },
     tickRate: 20, // 20 ticks per second
     gameMode: '1v1', // 2 players per match

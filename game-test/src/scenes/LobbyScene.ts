@@ -1,6 +1,11 @@
 /**
  * Lobby Scene - connection and matchmaking UI
  * Using simplified Phalanx Client API
+ *
+ * This is a simple anonymous authentication flow:
+ * - User enters a username (no OAuth required)
+ * - Client connects to server with just the username
+ * - Server accepts anonymous connections (auth.enabled = false)
  */
 
 import {
@@ -177,7 +182,7 @@ export class LobbyScene {
 
     // Cleanup previous instance
     if (this.client) {
-      this.client.destroy().catch(console.error);
+      this.client.destroy();
       this.client = null;
     }
     this.matchData = null;

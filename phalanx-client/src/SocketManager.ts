@@ -38,6 +38,8 @@ export interface SocketManagerConfig {
   playerId: string;
   /** Username */
   username: string;
+  /** Authentication token (e.g., Google ID token) */
+  authToken?: string;
   /** Connection timeout in milliseconds */
   connectionTimeoutMs: number;
   /** Whether to auto-reconnect */
@@ -127,6 +129,9 @@ export class SocketManager {
       this.socket = io(this.config.serverUrl, {
         forceNew: true,
         reconnection: false, // We handle reconnection ourselves
+        auth: this.config.authToken
+          ? { token: this.config.authToken }
+          : undefined,
       });
 
       this.socket.on('connect', () => {

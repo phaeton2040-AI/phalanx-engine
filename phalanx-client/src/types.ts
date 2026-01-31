@@ -28,6 +28,12 @@ export interface PhalanxClientConfig {
   username: string;
 
   /**
+   * Authentication token (e.g., Google ID token).
+   * Required if server has authentication enabled.
+   */
+  authToken?: string;
+
+  /**
    * Whether to automatically attempt reconnection after disconnection
    * @default true
    */

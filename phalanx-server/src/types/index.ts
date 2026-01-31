@@ -62,6 +62,74 @@ export interface DesyncConfig {
 }
 
 /**
+ * Token validator function type.
+ * Implement this to validate tokens from your OAuth provider.
+ */
+export type TokenValidator = (token: string) => Promise<TokenValidationResult>;
+
+/**
+ * Result of token validation
+ */
+export interface TokenValidationResult {
+  /** Whether the token is valid */
+  valid: boolean;
+  /** User ID from the token (if valid) */
+  userId?: string;
+  /** Username from the token (if valid) */
+  username?: string;
+  /** Email from the token (if valid) */
+  email?: string;
+  /** Token expiration timestamp in milliseconds (if valid) */
+  expiresAt?: number;
+  /** Error message (if invalid) */
+  error?: string;
+}
+
+/**
+ * Authentication configuration for securing WebSocket connections
+ */
+export interface AuthConfig {
+  /** Enable authentication (default: false for development) */
+  enabled: boolean;
+
+  /**
+   * Custom token validator function.
+   * If not provided and enabled=true, you must configure a built-in validator.
+   */
+  validator?: TokenValidator;
+
+  /**
+   * Built-in Google token validation.
+   * Validates Google ID tokens.
+   */
+  google?: {
+    /** Your Google OAuth Client ID */
+    clientId: string;
+    /** Allowed hosted domains (optional, for Google Workspace) */
+    allowedDomains?: string[];
+  };
+
+  /**
+   * Allow unauthenticated connections (for development/testing).
+   * If true, connections without tokens are allowed when auth is enabled.
+   * @default false
+   */
+  allowAnonymous?: boolean;
+
+  /**
+   * Cache validated tokens to reduce validation overhead.
+   * @default true
+   */
+  cacheTokens?: boolean;
+
+  /**
+   * Token cache TTL in milliseconds.
+   * @default 300000 (5 minutes)
+   */
+  cacheTtlMs?: number;
+}
+
+/**
  * Full Phalanx configuration
  */
 export interface PhalanxConfig {
@@ -71,6 +139,9 @@ export interface PhalanxConfig {
 
   // === TLS/SSL (optional) ===
   tls?: TlsConfig;
+
+  // === Authentication (optional) ===
+  auth?: AuthConfig;
 
   // === Tick System ===
   tickRate: number;

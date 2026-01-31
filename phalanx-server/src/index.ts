@@ -6,6 +6,13 @@
 // Main class
 export { Phalanx } from './Phalanx.js';
 
+// Authentication
+export {
+  TokenValidatorService,
+  createDevValidator,
+  createEndpointValidator,
+} from './services/TokenValidator.js';
+
 // Utilities
 export { DeterministicRandom } from './utils/index.js';
 export { Fixed, FixedMath, FixedVector2, FixedPoint } from './utils/index.js';
@@ -34,6 +41,10 @@ export type {
   DesyncDetectedEvent,
   PhalanxEventType,
   PhalanxEventHandlers,
+  // Auth types
+  AuthConfig,
+  TokenValidator,
+  TokenValidationResult,
 } from './types/index.js';
 
 // Constants

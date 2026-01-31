@@ -50,7 +50,7 @@ import type {
  * ```
  */
 export class PhalanxClient extends EventEmitter<PhalanxClientEvents> {
-  private config: Required<PhalanxClientConfig>;
+  private config: Omit<Required<PhalanxClientConfig>, 'authToken'> & Pick<PhalanxClientConfig, 'authToken'>;
   private socketManager: SocketManager;
   private renderLoop: RenderLoop;
   private desyncDetector: DesyncDetector;
@@ -82,6 +82,7 @@ export class PhalanxClient extends EventEmitter<PhalanxClientEvents> {
         serverUrl: this.config.serverUrl,
         playerId: this.config.playerId,
         username: this.config.username,
+        authToken: this.config.authToken,
         connectionTimeoutMs: this.config.connectionTimeoutMs,
         autoReconnect: this.config.autoReconnect,
         maxReconnectAttempts: this.config.maxReconnectAttempts,

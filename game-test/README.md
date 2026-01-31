@@ -7,6 +7,17 @@ A simple multiplayer game to test the Phalanx Engine using Babylon.js.
 - **Lobby Scene**: Players enter their username and wait for matchmaking to find an opponent
 - **Game Scene**: A 2m x 4m ground where players control spheres by clicking to issue move commands
 
+## Authentication
+
+This test game uses **anonymous authentication** - no OAuth or external login required:
+
+- Players simply enter a username in the lobby
+- No Google/Discord/Steam login buttons
+- Server accepts connections without auth tokens
+- Ideal for quick testing and development
+
+To enable OAuth authentication in production, see the [phalanx-client authentication docs](../phalanx-client/README.md).
+
 ## Features
 
 - Fixed timestep game loop using accumulator algorithm

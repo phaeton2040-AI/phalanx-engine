@@ -21,6 +21,7 @@ import type {
 } from './types/index.js';
 import { validateConfig } from './config/validation.js';
 import { MatchmakingService } from './services/MatchmakingService.js';
+import { TokenValidatorService } from './services/TokenValidator.js';
 
 /**
  * Socket data interface for type safety
@@ -28,6 +29,12 @@ import { MatchmakingService } from './services/MatchmakingService.js';
 interface SocketData {
   matchId?: string;
   playerId?: string;
+  /** Authenticated user ID from token validation */
+  userId?: string;
+  /** Authenticated username from token validation */
+  username?: string;
+  /** Whether this socket is authenticated */
+  authenticated?: boolean;
 }
 
 /**
@@ -39,6 +46,7 @@ export class Phalanx extends EventEmitter {
   private httpServer: HttpServer | HttpsServer | null = null;
   private io: SocketIOServer | null = null;
   private matchmaking: MatchmakingService | null = null;
+  private tokenValidator: TokenValidatorService | null = null;
   private isRunning: boolean = false;
 
   constructor(config?: Partial<PhalanxConfig>) {
@@ -105,6 +113,15 @@ export class Phalanx extends EventEmitter {
       cors: this.config.cors,
     });
 
+    // Setup authentication if enabled
+    if (this.config.auth?.enabled) {
+      this.tokenValidator = new TokenValidatorService(this.config.auth);
+      this.setupAuthMiddleware();
+      console.log('[Phalanx] Authentication enabled');
+    } else {
+      console.log('[Phalanx] Authentication disabled (development mode)');
+    }
+
     // Create matchmaking service
     this.matchmaking = new MatchmakingService(
       this.io,
@@ -161,6 +178,53 @@ export class Phalanx extends EventEmitter {
     }
 
     this.io = null;
+  }
+
+  /**
+   * Setup authentication middleware for Socket.IO connections.
+   * Validates tokens before allowing connections.
+   */
+  private setupAuthMiddleware(): void {
+    if (!this.io || !this.tokenValidator) return;
+
+    this.io.use(async (socket, next) => {
+      const token = socket.handshake.auth?.token as string | undefined;
+
+      // Check if token is provided
+      if (!token) {
+        // Allow anonymous if configured
+        if (this.config.auth?.allowAnonymous) {
+          console.log(
+            `[Phalanx] Anonymous connection allowed: ${socket.id}`
+          );
+          (socket.data as SocketData).authenticated = false;
+          return next();
+        }
+
+        console.log(`[Phalanx] Connection rejected - no token: ${socket.id}`);
+        return next(new Error('Authentication required'));
+      }
+
+      // Validate the token
+      const result = await this.tokenValidator!.validate(token);
+
+      if (!result.valid) {
+        console.log(
+          `[Phalanx] Connection rejected - invalid token: ${socket.id} - ${result.error}`
+        );
+        return next(new Error(result.error || 'Invalid token'));
+      }
+
+      // Store authenticated user info on socket
+      (socket.data as SocketData).authenticated = true;
+      (socket.data as SocketData).userId = result.userId;
+      (socket.data as SocketData).username = result.username;
+
+      console.log(
+        `[Phalanx] Authenticated connection: ${socket.id} - User: ${result.userId}`
+      );
+      next();
+    });
   }
 
   /**
