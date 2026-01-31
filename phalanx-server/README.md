@@ -42,6 +42,14 @@ const config: Partial<PhalanxConfig> = {
   port: 3000, // Server port (default: 3000)
   cors: { origin: '*' }, // CORS configuration
 
+  // === TLS/SSL (optional) ===
+  // See "TLS/WSS Configuration" section below for details
+  tls: {
+    enabled: true,
+    keyPath: '/path/to/privkey.pem',
+    certPath: '/path/to/fullchain.pem',
+  },
+
   // === Tick System ===
   tickRate: 20, // Ticks per second (default: 20)
   tickDeadlineMs: 50, // Max wait for commands per tick
@@ -150,6 +158,98 @@ import { GAME_MODES } from 'phalanx-server';
 // '3v3'  - 6 players, 2 teams
 // '4v4'  - 8 players, 2 teams
 // 'FFA4' - 4 players, 4 teams (Free For All)
+```
+
+## TLS/WSS Configuration
+
+Phalanx supports secure WebSocket connections (WSS) for production environments.
+
+### Basic TLS Setup
+
+```typescript
+import { Phalanx } from 'phalanx-server';
+
+const app = new Phalanx({
+  port: 443,
+  tls: {
+    enabled: true,
+    keyPath: '/etc/letsencrypt/live/game.example.com/privkey.pem',
+    certPath: '/etc/letsencrypt/live/game.example.com/fullchain.pem',
+  },
+});
+
+await app.start();
+console.log('Phalanx server running with TLS on port 443');
+```
+
+### TLS Configuration Options
+
+```typescript
+interface TlsConfig {
+  /** Enable TLS/SSL encryption */
+  enabled: boolean;
+  /** Path to the private key file (PEM format) */
+  keyPath: string;
+  /** Path to the certificate file (PEM format) */
+  certPath: string;
+  /** Optional path to CA certificate chain (for Let's Encrypt) */
+  caPath?: string;
+}
+```
+
+### Development Mode (No TLS)
+
+When TLS is not configured, the server runs in HTTP/WS mode:
+
+```typescript
+const app = new Phalanx({
+  port: 3000,
+  // No tls config = development mode
+});
+```
+
+### Let's Encrypt Setup
+
+1. Install certbot:
+   ```bash
+   sudo apt install certbot
+   ```
+
+2. Obtain certificates:
+   ```bash
+   sudo certbot certonly --standalone -d game.example.com
+   ```
+
+3. Configure Phalanx:
+   ```typescript
+   const app = new Phalanx({
+     port: 443,
+     tls: {
+       enabled: true,
+       keyPath: '/etc/letsencrypt/live/game.example.com/privkey.pem',
+       certPath: '/etc/letsencrypt/live/game.example.com/fullchain.pem',
+     },
+   });
+   ```
+
+4. Set up certificate auto-renewal:
+   ```bash
+   sudo certbot renew --dry-run
+   ```
+
+> **Note**: You may need to run the server with elevated privileges for port 443, or use a reverse proxy like nginx.
+
+### Client Connection (WSS)
+
+When connecting to a TLS-enabled server from the client:
+
+```typescript
+import { Phalanx } from 'phalanx-client';
+
+const phalanx = await Phalanx.init({
+  serverUrl: 'wss://game.example.com', // Use wss:// instead of ws://
+  playerId: 'player-123',
+});
 ```
 
 ## Related Packages

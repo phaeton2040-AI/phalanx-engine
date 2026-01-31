@@ -91,6 +91,36 @@ export { DesyncDetector } from './DesyncDetector.js';
 export type { DesyncConfig, DesyncEvent } from './DesyncDetector.js';
 
 // ============================================
+// Authentication
+// ============================================
+
+// Auth manager (managed OAuth for Google, Discord, Steam)
+export { AuthManager } from './auth/AuthManager.js';
+export type { AuthManagerConfig } from './auth/AuthManager.js';
+
+// Google OAuth adapter
+export { GoogleOAuthAdapter } from './auth/adapters/GoogleOAuthAdapter.js';
+
+// Storage adapters
+export { LocalStorageAdapter, MemoryStorageAdapter } from './auth/storage.js';
+export type { AuthStorage } from './auth/storage.js';
+
+// Auth types
+export type {
+  AuthAdapter,
+  AuthResult,
+  AuthState,
+  AuthUser,
+  AuthError,
+  CallbackParams,
+  LoginOptions,
+  GoogleOAuthConfig,
+  DiscordOAuthConfig,
+  SteamAuthConfig,
+  StoredAuthData,
+} from './auth/types.js';
+
+// ============================================
 // Types
 // ============================================
 

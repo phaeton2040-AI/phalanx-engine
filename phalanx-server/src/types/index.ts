@@ -31,6 +31,20 @@ export interface CorsConfig {
 }
 
 /**
+ * TLS/SSL configuration for secure WebSocket connections (WSS)
+ */
+export interface TlsConfig {
+  /** Enable TLS/SSL encryption */
+  enabled: boolean;
+  /** Path to the private key file (PEM format) */
+  keyPath: string;
+  /** Path to the certificate file (PEM format) */
+  certPath: string;
+  /** Optional path to CA certificate chain (for Let's Encrypt) */
+  caPath?: string;
+}
+
+/**
  * Action to take when desync is detected
  */
 export type DesyncAction = 'log-only' | 'end-match';
@@ -54,6 +68,9 @@ export interface PhalanxConfig {
   // === Server ===
   port: number;
   cors: CorsConfig;
+
+  // === TLS/SSL (optional) ===
+  tls?: TlsConfig;
 
   // === Tick System ===
   tickRate: number;

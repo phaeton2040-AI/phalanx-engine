@@ -1,11 +1,16 @@
 import { EventEmitter } from 'events';
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import {
-  createServer,
+  createServer as createHttpServer,
   Server as HttpServer,
   IncomingMessage,
   ServerResponse,
 } from 'http';
+import {
+  createServer as createHttpsServer,
+  Server as HttpsServer,
+} from 'https';
+import { readFileSync } from 'fs';
 import type {
   PhalanxConfig,
   MatchInfo,
@@ -31,7 +36,7 @@ interface SocketData {
  */
 export class Phalanx extends EventEmitter {
   private readonly config: PhalanxConfig;
-  private httpServer: HttpServer | null = null;
+  private httpServer: HttpServer | HttpsServer | null = null;
   private io: SocketIOServer | null = null;
   private matchmaking: MatchmakingService | null = null;
   private isRunning: boolean = false;
@@ -42,6 +47,49 @@ export class Phalanx extends EventEmitter {
   }
 
   /**
+   * Create HTTP or HTTPS server based on TLS configuration
+   */
+  private createServer(): HttpServer | HttpsServer {
+    const requestHandler = (req: IncomingMessage, res: ServerResponse) => {
+      if (req.url === '/' || req.url === '/health') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(
+          JSON.stringify({
+            status: 'ok',
+            timestamp: new Date().toISOString(),
+            tls: !!this.config.tls?.enabled,
+          })
+        );
+      } else {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Not found' }));
+      }
+    };
+
+    if (this.config.tls?.enabled) {
+      try {
+        const tlsOptions = {
+          key: readFileSync(this.config.tls.keyPath),
+          cert: readFileSync(this.config.tls.certPath),
+          ca: this.config.tls.caPath
+            ? readFileSync(this.config.tls.caPath)
+            : undefined,
+        };
+
+        console.log('[Phalanx] Starting with TLS enabled (WSS)');
+        return createHttpsServer(tlsOptions, requestHandler);
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : 'Unknown error';
+        throw new Error(`Failed to load TLS certificates: ${message}`);
+      }
+    }
+
+    console.log('[Phalanx] Starting without TLS (development mode)');
+    return createHttpServer(requestHandler);
+  }
+
+  /**
    * Start the Phalanx server
    */
   async start(): Promise<void> {
@@ -49,23 +97,8 @@ export class Phalanx extends EventEmitter {
       throw new Error('Phalanx server is already running');
     }
 
-    // Create HTTP server with health check endpoint
-    this.httpServer = createServer(
-      (req: IncomingMessage, res: ServerResponse) => {
-        if (req.url === '/' || req.url === '/health') {
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(
-            JSON.stringify({
-              status: 'ok',
-              timestamp: new Date().toISOString(),
-            })
-          );
-        } else {
-          res.writeHead(404, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'Not found' }));
-        }
-      }
-    );
+    // Create HTTP/HTTPS server with health check endpoint
+    this.httpServer = this.createServer();
 
     // Create Socket.IO server
     this.io = new SocketIOServer(this.httpServer, {

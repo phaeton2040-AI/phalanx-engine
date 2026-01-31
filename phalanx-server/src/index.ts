@@ -27,6 +27,7 @@ export type {
   GameModePreset,
   CustomGameMode,
   CorsConfig,
+  TlsConfig,
   QueuedPlayer,
   QueueStatusEvent,
   StateHashEvent,
