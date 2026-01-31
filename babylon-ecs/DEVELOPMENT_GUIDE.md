@@ -137,21 +137,42 @@ simulation.flushCommands();
 
 ### LockstepManager
 
-The `LockstepManager` wraps `TickSimulation` and handles game-specific logic:
+The `LockstepManager` handles deterministic command execution and simulation. It's called directly from `Game.ts` via the PhalanxClient's tick handler:
 
 ```typescript
-// LockstepManager uses TickSimulation internally
-constructor(client: PhalanxClient, systems: LockstepSystems, callbacks: LockstepCallbacks) {
-    this.tickSimulation = new TickSimulation(client, { tickRate: networkConfig.tickRate });
+// In Game.ts - setup
+this.client.onTick((tick, commands) => {
+  this.lockstepManager.processTick(tick, commands);
+});
 
-    this.tickSimulation.onSimulationTick((tick, commands) => {
-        this.executeTickCommands(commands);  // Execute move, placeUnit, etc.
-        this.simulateTick();                  // Physics, combat, projectiles
-        this.systems.resourceSystem.processTick(tick);
-        this.systems.waveSystem.processTick(tick);
-    });
+// LockstepManager.processTick() implementation
+public processTick(tick: number, commandsBatch: CommandsBatch): void {
+  // Flatten commands from all players
+  const allCommands: PlayerCommand[] = [];
+  for (const playerId in commandsBatch.commands) {
+    allCommands.push(...commandsBatch.commands[playerId]);
+  }
+
+  // Execute all commands for this tick
+  this.executeTickCommands(allCommands);  // Execute move, placeUnit, etc.
+
+  // Run one tick of deterministic simulation
+  this.simulateTick();                    // Physics, combat, projectiles
+
+  // Process systems that need tick-based updates
+  this.systems.resourceSystem.processTick(tick);
+  this.systems.waveSystem.processTick(tick);
+
+  // Cleanup destroyed entities
+  this.callbacks.onCleanupNeeded();
 }
 ```
+
+**Key Points:**
+- Network synchronization is handled by `PhalanxClient`
+- `LockstepManager` focuses on deterministic game logic
+- Commands from **all players** are executed (no filtering)
+- Simulation runs the same on all clients
 
 ### Visual Interpolation
 
@@ -335,6 +356,269 @@ this.lockstepManager.queueCommand({
 | `src/core/NetworkCommands.ts`        | Network command type definitions               |
 | `src/systems/InterpolationSystem.ts` | Smooth visual interpolation                    |
 
+### Desync Detection
+
+Desync detection ensures all clients maintain identical game state. When a desync is detected, the match can be ended gracefully rather than allowing players to continue with divergent game states.
+
+#### How It Works
+
+1. Each client computes a **state hash** after simulation ticks
+2. Hashes are submitted to the server via `client.submitStateHash(tick, hash)`
+3. Server compares hashes from all connected clients
+4. If hashes differ, server broadcasts `hash-comparison` event
+5. Client detects mismatch and emits `desync` event
+6. Server can optionally end the match
+
+#### Implementation in LockstepManager
+
+Add hash computation and submission to your `LockstepManager`:
+
+```typescript
+import { StateHasher } from 'phalanx-client';
+
+export class LockstepManager {
+  private hashInterval = 20; // Hash every 20 ticks (once per second)
+  private client: PhalanxClient;
+  private systems: LockstepSystems;
+  private entityManager: EntityManager;
+
+  constructor(
+    client: PhalanxClient,
+    systems: LockstepSystems,
+    entityManager: EntityManager
+  ) {
+    this.client = client;
+    this.systems = systems;
+    this.entityManager = entityManager;
+
+    // Handle desync events
+    this.client.on('desync', (event) => {
+      console.error(`Desync at tick ${event.tick}!`);
+      console.error(`Local: ${event.localHash}`);
+      console.error(`Remote:`, event.remoteHashes);
+      // Optionally show UI notification
+    });
+  }
+
+  /**
+   * Process a tick with commands - called from Game.ts via client.onTick()
+   */
+  public processTick(tick: number, commandsBatch: CommandsBatch): void {
+    // Execute all commands for this tick
+    this.executeTickCommands(commandsBatch);
+    
+    // Run deterministic simulation
+    this.simulateTick();
+
+    // Submit state hash at regular intervals
+    if (tick % this.hashInterval === 0) {
+      const hash = this.computeStateHash(tick);
+      this.client.submitStateHash(tick, hash);
+    }
+  }
+
+  private computeStateHash(tick: number): string {
+    const hasher = new StateHasher();
+
+    // Add tick number
+    hasher.addInt(tick);
+
+    // Get all entities sorted by ID for deterministic ordering
+    const entities = this.entityManager.getAllEntities()
+      .sort((a, b) => a.id - b.id);
+
+    hasher.addInt(entities.length);
+
+    for (const entity of entities) {
+      hasher.addInt(entity.id);
+
+      // Hash position
+      const pos = entity.position;
+      hasher.addFloat(pos.x);
+      hasher.addFloat(pos.y);
+      hasher.addFloat(pos.z);
+
+      // Hash health (if has HealthComponent)
+      const health = entity.getComponent(HealthComponent);
+      if (health) {
+        hasher.addInt(health.getCurrentHealth());
+        hasher.addInt(health.getMaxHealth());
+      }
+
+      // Hash movement state (if has MovementComponent)
+      const movement = entity.getComponent(MovementComponent);
+      if (movement) {
+        hasher.addBool(movement.isMoving());
+        if (movement.getTarget()) {
+          const target = movement.getTarget()!;
+          hasher.addFloat(target.x);
+          hasher.addFloat(target.y);
+          hasher.addFloat(target.z);
+        }
+      }
+
+      // Hash attack state (if has AttackComponent)
+      const attack = entity.getComponent(AttackComponent);
+      if (attack) {
+        hasher.addFloat(attack.getLastAttackTime());
+        hasher.addInt(attack.getCurrentTargetId() ?? -1);
+      }
+    }
+
+    return hasher.finalize();
+  }
+}
+```
+
+The `processTick` method is called from `Game.ts` via the PhalanxClient's tick handler:
+
+```typescript
+// In Game.ts
+this.client.onTick((tick, commands) => {
+  this.lockstepManager.processTick(tick, commands);
+});
+```
+
+#### StateHasher Best Practices
+
+1. **Always sort entities** by a stable ID before hashing
+2. **Include only deterministic state** - no timestamps, no random values
+3. **Hash positions with fixed precision** - `addFloat()` converts to fixed-point
+4. **Include relevant game state** - health, targets, cooldowns, etc.
+5. **Exclude visual-only state** - interpolated positions, particle effects
+
+```typescript
+// Good: Deterministic state
+hasher.addFloat(entity.position.x);      // Simulation position
+hasher.addInt(entity.health);            // Game state
+hasher.addInt(entity.targetId ?? -1);    // Nullable with default
+
+// Bad: Non-deterministic state
+hasher.addFloat(Date.now());             // ❌ Time varies
+hasher.addFloat(Math.random());          // ❌ Random
+hasher.addFloat(entity.mesh.position.x); // ❌ Visual position (interpolated)
+```
+
+#### Handling Desync Events
+
+```typescript
+// In Game.ts or LockstepManager.ts
+this.client.on('desync', (event) => {
+  // Log for debugging
+  console.error('=== DESYNC DETECTED ===');
+  console.error(`Tick: ${event.tick}`);
+  console.error(`Our hash: ${event.localHash}`);
+  console.error(`All hashes:`, event.remoteHashes);
+
+  // Show player notification
+  this.showDesyncWarning();
+});
+
+this.client.on('matchEnd', (event) => {
+  if (event.reason === 'desync') {
+    // Match ended due to desync
+    console.error('Match ended due to desync:', event.details);
+    this.showDesyncEndScreen();
+  }
+});
+```
+
+#### Testing Desync Detection
+
+To test desync detection during development:
+
+```typescript
+// Add to LockstepManager for testing
+private computeStateHash(tick: number): string {
+  const hasher = new StateHasher();
+  // ... normal hash computation ...
+  let hash = hasher.finalize();
+
+  // TESTING ONLY: Force desync at tick 100 for player 1
+  if (tick === 100 && this.client.getPlayerId() === 'test-player-1') {
+    console.warn('⚠️ Intentionally causing desync for testing');
+    hash = 'intentional-desync-hash';
+  }
+
+  return hash;
+}
+```
+
+To verify desync detection is working:
+
+1. Start two clients with different player IDs
+2. One client should report the forced desync at tick 100
+3. Check console for desync event logs
+4. Verify match ends if server is configured with `action: 'end-match'`
+
+#### Server Configuration
+
+Configure the Phalanx server for desync handling:
+
+```typescript
+// Server configuration
+const phalanx = new Phalanx({
+  enableStateHashing: true,    // Enable hash comparison
+  stateHashInterval: 60,       // Server-side interval hint
+
+  desync: {
+    enabled: true,
+    action: 'end-match',       // 'log-only' | 'end-match'
+    gracePeriodTicks: 1,       // Consecutive desyncs before action
+  },
+});
+```
+
+| Option               | Description                              | Recommended      |
+| -------------------- | ---------------------------------------- | ---------------- |
+| `action: 'end-match'`| End match on confirmed desync            | Production       |
+| `action: 'log-only'` | Log desync but continue playing          | Development      |
+| `gracePeriodTicks`   | Allow N desyncs before taking action     | `1` (strict)     |
+
+#### TODO: Integrate Desync Detection in Babylon-ECS
+
+The following tasks need to be completed to fully integrate desync detection into the babylon-ecs test game:
+
+- [ ] **Add `StateHasher` import to LockstepManager**
+  - File: `src/core/LockstepManager.ts`
+  - Import `StateHasher` from `phalanx-client`
+
+- [ ] **Add `EntityManager` reference to LockstepManager**
+  - Update constructor to accept `EntityManager`
+  - Store reference for hash computation
+
+- [ ] **Implement `computeStateHash()` method in LockstepManager**
+  - Hash all entities sorted by ID
+  - Include: position, health, movement state, attack cooldowns
+  - Exclude: visual-only state (mesh positions, particles)
+
+- [ ] **Call `submitStateHash()` in `processTick()`**
+  - Submit hash every N ticks (e.g., every 20 ticks = 1 second)
+  - Use configurable interval via `networkConfig`
+
+- [ ] **Add desync event handler in Game.ts**
+  - Listen for `client.on('desync', ...)` event
+  - Show UI notification to player
+  - Log details for debugging
+
+- [ ] **Add match-end handler for desync reason**
+  - Check `event.reason === 'desync'` in `matchEnd` handler
+  - Show appropriate end screen with desync info
+
+- [ ] **Add `hashInterval` to `networkConfig`**
+  - File: `src/config/constants.ts`
+  - Default: `20` (once per second at 20 TPS)
+
+- [ ] **Enable state hashing on server**
+  - Update `game-test-server` configuration
+  - Set `enableStateHashing: true`
+  - Configure `desync.action` based on environment
+
+- [ ] **Test desync detection**
+  - Add debug flag to intentionally cause desync
+  - Verify desync is detected and reported
+  - Verify match ends correctly (in production mode)
+
 ### Configuration
 
 Edit `src/config/constants.ts` to change:
@@ -442,11 +726,11 @@ Systems contain game logic and operate on entities with specific component combi
 
 **Core Managers**:
 
-| Manager           | Responsibility                                 |
-| ----------------- | ---------------------------------------------- |
-| `LockstepManager` | Deterministic lockstep sync via TickSimulation |
-| `EntityFactory`   | Entity creation with ownership tracking        |
-| `UIManager`       | UI updates and notifications                   |
+| Manager           | Responsibility                                     |
+| ----------------- | -------------------------------------------------- |
+| `LockstepManager` | Deterministic command execution and simulation     |
+| `EntityFactory`   | Entity creation with ownership tracking            |
+| `UIManager`       | UI updates and notifications                       |
 
 ---
 

@@ -22,6 +22,7 @@ import type {
   ReconnectStatusEvent,
   SubmitCommandsAck,
   MatchEndEvent,
+  HashComparisonEvent,
   PhalanxError,
   ConnectionState,
   PlayerCommand,
@@ -77,6 +78,9 @@ export interface SocketManagerCallbacks {
   // Reconnection events
   onReconnectState: (data: ReconnectStateEvent) => void;
   onReconnectStatus: (data: ReconnectStatusEvent) => void;
+
+  // Desync detection events
+  onHashComparison: (data: HashComparisonEvent) => void;
 
   // State queries (for reconnection logic)
   isPlaying: () => boolean;
@@ -292,6 +296,16 @@ export class SocketManager {
     this.socket!.emit('submit-commands', { tick, commands });
   }
 
+  /**
+   * Send state hash for desync detection
+   * @param tick - The tick this hash is for
+   * @param hash - The state hash string
+   */
+  sendStateHash(tick: number, hash: string): void {
+    this.ensureConnected();
+    this.socket!.emit('state-hash', { tick, hash });
+  }
+
   // ============================================
   // RECONNECTION
   // ============================================
@@ -409,6 +423,11 @@ export class SocketManager {
     // Match end
     this.socket.on('match-end', (data: MatchEndEvent) => {
       this.callbacks.onMatchEnd(data);
+    });
+
+    // Hash comparison (for desync detection)
+    this.socket.on('hash-comparison', (data: HashComparisonEvent) => {
+      this.callbacks.onHashComparison(data);
     });
 
     // Disconnection handling

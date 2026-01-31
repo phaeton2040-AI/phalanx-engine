@@ -31,6 +31,23 @@ export interface CorsConfig {
 }
 
 /**
+ * Action to take when desync is detected
+ */
+export type DesyncAction = 'log-only' | 'end-match';
+
+/**
+ * Configuration for desync detection behavior
+ */
+export interface DesyncConfig {
+  /** Whether desync detection is enabled */
+  enabled: boolean;
+  /** Action to take on confirmed desync */
+  action: DesyncAction;
+  /** Number of consecutive desyncs before taking action (default: 1) */
+  gracePeriodTicks: number;
+}
+
+/**
  * Full Phalanx configuration
  */
 export interface PhalanxConfig {
@@ -66,6 +83,8 @@ export interface PhalanxConfig {
   enableStateHashing?: boolean;
   /** Interval in ticks between state hash checks (default: 60) */
   stateHashInterval?: number;
+  /** Desync detection behavior configuration */
+  desync?: Partial<DesyncConfig>;
 }
 
 /**

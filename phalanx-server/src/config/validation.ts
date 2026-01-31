@@ -16,6 +16,10 @@ export function validateConfig(
       ...DEFAULT_CONFIG.cors,
       ...(userConfig.cors || {}),
     },
+    desync: {
+      ...DEFAULT_CONFIG.desync,
+      ...(userConfig.desync || {}),
+    },
   };
 
   // Validate port

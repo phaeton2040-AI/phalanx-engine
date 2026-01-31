@@ -83,6 +83,13 @@ export type {
 // Deterministic random number generator
 export { DeterministicRandom } from './DeterministicRandom.js';
 
+// State hasher utility for desync detection
+export { StateHasher } from './StateHasher.js';
+
+// Desync detector (advanced usage - for custom desync handling)
+export { DesyncDetector } from './DesyncDetector.js';
+export type { DesyncConfig, DesyncEvent } from './DesyncDetector.js';
+
 // ============================================
 // Types
 // ============================================
@@ -132,6 +139,9 @@ export type {
   // State types
   ConnectionState,
   ClientState,
+
+  // Desync detection
+  HashComparisonEvent,
 
   // Event handlers (for legacy 'on' API)
   PhalanxClientEvents,

@@ -6,6 +6,7 @@
 import { EventEmitter } from './EventEmitter.js';
 import { RenderLoop } from './RenderLoop.js';
 import { SocketManager } from './SocketManager.js';
+import { DesyncDetector, type DesyncConfig } from './DesyncDetector.js';
 import type {
   PhalanxClientConfig,
   PhalanxClientEvents,
@@ -52,6 +53,7 @@ export class PhalanxClient extends EventEmitter<PhalanxClientEvents> {
   private config: Required<PhalanxClientConfig>;
   private socketManager: SocketManager;
   private renderLoop: RenderLoop;
+  private desyncDetector: DesyncDetector;
 
   // State
   private clientState: ClientState = 'idle';
@@ -139,11 +141,32 @@ export class PhalanxClient extends EventEmitter<PhalanxClientEvents> {
         },
         onReconnectStatus: (data) => this.emit('reconnectStatus', data),
 
+        // Desync detection events
+        onHashComparison: (data) => {
+          if (!this.desyncDetector.isEnabled()) return;
+
+          const hasDesync = !this.desyncDetector.compareWithRemote(
+            data.tick,
+            data.hashes
+          );
+          if (hasDesync) {
+            const localHash = this.desyncDetector.getLocalHash(data.tick);
+            this.emit('desync', {
+              tick: data.tick,
+              localHash: localHash ?? 'unknown',
+              remoteHashes: data.hashes,
+            });
+          }
+        },
+
         // State queries
         isPlaying: () => this.clientState === 'playing',
         getCurrentMatchId: () => this.currentMatchId,
       }
     );
+
+    // Initialize DesyncDetector
+    this.desyncDetector = new DesyncDetector();
 
     // Initialize RenderLoop
     this.renderLoop = new RenderLoop({
@@ -386,6 +409,57 @@ export class PhalanxClient extends EventEmitter<PhalanxClientEvents> {
    */
   async attemptReconnection(): Promise<void> {
     return this.socketManager.attemptReconnection();
+  }
+
+  // ============================================
+  // DESYNC DETECTION
+  // ============================================
+
+  /**
+   * Submit state hash for desync detection
+   * Call this after each simulation tick (or every N ticks based on your preference)
+   *
+   * The game is responsible for computing the hash using StateHasher or
+   * a custom implementation. The SDK just handles transport and comparison.
+   *
+   * @param tick - The tick this hash is for
+   * @param hash - Hash computed by game (any string)
+   *
+   * @example
+   * ```typescript
+   * client.onTick((tick, commands) => {
+   *   simulation.processTick(tick, commands);
+   *
+   *   // Submit hash every 20 ticks (once per second at 20 TPS)
+   *   if (tick % 20 === 0) {
+   *     const hash = computeGameStateHash(tick);
+   *     client.submitStateHash(tick, hash);
+   *   }
+   * });
+   * ```
+   */
+  submitStateHash(tick: number, hash: string): void {
+    this.desyncDetector.recordLocalHash(tick, hash);
+    if (this.isConnected()) {
+      this.socketManager.sendStateHash(tick, hash);
+    }
+  }
+
+  /**
+   * Configure desync detection
+   * @param config - Configuration options for desync detection
+   *
+   * @example
+   * ```typescript
+   * // Disable desync detection
+   * client.configureDesyncDetection({ enabled: false });
+   *
+   * // Limit stored hashes
+   * client.configureDesyncDetection({ maxStoredHashes: 50 });
+   * ```
+   */
+  configureDesyncDetection(config: Partial<DesyncConfig>): void {
+    this.desyncDetector.configure(config);
   }
 
   // ============================================

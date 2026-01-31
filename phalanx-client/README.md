@@ -241,6 +241,168 @@ const state = await client.reconnectToMatch(matchId);
 await client.attemptReconnection();
 ```
 
+### Desync Detection
+
+Desync detection helps identify when game state diverges between clients. This is critical for deterministic lockstep games where all clients must maintain identical simulation state.
+
+#### How It Works
+
+1. **Game computes state hashes** at regular intervals (e.g., every 20 ticks)
+2. **Client submits hashes** to the server via `submitStateHash()`
+3. **Server compares hashes** from all clients
+4. **Server broadcasts results** to all clients
+5. **Client emits `desync` event** if hashes don't match
+
+#### Submitting State Hashes
+
+```typescript
+import { PhalanxClient, StateHasher } from 'phalanx-client';
+
+// In your tick handler
+client.onTick((tick, commands) => {
+  // Run simulation
+  simulation.processTick(tick, commands);
+
+  // Submit state hash every 20 ticks (once per second at 20 TPS)
+  if (tick % 20 === 0) {
+    const hash = computeStateHash(tick);
+    client.submitStateHash(tick, hash);
+  }
+});
+```
+
+#### Using StateHasher
+
+The `StateHasher` utility provides a deterministic FNV-1a hash implementation:
+
+```typescript
+import { StateHasher } from 'phalanx-client';
+
+function computeStateHash(tick: number): string {
+  const hasher = new StateHasher();
+
+  // Add tick number
+  hasher.addInt(tick);
+
+  // Add entity data (sorted by ID for determinism)
+  const sortedEntities = [...entities].sort((a, b) => a.id.localeCompare(b.id));
+  hasher.addInt(sortedEntities.length);
+
+  for (const entity of sortedEntities) {
+    hasher.addString(entity.id);
+    hasher.addFloat(entity.x);
+    hasher.addFloat(entity.y);
+    hasher.addFloat(entity.z);
+    hasher.addInt(entity.health);
+    hasher.addString(entity.state);
+  }
+
+  return hasher.finalize();
+}
+```
+
+#### StateHasher API
+
+```typescript
+const hasher = new StateHasher();
+
+// Add primitive values
+hasher.addInt(42);                    // Integer
+hasher.addFloat(3.14159);             // Float (converted to fixed-point)
+hasher.addString("entity-123");       // String
+hasher.addBool(true);                 // Boolean
+
+// Add arrays
+hasher.addIntArray([1, 2, 3]);        // Array of integers
+hasher.addFloatArray([1.5, 2.5]);     // Array of floats
+
+// Get final hash (8-char hex string)
+const hash = hasher.finalize();       // e.g., "a1b2c3d4"
+
+// Reset for reuse
+hasher.reset();
+```
+
+#### Handling Desync Events
+
+```typescript
+// Listen for desync events
+client.on('desync', (event) => {
+  console.error('Desync detected!');
+  console.error(`Tick: ${event.tick}`);
+  console.error(`Local hash: ${event.localHash}`);
+  console.error(`Remote hashes:`, event.remoteHashes);
+
+  // Options:
+  // 1. Log for debugging
+  // 2. Show error to players
+  // 3. Attempt recovery (rare)
+});
+
+// Listen for match end due to desync
+client.on('matchEnd', (event) => {
+  if (event.reason === 'desync') {
+    console.error('Match ended due to desync');
+    console.error('Details:', event.details);
+    // event.details contains { tick, hashes }
+  }
+});
+```
+
+#### Configuring Desync Detection
+
+```typescript
+// Enable/disable desync detection
+client.configureDesyncDetection({ enabled: true });
+
+// Limit stored hashes (for memory optimization)
+client.configureDesyncDetection({ maxStoredHashes: 50 });
+```
+
+#### Server Configuration
+
+The server can be configured to take different actions on desync:
+
+```typescript
+// phalanx-server configuration
+const phalanx = new Phalanx({
+  enableStateHashing: true,
+  desync: {
+    enabled: true,
+    action: 'end-match',      // 'log-only' | 'end-match'
+    gracePeriodTicks: 1,      // Consecutive desyncs before action
+  },
+});
+```
+
+| Option             | Description                                        | Default      |
+| ------------------ | -------------------------------------------------- | ------------ |
+| `enabled`          | Enable desync detection                            | `true`       |
+| `action`           | Action on confirmed desync                         | `'end-match'`|
+| `gracePeriodTicks` | Consecutive desyncs required before taking action  | `1`          |
+
+#### Testing Desync Detection
+
+To test desync detection during development:
+
+```typescript
+// Intentionally cause a desync for testing
+client.onTick((tick, commands) => {
+  simulation.processTick(tick, commands);
+
+  if (tick % 20 === 0) {
+    let hash = computeStateHash(tick);
+
+    // Force desync on a specific tick for testing
+    if (tick === 100 && client.getPlayerId() === 'player-1') {
+      hash = 'intentionally-wrong-hash';
+    }
+
+    client.submitStateHash(tick, hash);
+  }
+});
+```
+
 ### State Getters
 
 ```typescript
@@ -283,6 +445,9 @@ client.on('playerReconnected', (event) => {});
 // Reconnection events
 client.on('reconnectState', (event) => {});
 client.on('reconnectStatus', (event) => {});
+
+// Desync detection events
+client.on('desync', (event) => {});  // Local hash mismatch detected
 
 // Unsubscribe
 const unsubscribe = client.on('tick', handler);

@@ -7,6 +7,7 @@ import type {
   PlayerInfo,
   PlayerCommand,
   TickCommands,
+  DesyncConfig,
 } from '../types/index.js';
 
 /**
@@ -61,6 +62,10 @@ export class GameRoom {
   private lastSequence: Map<string, number> = new Map();
   // State hashes per tick for desync detection (2.1.3)
   private stateHashes: Map<number, Map<string, string>> = new Map();
+  // Track consecutive desyncs for grace period (2.5.3.1)
+  private consecutiveDesyncs: number = 0;
+  // Resolved desync config with defaults
+  private readonly desyncConfig: Required<DesyncConfig>;
 
   constructor(
     id: string,
@@ -78,6 +83,13 @@ export class GameRoom {
     this.createdAt = new Date();
     // Generate deterministic random seed for this match (32-bit unsigned integer)
     this.randomSeed = randomBytes(4).readUInt32BE();
+
+    // Resolve desync config with defaults
+    this.desyncConfig = {
+      enabled: config.desync?.enabled ?? true,
+      action: config.desync?.action ?? 'end-match',
+      gracePeriodTicks: config.desync?.gracePeriodTicks ?? 1,
+    };
 
     // Initialize players from teams
     teams.forEach((team, teamId) => {
@@ -565,8 +577,9 @@ export class GameRoom {
 
   /**
    * Stop the game room
+   * @param skipNotify - If true, skip emitting match-ended events (used when already handled)
    */
-  stop(): void {
+  stop(skipNotify: boolean = false): void {
     if (this.tickInterval) {
       clearInterval(this.tickInterval);
       this.tickInterval = null;
@@ -581,14 +594,15 @@ export class GameRoom {
     }
     this.state = 'finished';
 
-    // Emit match-ended event
-    this.eventEmitter('match-ended', this.id, 'stopped');
+    if (!skipNotify) {
+      // Emit match-ended event
+      this.eventEmitter('match-ended', this.id, 'stopped');
 
-    // Notify players
-    this.io.to(this.roomId).emit('match-ended', {
-      matchId: this.id,
-      reason: 'stopped',
-    });
+      // Notify players
+      this.io.to(this.roomId).emit('match-end', {
+        reason: 'stopped',
+      });
+    }
   }
 
   /**
@@ -746,21 +760,72 @@ export class GameRoom {
     const hashValues = Array.from(hashes.values());
     const allMatch = hashValues.every((h) => h === hashValues[0]);
 
+    const hashObject: { [playerId: string]: string } = {};
+    hashes.forEach((hash, playerId) => {
+      hashObject[playerId] = hash;
+    });
+
     if (!allMatch) {
-      const hashObject: { [playerId: string]: string } = {};
-      hashes.forEach((hash, playerId) => {
-        hashObject[playerId] = hash;
-      });
+      // Increment consecutive desync counter
+      this.consecutiveDesyncs++;
 
       // Emit desync event to server handlers
       this.eventEmitter('desync-detected', this.id, tick, hashObject);
 
-      // Broadcast to all clients in the room
-      this.io.to(this.roomId).emit('desync-detected', {
+      // Check if we've exceeded the grace period
+      if (this.consecutiveDesyncs >= this.desyncConfig.gracePeriodTicks) {
+        // Take configured action
+        if (this.desyncConfig.action === 'end-match') {
+          // End the match due to confirmed desync
+          this.endMatchDueToDesync(tick, hashObject);
+        } else {
+          // Log only - broadcast to clients for their logging/debugging
+          this.io.to(this.roomId).emit('hash-comparison', {
+            tick,
+            hashes: hashObject,
+          });
+        }
+      } else {
+        // Still within grace period - just broadcast for logging
+        this.io.to(this.roomId).emit('hash-comparison', {
+          tick,
+          hashes: hashObject,
+        });
+      }
+    } else {
+      // Hashes match - reset consecutive desync counter
+      this.consecutiveDesyncs = 0;
+
+      // Broadcast successful comparison (for client-side logging if needed)
+      this.io.to(this.roomId).emit('hash-comparison', {
         tick,
         hashes: hashObject,
       });
     }
+  }
+
+  /**
+   * End the match due to confirmed desync
+   */
+  private endMatchDueToDesync(
+    tick: number,
+    hashes: { [playerId: string]: string }
+  ): void {
+    // Stop the game (skip default notification since we handle it here)
+    this.stop(true);
+
+    // Notify players with desync details
+    this.io.to(this.roomId).emit('match-end', {
+      reason: 'desync',
+      details: {
+        tick,
+        hashes,
+      },
+      winner: null,
+    });
+
+    // Emit match-ended event
+    this.eventEmitter('match-ended', this.id, 'desync');
   }
 
   /**

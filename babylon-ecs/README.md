@@ -10,6 +10,8 @@ A real-time strategy (RTS) game demo built with [Babylon.js](https://www.babylon
 - **Projectile System**: Visual projectiles with hit detection
 - **Selection System**: Click to select units, right-click to move
 - **Health System**: Entities take damage and can be destroyed
+- **Multiplayer**: 1v1 deterministic lockstep via Phalanx Engine
+- **Desync Detection**: State hash verification to ensure synchronized gameplay
 
 ## Getting Started
 

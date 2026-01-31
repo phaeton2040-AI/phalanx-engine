@@ -3,6 +3,11 @@
  * Types for the client-side library
  */
 
+import type { DesyncEvent } from './DesyncDetector.js';
+
+// Re-export DesyncEvent for convenience
+export type { DesyncEvent };
+
 /**
  * Configuration for the Phalanx client
  */
@@ -185,6 +190,18 @@ export interface SubmitCommandsAck {
  */
 export interface MatchEndEvent {
   reason: string;
+  /** Additional details about the match end (e.g., desync info) */
+  details?: unknown;
+  /** Winner information (null on desync) */
+  winner?: string | null;
+}
+
+/**
+ * Hash comparison data received from server
+ */
+export interface HashComparisonEvent {
+  tick: number;
+  hashes: Record<string, string>;
 }
 
 /**
@@ -274,4 +291,7 @@ export interface PhalanxClientEvents {
   // Reconnection events
   reconnectState: (event: ReconnectStateEvent) => void;
   reconnectStatus: (event: ReconnectStatusEvent) => void;
+
+  // Desync detection events
+  desync: (event: DesyncEvent) => void;
 }

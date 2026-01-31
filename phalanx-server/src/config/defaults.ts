@@ -48,4 +48,11 @@ export const DEFAULT_CONFIG: PhalanxConfig = {
   validateInputSequence: false,
   enableStateHashing: false,
   stateHashInterval: 60, // 3 seconds at 20 TPS
+
+  // Desync Detection Behavior
+  desync: {
+    enabled: true,
+    action: 'end-match', // 'log-only' | 'end-match'
+    gracePeriodTicks: 1, // Consecutive desyncs before action
+  },
 };
