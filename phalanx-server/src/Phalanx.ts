@@ -66,7 +66,7 @@ export class Phalanx extends EventEmitter {
     const requestHandler = async (req: IncomingMessage, res: ServerResponse) => {
       // Handle CORS preflight
       if (req.method === 'OPTIONS') {
-        this.setCorsHeaders(res);
+        this.setCorsHeaders(res, req);
         res.writeHead(204);
         res.end();
         return;
@@ -74,7 +74,7 @@ export class Phalanx extends EventEmitter {
 
       // Health check endpoint
       if (req.url === '/' || req.url === '/health') {
-        this.setCorsHeaders(res);
+        this.setCorsHeaders(res, req);
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(
           JSON.stringify({
@@ -93,7 +93,7 @@ export class Phalanx extends EventEmitter {
       }
 
       // 404 for other routes
-      this.setCorsHeaders(res);
+      this.setCorsHeaders(res, req);
       res.writeHead(404, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Not found' }));
     };
@@ -124,14 +124,26 @@ export class Phalanx extends EventEmitter {
   /**
    * Set CORS headers on response
    */
-  private setCorsHeaders(res: ServerResponse): void {
-    const origins = Array.isArray(this.config.cors.origin)
+  private setCorsHeaders(res: ServerResponse, req?: IncomingMessage): void {
+    const configuredOrigins = Array.isArray(this.config.cors.origin)
       ? this.config.cors.origin
       : [this.config.cors.origin];
 
-    // For simplicity, allow all configured origins
-    // In production, you might want to check the Origin header
-    res.setHeader('Access-Control-Allow-Origin', origins[0] || '*');
+    // Get the request Origin header
+    const requestOrigin = req?.headers.origin;
+
+    // Check if the request origin is in our allowed list
+    let allowedOrigin: string;
+    if (requestOrigin && configuredOrigins.includes(requestOrigin)) {
+      allowedOrigin = requestOrigin;
+    } else if (configuredOrigins.includes('*')) {
+      allowedOrigin = '*';
+    } else {
+      // Default to first configured origin (for preflight without Origin header)
+      allowedOrigin = configuredOrigins[0] || '*';
+    }
+
+    res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
     if (this.config.cors.credentials) {
@@ -143,7 +155,7 @@ export class Phalanx extends EventEmitter {
    * Handle OAuth token exchange request
    */
   private async handleTokenExchange(req: IncomingMessage, res: ServerResponse): Promise<void> {
-    this.setCorsHeaders(res);
+    this.setCorsHeaders(res, req);
 
     if (!this.oauthExchange) {
       res.writeHead(503, { 'Content-Type': 'application/json' });
