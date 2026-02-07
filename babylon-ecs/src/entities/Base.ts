@@ -12,6 +12,7 @@ import {
   TeamComponent,
   HealthComponent,
   AttackComponent,
+  DeathComponent,
 } from '../components';
 import { TeamTag } from '../enums/TeamTag';
 
@@ -68,6 +69,9 @@ export class Base extends Entity {
     // Set attack origin offset to top of base
     attackComponent.setAttackOriginOffset(new Vector3(0, 2, 0));
     this.addComponent(attackComponent);
+
+    // Add DeathComponent for deterministic death timing (instant death)
+    this.addComponent(new DeathComponent(0));
 
     if (this._debug) {
       this.createRangeIndicator();

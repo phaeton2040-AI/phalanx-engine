@@ -4,6 +4,7 @@ export type { IComponent, ComponentTypeKey } from './Component';
 
 export { TeamComponent } from './TeamComponent';
 export { HealthComponent } from './HealthComponent';
+export { DeathComponent } from './DeathComponent'; // Add death timer component
 export { AttackComponent } from './AttackComponent';
 export type { AttackConfig, AttackType } from './AttackComponent';
 export { MovementComponent } from './MovementComponent';

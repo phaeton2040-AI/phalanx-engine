@@ -97,6 +97,11 @@ export class Game {
   // Callbacks
   private onExit: (() => void) | null = null;
 
+  // PhalanxClient handler unsubscribe functions
+  private unsubscribeTick: (() => void) | null = null;
+  private unsubscribeFrame: (() => void) | null = null;
+  private networkEventUnsubscribers: (() => void)[] = [];
+
   constructor(
     canvas: HTMLCanvasElement,
     client: PhalanxClient,
@@ -221,6 +226,7 @@ export class Game {
         resourceSystem: this.resourceSystem,
         formationGridSystem: this.formationGridSystem,
         waveSystem: this.waveSystem,
+        healthSystem: this.healthSystem,
         eventBus: this.eventBus,
       },
       {
@@ -247,23 +253,29 @@ export class Game {
    * Setup network event handlers (disconnect, reconnect, match end)
    */
   private setupNetworkEventHandlers(): void {
-    this.client.on('playerDisconnected', (_event) => {
-      this.uiManager.showNotification('Opponent disconnected', 'warning');
-      setTimeout(() => {
-        this.handleExit();
-      }, 3000);
-    });
+    this.networkEventUnsubscribers.push(
+      this.client.on('playerDisconnected', (_event) => {
+        this.uiManager.showNotification('Opponent disconnected', 'warning');
+        setTimeout(() => {
+          this.handleExit();
+        }, 3000);
+      })
+    );
 
-    this.client.on('playerReconnected', (_event) => {
-      this.uiManager.showNotification('Opponent reconnected', 'info');
-    });
+    this.networkEventUnsubscribers.push(
+      this.client.on('playerReconnected', (_event) => {
+        this.uiManager.showNotification('Opponent reconnected', 'info');
+      })
+    );
 
-    this.client.on('matchEnd', (event) => {
-      this.uiManager.showNotification(`Match ended: ${event.reason}`, 'info');
-      setTimeout(() => {
-        this.handleExit();
-      }, 2000);
-    });
+    this.networkEventUnsubscribers.push(
+      this.client.on('matchEnd', (event) => {
+        this.uiManager.showNotification(`Match ended: ${event.reason}`, 'info');
+        setTimeout(() => {
+          this.handleExit();
+        }, 2000);
+      })
+    );
   }
 
   /**
@@ -271,7 +283,7 @@ export class Game {
    */
   private setupPhalanxClientHandlers(): void {
     // Register tick handler for simulation
-    this.client.onTick((tick, commandsBatch) => {
+    this.unsubscribeTick = this.client.onTick((tick, commandsBatch) => {
       // Snapshot positions before simulation
       this.interpolationSystem.snapshotPositions();
 
@@ -283,7 +295,7 @@ export class Game {
     });
 
     // Register frame handler for rendering
-    this.client.onFrame((alpha, dt) => {
+    this.unsubscribeFrame = this.client.onFrame((alpha, dt) => {
       // Update camera controller (keyboard/touch input)
       this.cameraController.update(dt);
 
@@ -611,10 +623,20 @@ export class Game {
     this.waveSystem.registerPlayer(team1PlayerId);
     this.waveSystem.registerPlayer(team2PlayerId);
 
-    // Set up wave deployment callback
+    // Set up wave deployment callback (legacy - used as fallback)
     this.waveSystem.setDeployUnitsCallback((playerId) => {
       return this.formationGridSystem.commitFormation(playerId);
     });
+
+    // Set up staggered deployment callbacks for smoother spawning
+    this.waveSystem.setStaggeredDeploymentCallbacks(
+      // Get pending units
+      (playerId) => this.formationGridSystem.getPendingUnitsForDeployment(playerId),
+      // Deploy single unit
+      (playerId, unitInfo) => this.formationGridSystem.deploySingleUnit(playerId, unitInfo),
+      // Finalize deployment
+      (playerId, unitCount) => this.formationGridSystem.finalizeDeployment(playerId, unitCount)
+    );
 
     // Start the wave system (Wave 0 - preparation phase)
     this.waveSystem.start(0);
@@ -819,6 +841,22 @@ export class Game {
    * Cleanup resources
    */
   public dispose(): void {
+    // Unsubscribe from PhalanxClient handlers first to stop rendering/simulation
+    if (this.unsubscribeTick) {
+      this.unsubscribeTick();
+      this.unsubscribeTick = null;
+    }
+    if (this.unsubscribeFrame) {
+      this.unsubscribeFrame();
+      this.unsubscribeFrame = null;
+    }
+
+    // Unsubscribe from network event handlers
+    for (const unsubscribe of this.networkEventUnsubscribers) {
+      unsubscribe();
+    }
+    this.networkEventUnsubscribers = [];
+
     this.uiManager.dispose();
 
     // Dispose all systems

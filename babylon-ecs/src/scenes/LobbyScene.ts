@@ -28,6 +28,9 @@ export class LobbyScene {
     | ((client: PhalanxClient, matchData: MatchFoundEvent) => void)
     | null = null;
 
+  // Network event unsubscribers (to clean up when returning to lobby)
+  private networkUnsubscribers: (() => void)[] = [];
+
   constructor() {
     // Get DOM elements
     this.lobbyElement = document.getElementById('lobby')!;
@@ -218,15 +221,19 @@ export class LobbyScene {
   private async connectToServer(): Promise<void> {
     this.setStatus('Connecting to server...');
 
-    // Setup event handlers
-    this.client.on('disconnected', () => {
-      this.setStatus('Disconnected from server', 'error');
-      this.connectButton.disabled = false;
-    });
+    // Setup event handlers (store unsubscribers for cleanup)
+    this.networkUnsubscribers.push(
+      this.client.on('disconnected', () => {
+        this.setStatus('Disconnected from server', 'error');
+        this.connectButton.disabled = false;
+      })
+    );
 
-    this.client.on('error', (error) => {
-      this.setStatus(`Error: ${error.message}`, 'error');
-    });
+    this.networkUnsubscribers.push(
+      this.client.on('error', (error) => {
+        this.setStatus(`Error: ${error.message}`, 'error');
+      })
+    );
 
     // Connect
     await this.client.connect();
@@ -292,6 +299,12 @@ export class LobbyScene {
    * Show lobby (called when returning from game)
    */
   show(): void {
+    // Clean up network event handlers from previous session
+    for (const unsubscribe of this.networkUnsubscribers) {
+      unsubscribe();
+    }
+    this.networkUnsubscribers = [];
+
     this.lobbyElement.style.display = 'flex';
     this.gameContainer.style.display = 'none';
     this.connectButton.disabled = false;

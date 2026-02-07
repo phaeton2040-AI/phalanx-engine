@@ -9,6 +9,7 @@ import {
   AttackComponent,
   AttackLockComponent,
   ComponentType,
+  DeathComponent,
   HealthComponent,
   MovementComponent,
   RotationComponent,
@@ -77,8 +78,6 @@ export class CombatSystem {
   private storedMoveTargets: Map<number, Vector3> = new Map(); // attacker ID -> original move target
   private aggroTargets: Map<number, number> = new Map(); // entity ID -> attacker ID (who damaged them)
 
-  // Fixed timestep accumulator for deterministic updates
-  private accumulator: number = 0;
 
   // Callback for moving units (bypasses EventBus for lockstep simulation)
   private moveUnitCallback:
@@ -165,21 +164,6 @@ export class CombatSystem {
     this.aggroTargets.set(targetId, attackerId);
   }
 
-  /**
-   * Update combat system - called every frame (legacy)
-   * Uses fixed timestep accumulator for deterministic attack cooldown updates.
-   * @deprecated Use simulateTick() for deterministic network synchronization
-   */
-  public update(): void {
-    const deltaTime = this.engine.getDeltaTime() / 1000;
-    this.accumulator += deltaTime;
-
-    // Run fixed timestep updates for deterministic combat
-    while (this.accumulator >= this.config.fixedTimestep) {
-      this.fixedUpdate(this.config.fixedTimestep);
-      this.accumulator -= this.config.fixedTimestep;
-    }
-  }
 
   /**
    * Simulate one network tick worth of combat
@@ -211,11 +195,12 @@ export class CombatSystem {
       );
       if (health?.isDestroyed) continue;
 
-      // Skip dying entities - check via AnimationComponent
-      const animComp = attacker.getComponent<AnimationComponent>(
-        ComponentType.Animation
+      // Skip dying entities - check via DeathComponent for deterministic behavior
+      // (AnimationComponent.isDying is set by frame-dependent animation system)
+      const deathComp = attacker.getComponent<DeathComponent>(
+        ComponentType.Death
       );
-      if (animComp?.isDying) continue;
+      if (deathComp?.isDying) continue;
 
       const attack = attacker.getComponent<AttackComponent>(
         ComponentType.Attack
@@ -283,6 +268,8 @@ export class CombatSystem {
         const isTower = attacker instanceof Tower;
         if (isTower) {
           attacker.setTargetPosition(target.position);
+          // Update deterministic aiming state (tick-based, not frame-based)
+          attacker.simulateTurretAiming(deltaTime);
         }
 
         // Check if entity is currently attack-locked (via component)
@@ -496,11 +483,11 @@ export class CombatSystem {
 
     // If we have an aggro target in attack range, prioritize it (unless dying)
     if (aggroTarget) {
-      // Skip dying entities as aggro targets (check via AnimationComponent)
-      const aggroAnimComp = aggroTarget.getComponent<AnimationComponent>(
-        ComponentType.Animation
+      // Skip dying entities as aggro targets - use DeathComponent for determinism
+      const aggroDeathComp = aggroTarget.getComponent<DeathComponent>(
+        ComponentType.Death
       );
-      const isDying = aggroAnimComp?.isDying ?? false;
+      const isDying = aggroDeathComp?.isDying ?? false;
       const aggroHealth = aggroTarget.getComponent<HealthComponent>(
         ComponentType.Health
       );
@@ -528,11 +515,11 @@ export class CombatSystem {
       );
       if (health?.isDestroyed) continue;
 
-      // Skip dying entities as potential targets (check via AnimationComponent)
-      const potentialAnimComp = potential.getComponent<AnimationComponent>(
-        ComponentType.Animation
+      // Skip dying entities as potential targets - use DeathComponent for determinism
+      const potentialDeathComp = potential.getComponent<DeathComponent>(
+        ComponentType.Death
       );
-      if (potentialAnimComp?.isDying) continue;
+      if (potentialDeathComp?.isDying) continue;
 
       const targetTeam = potential.getComponent<TeamComponent>(
         ComponentType.Team
@@ -681,14 +668,6 @@ export class CombatSystem {
     });
   }
 
-  /**
-   * Get the current target of an entity
-   */
-  public getTarget(entityId: number): Entity | null {
-    const targetId = this.currentTargets.get(entityId);
-    if (targetId === undefined) return null;
-    return this.entityManager.getEntity(targetId) ?? null;
-  }
 
   /**
    * Update tower turret rotations for smooth visual rotation

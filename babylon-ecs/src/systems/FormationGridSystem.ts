@@ -17,6 +17,7 @@ import {
   type PlacedUnit,
   type GridCoords,
   type GridCell,
+  type DeploymentUnitInfo,
 } from './formation';
 import type {
   UnitPurchaseCompletedEvent,
@@ -407,6 +408,30 @@ export class FormationGridSystem {
    */
   public commitFormation(playerId: string): number {
     return this.deployer.commitFormation(playerId);
+  }
+
+  /**
+   * Get pending units for staggered deployment
+   */
+  public getPendingUnitsForDeployment(playerId: string): DeploymentUnitInfo[] {
+    return this.deployer.getPendingUnitsForDeployment(playerId);
+  }
+
+  /**
+   * Deploy a single unit during staggered deployment
+   */
+  public deploySingleUnit(
+    playerId: string,
+    unitInfo: DeploymentUnitInfo
+  ): void {
+    return this.deployer.deploySingleUnit(playerId, unitInfo);
+  }
+
+  /**
+   * Finalize deployment for a player
+   */
+  public finalizeDeployment(playerId: string, unitCount: number): void {
+    return this.deployer.finalizeDeployment(playerId, unitCount);
   }
 
   /**

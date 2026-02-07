@@ -80,21 +80,6 @@ export class AnimationSystem {
   }
 
   /**
-   * Play idle animation with crossfade
-   */
-  public playIdleAnimation(anim: AnimationComponent): void {
-    if (!anim.isModelLoaded) return;
-    if (anim.isDying || anim.currentState === AnimationState.Dying) return;
-    if (anim.currentState === AnimationState.Idle) return;
-
-    const animation = anim.getAnimation(anim.animationNames.idle);
-    if (animation) {
-      this.crossFadeToAnimation(anim, animation, true, 1.0);
-      anim.currentState = AnimationState.Idle;
-    }
-  }
-
-  /**
    * Play run animation with crossfade
    */
   public playRunAnimation(anim: AnimationComponent): void {
@@ -182,35 +167,31 @@ export class AnimationSystem {
     return true;
   }
 
+
   /**
-   * Start death sequence
+   * Play death animation for visual effect only
+   *
+   * IMPORTANT FOR DETERMINISM: This method plays the animation purely for
+   * visual effect. The actual entity destruction is controlled by the
+   * DeathComponent's tick-based timer in HealthSystem.processTick().
+   *
+   * This ensures all clients destroy entities at exactly the same tick,
+   * regardless of frame rate or animation playback speed.
+   *
    * @param anim Animation component
-   * @param onComplete Callback when death animation finishes
    */
-  public startDeathSequence(
-    anim: AnimationComponent,
-    onComplete: () => void
-  ): void {
+  public playDeathAnimationVisualOnly(anim: AnimationComponent): void {
     if (anim.isDying) return;
 
     anim.isDying = true;
-    anim.onDeathComplete = onComplete;
+    // No onDeathComplete callback - death timing is handled by DeathComponent
 
     // Stop any current actions
     anim.isAttacking = false;
     anim.isInCombat = false;
 
-    this.playDeathAnimation(anim);
-  }
-
-  /**
-   * Play death animation
-   */
-  private playDeathAnimation(anim: AnimationComponent): void {
     if (!anim.isModelLoaded) {
-      // If model not loaded, complete immediately
-      anim.onDeathComplete?.();
-      return;
+      return; // No animation to play
     }
 
     if (
@@ -227,15 +208,14 @@ export class AnimationSystem {
       animation.start(false, 1.0);
       anim.currentState = AnimationState.Dying;
 
+      // When animation ends, just update visual state (no destroy callback)
       animation.onAnimationGroupEndObservable.addOnce(() => {
         anim.currentState = AnimationState.Dead;
-        anim.onDeathComplete?.();
+        // Note: Entity destruction is handled by DeathComponent in HealthSystem.processTick()
       });
-    } else {
-      // No animation found, complete immediately
-      anim.onDeathComplete?.();
     }
   }
+
 
   /**
    * Stop all animations immediately

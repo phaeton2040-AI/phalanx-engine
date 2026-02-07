@@ -15,6 +15,7 @@ import {
   MovementComponent,
   UnitTypeComponent,
   UnitType,
+  DeathComponent,
 } from '../components';
 import { TeamTag } from '../enums/TeamTag';
 
@@ -80,6 +81,10 @@ export class LanceUnit extends Entity {
     );
     this.addComponent(new MovementComponent(config.moveSpeed ?? 8)); // Between sphere (10) and prisma (6)
     this.addComponent(new UnitTypeComponent(UnitType.Lance));
+
+    // Add DeathComponent for deterministic death timing
+    // LanceUnit has no death animation, so use instant death (0 ticks)
+    this.addComponent(new DeathComponent(0));
 
     if (this._debug) {
       this.createRangeIndicator();

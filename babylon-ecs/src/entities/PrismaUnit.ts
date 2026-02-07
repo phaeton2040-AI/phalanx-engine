@@ -16,6 +16,7 @@ import {
   MovementComponent,
   UnitTypeComponent,
   UnitType,
+  DeathComponent,
 } from '../components';
 import { TeamTag } from '../enums/TeamTag';
 
@@ -71,6 +72,10 @@ export class PrismaUnit extends Entity {
     );
     this.addComponent(new MovementComponent(config.moveSpeed ?? 6)); // Slower than sphere
     this.addComponent(new UnitTypeComponent(UnitType.Prisma));
+
+    // Add DeathComponent for deterministic death timing
+    // PrismaUnit has no death animation, so use instant death (0 ticks)
+    this.addComponent(new DeathComponent(0));
 
     if (this._debug) {
       this.createRangeIndicator();

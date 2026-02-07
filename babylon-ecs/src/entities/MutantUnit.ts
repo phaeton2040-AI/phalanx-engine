@@ -12,6 +12,7 @@ import {
   AttackComponent,
   AttackLockComponent,
   ComponentType,
+  DeathComponent,
   HealthComponent,
   MovementComponent,
   RotationComponent,
@@ -120,6 +121,11 @@ export class MutantUnit extends Entity {
     this.addComponent(new AnimationComponent(MutantAnimations, 0.15));
     this.addComponent(new RotationComponent(defaultRotationY, 8.0));
     this.addComponent(new AttackLockComponent(0.8));
+
+    // Add DeathComponent for deterministic death timing
+    // Death duration should be longer than the death animation (~3 seconds = 60 ticks at 20 TPS)
+    // This ensures the unit stays visible until the animation completes
+    this.addComponent(new DeathComponent(4.0));
 
     if (this._debug) {
       this.createRangeIndicator();
@@ -291,50 +297,6 @@ export class MutantUnit extends Entity {
     return true;
   }
 
-  // Debug methods
-  public get debug(): boolean {
-    return this._debug;
-  }
-
-  public setDebug(value: boolean): void {
-    this._debug = value;
-    if (value && !this.rangeIndicator) {
-      this.createRangeIndicator();
-    } else if (!value && this.rangeIndicator) {
-      this.rangeIndicator.dispose();
-      this.rangeIndicator = null;
-    }
-  }
-
-  // Convenience getters that read from components
-  // These provide backward compatibility and easy access to component data
-
-  /**
-   * Check if the unit is currently dying (from AnimationComponent)
-   */
-  public get isDying(): boolean {
-    const anim = this.getComponent<AnimationComponent>(ComponentType.Animation);
-    return anim?.isDying ?? false;
-  }
-
-  /**
-   * Check if the unit is currently attack-locked (deterministic for simulation)
-   * Reads from AttackLockComponent
-   */
-  public get isCurrentlyAttacking(): boolean {
-    const attackLock = this.getComponent<AttackLockComponent>(
-      ComponentType.AttackLock
-    );
-    return attackLock?.isLocked ?? false;
-  }
-
-  /**
-   * Check if the unit is in combat mode (from AnimationComponent)
-   */
-  public get isInCombat(): boolean {
-    const anim = this.getComponent<AnimationComponent>(ComponentType.Animation);
-    return anim?.isInCombat ?? false;
-  }
 
   public override dispose(): void {
     this.selectionIndicator.dispose();

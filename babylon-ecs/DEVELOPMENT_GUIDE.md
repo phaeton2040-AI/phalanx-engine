@@ -312,6 +312,8 @@ interface NetworkDeployUnitsCommand extends PlayerCommand {
 
 ### Adding New Network Commands
 
+To add a new command type (e.g., a manual attack command), follow these steps:
+
 1. **Define the command type** in `NetworkCommands.ts`:
 
 ```typescript
@@ -337,10 +339,15 @@ export type NetworkCommand =
 ```typescript
 if (cmd.type === 'attack') {
   const attackCmd = cmd as NetworkAttackCommand;
-  this.systems.combatSystem.executeAttack(
-    attackCmd.data.attackerId,
-    attackCmd.data.targetId
-  );
+  // Implement your attack logic here
+  // Note: Current CombatSystem handles attacks automatically via detection
+  // You would need to add a method like forceAttackTarget() if needed
+  const attacker = this.entityManager.getEntity(attackCmd.data.attackerId);
+  const target = this.entityManager.getEntity(attackCmd.data.targetId);
+  if (attacker && target) {
+    // Set attack target via movement toward enemy
+    this.systems.movementSystem.moveEntity(attacker.id, target.position);
+  }
 }
 ```
 
@@ -352,6 +359,10 @@ this.lockstepManager.queueCommand({
   data: { attackerId: unit.id, targetId: enemy.id },
 });
 ```
+
+> **Note**: The current CombatSystem uses automatic target detection within range.
+> Units attack automatically when enemies enter their detection range.
+> Manual attack commands can be used to direct units toward specific targets.
 
 ### Game Flow
 
@@ -465,16 +476,16 @@ export class LockstepManager {
       // Hash health (if has HealthComponent)
       const health = entity.getComponent(HealthComponent);
       if (health) {
-        hasher.addInt(health.getCurrentHealth());
-        hasher.addInt(health.getMaxHealth());
+        hasher.addInt(health.health);
+        hasher.addInt(health.maxHealth);
       }
 
       // Hash movement state (if has MovementComponent)
       const movement = entity.getComponent(MovementComponent);
       if (movement) {
-        hasher.addBool(movement.isMoving());
-        if (movement.getTarget()) {
-          const target = movement.getTarget()!;
+        hasher.addBool(movement.isMoving);
+        if (movement.isMoving) {
+          const target = movement.targetPosition;
           hasher.addFloat(target.x);
           hasher.addFloat(target.y);
           hasher.addFloat(target.z);
@@ -484,8 +495,8 @@ export class LockstepManager {
       // Hash attack state (if has AttackComponent)
       const attack = entity.getComponent(AttackComponent);
       if (attack) {
-        hasher.addFloat(attack.getLastAttackTime());
-        hasher.addInt(attack.getCurrentTargetId() ?? -1);
+        hasher.addFloat(attack.currentCooldown);
+        hasher.addBool(attack.canAttack());
       }
     }
 

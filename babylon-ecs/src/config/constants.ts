@@ -76,7 +76,7 @@ export const resourceConfig = {
   initialResources: 200,
 
   // Base resource generation rate (per second)
-  baseGenerationRate: 20,
+  baseGenerationRate: 100,
 
   // Aggression bonus multiplier when on enemy territory
   aggressionBonusMultiplier: 2.0,
@@ -136,10 +136,21 @@ export const waveConfig = {
 
   // Wave 0 duration - initial preparation time before first deployment
   // Set to same as waveDuration by default, but can be customized
-  initialWaveDuration: 12,
+  initialWaveDuration: 15,
 
   // Whether Wave 0 deploys units (false = preparation wave only)
   deployOnWaveZero: false,
+
+  // Staggered deployment settings
+  // Maximum units to spawn per tick to prevent frame drops
+  unitsPerTick: 3,
+
+  // Number of ticks to skip between spawn batches
+  // 0 = spawn every tick, 1 = spawn every other tick, 2 = spawn every 3rd tick, etc.
+  ticksBetweenSpawns: 3,
+
+  // Whether to use staggered deployment (false = spawn all at once like before)
+  useStaggeredDeployment: true,
 };
 
 /**

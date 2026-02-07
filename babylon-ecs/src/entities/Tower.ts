@@ -13,6 +13,7 @@ import {
   TeamComponent,
   HealthComponent,
   AttackComponent,
+  DeathComponent,
 } from '../components';
 import { TeamTag } from '../enums/TeamTag';
 
@@ -50,11 +51,18 @@ export class Tower extends Entity {
   private barrelMesh: Mesh;
   private crystalMesh: Mesh;
 
-  // Turret rotation tracking
+  // Turret rotation tracking (VISUAL - frame-rate dependent)
   private _currentTargetPosition: Vector3 | null = null;
   private _turretRotationSpeed: number = 4.0; // Radians per second
+  // @ts-ignore
   private _isAimedAtTarget: boolean = false;
   private _aimThreshold: number = 0.1; // Radians - how close to target angle to start firing
+
+  // DETERMINISTIC simulation aiming state (tick-based, NOT frame-based)
+  // This is what CombatSystem checks to determine if tower can fire
+  private _simCurrentAngle: number = 0; // Current turret angle in simulation
+  private _simTargetAngle: number = 0; // Target angle in simulation
+  private _simIsAimed: boolean = false; // Whether turret is aimed in simulation
 
   // Tower dimensions for attack origin calculation
   private static readonly BASE_HEIGHT = 3;
@@ -108,6 +116,9 @@ export class Tower extends Entity {
       new Vector3(0, Tower.BASE_HEIGHT / 2 + Tower.TURRET_HEIGHT / 2, 0)
     );
     this.addComponent(attackComponent);
+
+    // Add DeathComponent for deterministic death timing (instant death)
+    this.addComponent(new DeathComponent(0));
 
     if (this._debug) {
       this.createRangeIndicator();
@@ -373,15 +384,87 @@ export class Tower extends Entity {
     this._currentTargetPosition = position ? position.clone() : null;
     if (!position) {
       this._isAimedAtTarget = false;
+      this._simIsAimed = false;
+    } else {
+      // Calculate the simulation target angle immediately
+      const towerWorldPos = this.mesh!.position;
+      const targetDir = position.subtract(towerWorldPos);
+      targetDir.y = 0;
+      if (targetDir.length() > 0.01) {
+        this._simTargetAngle = Math.atan2(targetDir.x, targetDir.z);
+      }
+    }
+  }
+
+  /**
+   * Update turret aiming state for DETERMINISTIC simulation
+   * Called once per simulation tick by CombatSystem
+   *
+   * IMPORTANT: This uses fixed timestep for deterministic behavior.
+   * All clients will have the same aiming state at the same tick.
+   *
+   * @param deltaTime Fixed timestep (e.g., 1/20 for 20 TPS)
+   */
+  public simulateTurretAiming(deltaTime: number): void {
+    if (!this._currentTargetPosition) {
+      this._simIsAimed = false;
+      return;
+    }
+
+    // Recalculate target angle (target may have moved)
+    const towerWorldPos = this.mesh!.position;
+    const targetDir = this._currentTargetPosition.subtract(towerWorldPos);
+    targetDir.y = 0;
+
+    if (targetDir.length() < 0.01) {
+      this._simIsAimed = true;
+      return;
+    }
+
+    this._simTargetAngle = Math.atan2(targetDir.x, targetDir.z);
+
+    // Normalize current angle to -PI to PI
+    while (this._simCurrentAngle > Math.PI) this._simCurrentAngle -= Math.PI * 2;
+    while (this._simCurrentAngle < -Math.PI) this._simCurrentAngle += Math.PI * 2;
+
+    // Calculate angle difference
+    let angleDiff = this._simTargetAngle - this._simCurrentAngle;
+
+    // Normalize to shortest rotation path
+    while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+    while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+
+    // Check if we're close enough to the target angle
+    if (Math.abs(angleDiff) <= this._aimThreshold) {
+      this._simIsAimed = true;
+      this._simCurrentAngle = this._simTargetAngle;
+      return;
+    }
+
+    this._simIsAimed = false;
+
+    // Rotate towards target using fixed timestep
+    const rotationStep = this._turretRotationSpeed * deltaTime;
+
+    if (Math.abs(angleDiff) <= rotationStep) {
+      this._simCurrentAngle = this._simTargetAngle;
+      this._simIsAimed = true;
+    } else {
+      const rotationDir = angleDiff > 0 ? 1 : -1;
+      this._simCurrentAngle += rotationDir * rotationStep;
     }
   }
 
   /**
    * Check if the turret is aimed at its current target
    * Used by CombatSystem to determine if the tower can fire
+   *
+   * IMPORTANT: Returns the DETERMINISTIC simulation aiming state,
+   * NOT the visual rotation state. This ensures all clients agree
+   * on when a tower can fire, regardless of frame rate.
    */
   public get isAimedAtTarget(): boolean {
-    return this._isAimedAtTarget;
+    return this._simIsAimed;
   }
 
   /**

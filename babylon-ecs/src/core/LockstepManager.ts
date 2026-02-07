@@ -13,6 +13,7 @@ import type { TerritorySystem } from '../systems/TerritorySystem';
 import type { ResourceSystem } from '../systems/ResourceSystem';
 import type { FormationGridSystem } from '../systems/FormationGridSystem';
 import type { WaveSystem } from '../systems/WaveSystem';
+import type { HealthSystem } from '../systems/HealthSystem';
 import { TeamTag } from '../enums/TeamTag';
 import { networkConfig } from '../config/constants';
 import { GameEvents, createEvent } from '../events';
@@ -51,6 +52,7 @@ export interface LockstepSystems {
   resourceSystem: ResourceSystem;
   formationGridSystem: FormationGridSystem;
   waveSystem: WaveSystem;
+  healthSystem: HealthSystem;
   eventBus: EventBus;
 }
 
@@ -84,9 +86,11 @@ export class LockstepManager {
    * This is called by PhalanxClient's onTick handler
    */
   public processTick(tick: number, commandsBatch: CommandsBatch): void {
-    // Flatten commands from all players
+    // Flatten commands from all players in deterministic order
+    // Sort player IDs to ensure consistent command ordering across all clients
     const allCommands: PlayerCommand[] = [];
-    for (const playerId in commandsBatch.commands) {
+    const sortedPlayerIds = Object.keys(commandsBatch.commands).sort();
+    for (const playerId of sortedPlayerIds) {
       allCommands.push(...commandsBatch.commands[playerId]);
     }
 
@@ -95,6 +99,11 @@ export class LockstepManager {
 
     // Run one tick of deterministic simulation
     this.simulateTick();
+
+    // Process death timers (deterministic entity destruction)
+    // IMPORTANT: This must be called to ensure dying entities are destroyed
+    // at exactly the same tick across all clients
+    this.systems.healthSystem.processTick(tick);
 
     // Process resources deterministically based on tick
     this.systems.resourceSystem.processTick(tick);

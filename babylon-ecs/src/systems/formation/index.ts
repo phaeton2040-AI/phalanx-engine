@@ -18,4 +18,4 @@ export { FormationGridData } from './FormationGridData';
 export { FormationGridRenderer } from './FormationGridRenderer';
 export { FormationHoverPreview } from './FormationHoverPreview';
 export { FormationInputHandler } from './FormationInputHandler';
-export { FormationDeployer } from './FormationDeployer';
+export { FormationDeployer, type DeploymentUnitInfo } from './FormationDeployer';

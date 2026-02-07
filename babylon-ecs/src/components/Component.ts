@@ -22,6 +22,7 @@ export const ComponentType = {
   Animation: Symbol('Animation'),
   Rotation: Symbol('Rotation'),
   AttackLock: Symbol('AttackLock'),
+  Death: Symbol('Death'),
 } as const;
 
 export type ComponentTypeKey = keyof typeof ComponentType;

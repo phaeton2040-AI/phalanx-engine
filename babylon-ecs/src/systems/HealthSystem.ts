@@ -5,6 +5,7 @@ import {
   HealthComponent,
   AnimationComponent,
   MovementComponent,
+  DeathComponent,
 } from '../components';
 import { Entity } from '../entities/Entity';
 import { GameEvents, createEvent } from '../events';
@@ -21,12 +22,17 @@ import type { AnimationSystem } from './AnimationSystem';
  * HealthSystem - Manages entity health and destruction
  * Follows Single Responsibility: Only handles health-related logic
  * Uses EventBus for decoupled communication
+ *
+ * DETERMINISM: Death timing is controlled via DeathComponent tick counters,
+ * NOT animation callbacks. This ensures all clients destroy entities at
+ * exactly the same simulation tick.
  */
 export class HealthSystem {
   private entityManager: EntityManager;
   private eventBus: EventBus;
   private unsubscribers: (() => void)[] = [];
   private animationSystem: AnimationSystem | null = null;
+  private currentTick: number = 0;
 
   constructor(entityManager: EntityManager, eventBus: EventBus) {
     this.entityManager = entityManager;
@@ -40,6 +46,45 @@ export class HealthSystem {
    */
   public setAnimationSystem(animationSystem: AnimationSystem): void {
     this.animationSystem = animationSystem;
+  }
+
+  /**
+   * Update the current tick (call this from LockstepManager before processing)
+   * @param tick Current simulation tick
+   */
+  public setCurrentTick(tick: number): void {
+    this.currentTick = tick;
+  }
+
+  /**
+   * Process death timers for all dying entities
+   * Call this once per simulation tick for deterministic death timing
+   * @param tick Current simulation tick
+   */
+  public processTick(tick: number): void {
+    this.currentTick = tick;
+
+    // Query all entities with DeathComponent
+    const dyingEntities = this.entityManager.queryEntities(ComponentType.Death);
+
+    for (const entity of dyingEntities) {
+      const deathComp = entity.getComponent<DeathComponent>(ComponentType.Death);
+      if (!deathComp || !deathComp.isDying) continue;
+
+      // Check if death timer has expired
+      if (deathComp.shouldCompleteThisTick(tick)) {
+        // Emit entity destroyed event before destroying
+        this.eventBus.emit<EntityDestroyedEvent>(GameEvents.ENTITY_DESTROYED, {
+          ...createEvent(),
+          entityId: entity.id,
+          position: entity.position.clone(),
+        });
+
+        // Complete the death (invokes callback and destroys entity)
+        deathComp.completeDeath();
+        entity.destroy();
+      }
+    }
   }
 
   private setupEventListeners(): void {
@@ -100,8 +145,10 @@ export class HealthSystem {
     });
 
     if (wasDestroyed) {
-      // Handle death differently for entities with AnimationComponent
-      if (animComp && this.animationSystem) {
+      // Handle death differently for entities with DeathComponent (units with animations)
+      const deathComp = entity.getComponent<DeathComponent>(ComponentType.Death);
+
+      if (deathComp) {
         // Stop any ongoing movement immediately
         const movement = entity.getComponent<MovementComponent>(
           ComponentType.Movement
@@ -119,22 +166,19 @@ export class HealthSystem {
           entityId: entity.id,
         });
 
-        // Start death sequence via AnimationSystem - unit will be destroyed when animation completes
-        this.animationSystem.startDeathSequence(animComp, () => {
-          // Emit entity destroyed event before destroying
-          this.eventBus.emit<EntityDestroyedEvent>(
-            GameEvents.ENTITY_DESTROYED,
-            {
-              ...createEvent(),
-              entityId: entity.id,
-              position: entity.position.clone(),
-            }
-          );
-
-          entity.destroy();
+        // Start deterministic death timer (tick-based, NOT animation-based)
+        // The entity will be destroyed in processTick() when timer expires
+        deathComp.startDeath(this.currentTick, () => {
+          // This callback is called from processTick when timer expires
+          // The actual destroy happens there for determinism
         });
+
+        // Start visual death animation (purely cosmetic, does NOT control timing)
+        if (animComp && this.animationSystem) {
+          this.animationSystem.playDeathAnimationVisualOnly(animComp);
+        }
       } else {
-        // For other entities, destroy immediately
+        // For other entities (no DeathComponent), destroy immediately
         // Emit entity destroyed event before destroying
         this.eventBus.emit<EntityDestroyedEvent>(GameEvents.ENTITY_DESTROYED, {
           ...createEvent(),
