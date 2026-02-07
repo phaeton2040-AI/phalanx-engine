@@ -13,6 +13,11 @@ import type {
 } from '../events';
 import type { TeamTag } from '../enums/TeamTag';
 import { networkConfig } from '../config/constants';
+import { FP, FPVector3 } from 'phalanx-math';
+
+// Pre-computed fixed-point constants for projectile collision
+const FP_HIT_RADIUS_SQ = FP.FromFloat(1.5 * 1.5); // hitRadius^2 = 2.25
+const FP_GROUND_LEVEL = FP._0;
 
 export interface ProjectileSpawnConfig {
   damage: number;
@@ -178,24 +183,24 @@ export class ProjectileSystem {
   ): boolean {
     if (projectile.isDestroyed) return true;
 
-    const hitRadius = 1.5;
-    const groundLevel = 0;
-
-    // Update lifetime
+    // Update lifetime and movement (using fixed-point internally)
     const wasDestroyed = projectile.update(deltaTime, []);
     if (wasDestroyed && projectile.isDestroyed) return true;
 
-    // Check if projectile hit the ground
-    if (projectile.position.y <= groundLevel) {
+    // Check if projectile hit the ground using fixed-point
+    if (FP.Lte(projectile.fpPosition.y, FP_GROUND_LEVEL)) {
       projectile.destroy();
       return true;
     }
 
-    // Check collisions with targets
+    // Check collisions with targets using fixed-point squared distance
     for (const target of targets) {
-      const distance = Vector3.Distance(projectile.position, target.position);
+      const distanceSq = FPVector3.SqrDistance(
+        projectile.fpPosition,
+        target.fpPosition
+      );
 
-      if (distance < hitRadius) {
+      if (FP.Lt(distanceSq, FP_HIT_RADIUS_SQ)) {
         // Emit damage request event instead of directly calling HealthSystem
         this.eventBus.emit<DamageRequestedEvent>(GameEvents.DAMAGE_REQUESTED, {
           ...createEvent(),

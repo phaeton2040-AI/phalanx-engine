@@ -1,17 +1,25 @@
 import { Vector3 } from '@babylonjs/core';
 import type { EntityManager } from '../core/EntityManager';
+import {
+  fpToVector3Ref,
+  lerpVector3FromFpRef,
+} from '../core/MathConversions';
+import { FPVector3, type FPVector3 as FPVector3Type } from 'phalanx-math';
 
 /**
  * Interpolation state for an entity
- * Stores previous and current simulation positions for smooth visual interpolation
+ * Stores previous and current fixed-point simulation positions for smooth visual interpolation
+ *
+ * NOTE: We store FPVector3 (fixed-point) for deterministic snapshot/capture,
+ * but interpolate to Vector3 (float) for rendering.
  */
 interface InterpolationState {
   entityId: number;
-  /** Position from previous simulation tick */
-  previousPosition: Vector3;
-  /** Position from current simulation tick */
-  currentPosition: Vector3;
-  /** Visual position applied to mesh (interpolated) */
+  /** Fixed-point position from previous simulation tick (authoritative) */
+  previousFpPosition: FPVector3Type;
+  /** Fixed-point position from current simulation tick (authoritative) */
+  currentFpPosition: FPVector3Type;
+  /** Visual position applied to mesh (interpolated, for rendering) */
   visualPosition: Vector3;
   /** Whether this entity needs interpolation */
   active: boolean;
@@ -59,12 +67,16 @@ export class InterpolationSystem {
     const entity = this.entityManager.getEntity(entityId);
     if (!entity) return;
 
-    const pos = entity.position.clone();
+    // Clone the authoritative fixed-point position for interpolation state
+    const fpPos = entity.fpPosition;
+    const clonedFpPos: FPVector3Type = FPVector3.Create(fpPos.x, fpPos.y, fpPos.z);
+    const clonedFpPos2: FPVector3Type = FPVector3.Create(fpPos.x, fpPos.y, fpPos.z);
+
     this.states.set(entityId, {
       entityId,
-      previousPosition: pos.clone(),
-      currentPosition: pos.clone(),
-      visualPosition: pos.clone(),
+      previousFpPosition: clonedFpPos,
+      currentFpPosition: clonedFpPos2,
+      visualPosition: entity.position.clone(),
       active: true,
     });
   }
@@ -84,8 +96,12 @@ export class InterpolationSystem {
    */
   public snapshotPositions(): void {
     for (const state of this.states.values()) {
-      // Previous becomes what was current
-      state.previousPosition.copyFrom(state.currentPosition);
+      // Previous becomes what was current (copy fixed-point values)
+      state.previousFpPosition = FPVector3.Create(
+        state.currentFpPosition.x,
+        state.currentFpPosition.y,
+        state.currentFpPosition.z
+      );
     }
   }
 
@@ -98,14 +114,18 @@ export class InterpolationSystem {
       const entity = this.entityManager.getEntity(state.entityId);
       if (!entity) continue;
 
-      // Capture the new authoritative simulation position
-      state.currentPosition.copyFrom(entity.position);
+      // Capture the new authoritative fixed-point simulation position
+      const fpPos = entity.fpPosition;
+      state.currentFpPosition = FPVector3.Create(fpPos.x, fpPos.y, fpPos.z);
     }
   }
 
   /**
    * Interpolate visual positions and apply to meshes
    * Call this every render frame
+   *
+   * Uses fixed-point positions as authoritative source and interpolates
+   * to float Vector3 for smooth visual rendering.
    *
    * @param alpha Interpolation factor (0 = previous tick, 1 = current tick)
    */
@@ -117,13 +137,14 @@ export class InterpolationSystem {
       const entity = this.entityManager.getEntity(state.entityId);
       if (!entity) continue;
 
-      // Lerp between previous and current positions
-      const prev = state.previousPosition;
-      const curr = state.currentPosition;
-
-      state.visualPosition.x = prev.x + (curr.x - prev.x) * alpha;
-      state.visualPosition.y = prev.y + (curr.y - prev.y) * alpha;
-      state.visualPosition.z = prev.z + (curr.z - prev.z) * alpha;
+      // Lerp between previous and current fixed-point positions,
+      // writing result to the existing visualPosition Vector3 (no allocation)
+      lerpVector3FromFpRef(
+        state.previousFpPosition,
+        state.currentFpPosition,
+        alpha,
+        state.visualPosition
+      );
 
       // Apply visual position to the entity's mesh
       entity.setVisualPosition(state.visualPosition);
@@ -139,10 +160,16 @@ export class InterpolationSystem {
       const entity = this.entityManager.getEntity(state.entityId);
       if (!entity) continue;
 
-      state.previousPosition.copyFrom(entity.position);
-      state.currentPosition.copyFrom(entity.position);
-      state.visualPosition.copyFrom(entity.position);
-      entity.setVisualPosition(entity.position);
+      // Copy current fixed-point position to both previous and current
+      const fpPos = entity.fpPosition;
+      state.previousFpPosition = FPVector3.Create(fpPos.x, fpPos.y, fpPos.z);
+      state.currentFpPosition = FPVector3.Create(fpPos.x, fpPos.y, fpPos.z);
+
+      // Convert fixed-point to visual position (no allocation, reuse existing Vector3)
+      fpToVector3Ref(fpPos, state.visualPosition);
+
+      // Apply to mesh
+      entity.setVisualPosition(state.visualPosition);
     }
   }
 

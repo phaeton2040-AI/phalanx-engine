@@ -8,6 +8,7 @@ import {
 } from '@babylonjs/core';
 import type { IDamageable } from '../interfaces/IDamageable';
 import { TeamTag } from '../enums/TeamTag';
+import { FP, FPVector3, type FPVector3 as FPVector3Type, type FixedPoint } from 'phalanx-math';
 
 export interface ProjectileConfig {
   damage: number;
@@ -20,6 +21,10 @@ export interface ProjectileConfig {
 /**
  * Projectile entity - Represents a laser beam projectile
  * Follows Single Responsibility: Only handles projectile behavior
+ *
+ * DETERMINISTIC SIMULATION:
+ * - Uses fpPosition and fpDirection for deterministic fixed-point calculations
+ * - mesh.position is for visual rendering only
  */
 export class Projectile {
   private scene: Scene;
@@ -32,6 +37,12 @@ export class Projectile {
   private _team: TeamTag;
   private _sourceId: number;
   private _isDestroyed: boolean = false;
+
+  // Fixed-point fields for deterministic simulation
+  private _fpPosition: FPVector3Type;
+  private _fpDirection: FPVector3Type;
+  private _fpSpeed: FixedPoint;
+  private _fpCurrentLifetime: FixedPoint;
 
   constructor(
     scene: Scene,
@@ -48,6 +59,14 @@ export class Projectile {
     this._currentLifetime = this._lifetime;
     this._team = config.team;
     this._sourceId = config.sourceId;
+
+    // Initialize fixed-point fields for deterministic simulation
+    this._fpPosition = FPVector3.FromFloat(origin.x, origin.y, origin.z);
+    this._fpDirection = FPVector3.Normalize(
+      FPVector3.FromFloat(direction.x, direction.y, direction.z)
+    );
+    this._fpSpeed = FP.FromFloat(this._speed);
+    this._fpCurrentLifetime = FP.FromFloat(this._currentLifetime);
 
     this.mesh = this.createMesh();
     this.mesh.position = origin.clone();
@@ -99,30 +118,46 @@ export class Projectile {
 
   /**
    * Update projectile position and check for collisions
+   * Uses fixed-point math for deterministic movement across all platforms.
    * @returns true if projectile should be destroyed
    */
   public update(deltaTime: number, targets: IDamageable[]): boolean {
     if (this._isDestroyed) return true;
 
-    // Update lifetime
-    this._currentLifetime -= deltaTime;
-    if (this._currentLifetime <= 0) {
+    // Update lifetime using fixed-point for determinism
+    const fpDeltaTime = FP.FromFloat(deltaTime);
+    this._fpCurrentLifetime = FP.Sub(this._fpCurrentLifetime, fpDeltaTime);
+    this._currentLifetime = FP.ToFloat(this._fpCurrentLifetime);
+
+    if (FP.Lte(this._fpCurrentLifetime, FP._0)) {
       this._isDestroyed = true;
       return true;
     }
 
-    // Move projectile
-    const movement = this._direction.scale(this._speed * deltaTime);
-    this.mesh.position.addInPlace(movement);
+    // Move projectile using fixed-point for determinism
+    // velocity = direction * speed * deltaTime
+    const fpDistance = FP.Mul(this._fpSpeed, fpDeltaTime);
+    const movement = FPVector3.Scale(this._fpDirection, fpDistance);
+    this._fpPosition = FPVector3.Add(this._fpPosition, movement);
 
-    // Check for collision with targets
+    // Sync visual position from deterministic fpPosition
+    const floatPos = FPVector3.ToFloat(this._fpPosition);
+    this.mesh.position.set(floatPos.x, floatPos.y, floatPos.z);
+
+    // Check for collision with targets (legacy path - collision is now handled in ProjectileSystem)
     for (const target of targets) {
       if (target.isDestroyed()) continue;
 
-      const distance = Vector3.Distance(this.mesh.position, target.position);
-      const hitRadius = 1.5; // Collision radius
+      // Use fixed-point squared distance for deterministic collision
+      const targetFpPos = FPVector3.FromFloat(
+        target.position.x,
+        target.position.y,
+        target.position.z
+      );
+      const distSq = FPVector3.SqrDistance(this._fpPosition, targetFpPos);
+      const hitRadiusSq = FP.FromFloat(1.5 * 1.5); // 1.5^2
 
-      if (distance < hitRadius) {
+      if (FP.Lt(distSq, hitRadiusSq)) {
         // Hit target
         target.takeDamage(this._damage);
         this._isDestroyed = true;
@@ -135,6 +170,13 @@ export class Projectile {
 
   public get position(): Vector3 {
     return this.mesh.position;
+  }
+
+  /**
+   * Get the fixed-point position (authoritative for deterministic simulation)
+   */
+  public get fpPosition(): FPVector3Type {
+    return this._fpPosition;
   }
 
   public get team(): TeamTag {

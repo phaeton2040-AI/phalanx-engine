@@ -12,9 +12,9 @@
 
 4. ✅ **Refactor `CombatSystem` to use `FixedMath`**: Update distance calculations and range checks in [CombatSystem.ts](babylon-ecs/src/systems/CombatSystem.ts) to use `FPVector3.SqrDistance` and fixed-point comparisons (`FP.Lte`, `FP.Gt`) instead of `Vector3.Distance`. Uses squared distances to avoid non-deterministic sqrt operations.
 
-5. **Refactor `ProjectileSystem` and `RotationSystem`**: Update [ProjectileSystem.ts](babylon-ecs/src/systems/ProjectileSystem.ts) movement/hit detection and [RotationSystem.ts](babylon-ecs/src/systems/RotationSystem.ts) angle calculations to use `FixedMath.sin`, `FixedMath.cos`, `FixedMath.atan2`.
+5. ✅ **Refactor `ProjectileSystem` and `RotationSystem`**: Update [ProjectileSystem.ts](babylon-ecs/src/systems/ProjectileSystem.ts) movement/hit detection and [RotationSystem.ts](babylon-ecs/src/systems/RotationSystem.ts) angle calculations to use `FixedMath.sin`, `FixedMath.cos`, `FixedMath.atan2`.
 
-6. **Add conversion utilities**: Create helpers in `babylon-ecs` to convert between `FPVector2`/`FPPosition` and Babylon's `Vector3` for rendering interpolation in [InterpolationSystem.ts](babylon-ecs/src/systems/InterpolationSystem.ts).
+6. ✅ **Add conversion utilities**: Created [MathConversions.ts](babylon-ecs/src/core/MathConversions.ts) with helpers to convert between `FPVector2`/`FPVector3` and Babylon's `Vector2`/`Vector3`. Updated [InterpolationSystem.ts](babylon-ecs/src/systems/InterpolationSystem.ts) to use fixed-point positions as authoritative source and interpolate to float Vector3 for smooth visual rendering.
 
 ### Further Considerations
 
