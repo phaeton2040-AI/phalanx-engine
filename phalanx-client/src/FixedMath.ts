@@ -1,12 +1,12 @@
 /**
  * Fixed-Point Math Module
  *
- * Re-exports from phalanx-math for backward compatibility.
+ * Re-exports from phalanx-math for convenience.
  * The canonical implementation is in phalanx-math.
  *
  * @example
  * ```typescript
- * import { Fixed, FixedMath } from 'phalanx-server';
+ * import { Fixed, FixedMath } from 'phalanx-client';
  *
  * const position = {
  *   x: Fixed.from(10.5),
@@ -34,3 +34,5 @@ export {
 } from 'phalanx-math';
 
 export type { FPVector2, FPPosition } from 'phalanx-math';
+
+

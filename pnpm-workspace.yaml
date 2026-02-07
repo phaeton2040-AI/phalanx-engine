@@ -1,4 +1,5 @@
 packages:
+  - 'phalanx-math'
   - 'phalanx-server'
   - 'phalanx-client'
   - 'game-test'

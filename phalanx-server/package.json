@@ -33,7 +33,7 @@
     "README.md"
   ],
   "dependencies": {
-    "@hastom/fixed-point": "^4.3.1",
+    "phalanx-math": "workspace:*",
     "pure-rand": "^7.0.1",
     "socket.io": "^4.7.0"
   },

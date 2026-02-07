@@ -1,5 +1,6 @@
 import { Scene, Vector3, Mesh } from '@babylonjs/core';
 import type { IComponent } from '../components';
+import { FixedVector3, type FPPosition } from 'phalanx-math';
 
 let entityIdCounter = 0;
 
@@ -16,9 +17,10 @@ export function resetEntityIdCounter(): void {
  * Uses composition over inheritance
  *
  * INTERPOLATION ARCHITECTURE:
- * - simulationPosition: The authoritative position updated by physics (deterministic)
+ * - fpPosition: The authoritative fixed-point position (deterministic across all platforms)
+ * - simulationPosition: Cached Vector3 derived from fpPosition for Babylon.js compatibility
  * - mesh.position: The visual position used for rendering (can be interpolated)
- * - By default, they are the same. InterpolationSystem can separate them for smooth visuals.
+ * - By default, they are synchronized. InterpolationSystem can separate them for smooth visuals.
  */
 export abstract class Entity {
   public readonly id: number;
@@ -27,7 +29,10 @@ export abstract class Entity {
   protected components: Map<symbol, IComponent> = new Map();
   private _isDestroyed: boolean = false;
 
-  // Simulation position (authoritative, used by physics/combat)
+  // Fixed-point simulation position (authoritative, deterministic across all platforms)
+  private _fpPosition: FPPosition = FixedVector3.ZERO;
+
+  // Cached Vector3 simulation position (derived from _fpPosition for Babylon.js compatibility)
   private _simulationPosition: Vector3 = new Vector3();
 
   // Physics ignore flag - when true, physics system will skip this entity
@@ -91,19 +96,48 @@ export abstract class Entity {
   }
 
   /**
-   * Get the entity's simulation position (authoritative, deterministic)
-   * This is the position used by physics, combat, and other gameplay systems.
+   * Get the entity's fixed-point simulation position (authoritative, deterministic)
+   * This is the true authoritative position used for all deterministic calculations.
+   */
+  public get fpPosition(): FPPosition {
+    return this._fpPosition;
+  }
+
+  /**
+   * Set the entity's fixed-point simulation position (authoritative, deterministic)
+   * This updates both the FPPosition and the cached Vector3 simulation position.
+   * By default, also updates the visual (mesh) position.
+   */
+  public set fpPosition(value: FPPosition) {
+    this._fpPosition = value;
+    // Update cached Vector3 for Babylon.js compatibility
+    const nums = FixedVector3.toNumbers(value);
+    this._simulationPosition.set(nums.x, nums.y, nums.z);
+    // Also update mesh position (visual) by default
+    if (this.mesh) {
+      this.mesh.position.copyFrom(this._simulationPosition);
+    }
+  }
+
+  /**
+   * Get the entity's simulation position as Vector3 (for Babylon.js compatibility)
+   * This is derived from the authoritative fpPosition.
+   * @deprecated Use fpPosition for deterministic calculations. This getter is for
+   * backward compatibility and rendering.
    */
   public get position(): Vector3 {
     return this._simulationPosition;
   }
 
   /**
-   * Set the entity's simulation position (authoritative, deterministic)
+   * Set the entity's simulation position from a Vector3
+   * Converts to FPPosition internally for deterministic storage.
    * By default, also updates the visual (mesh) position.
-   * InterpolationSystem may override the visual position separately.
+   * @deprecated Use fpPosition for deterministic calculations. This setter is for
+   * backward compatibility.
    */
   public set position(value: Vector3) {
+    this._fpPosition = FixedVector3.fromNumbers(value.x, value.y, value.z);
     this._simulationPosition.copyFrom(value);
     // Also update mesh position (visual) by default
     if (this.mesh) {
@@ -130,11 +164,16 @@ export abstract class Entity {
 
   /**
    * Sync simulation position from mesh (call after mesh is created)
-   * Used during entity initialization
+   * Used during entity initialization. Updates both Vector3 and FPPosition.
    */
   public syncSimulationPosition(): void {
     if (this.mesh) {
       this._simulationPosition.copyFrom(this.mesh.position);
+      this._fpPosition = FixedVector3.fromNumbers(
+        this.mesh.position.x,
+        this.mesh.position.y,
+        this.mesh.position.z
+      );
     }
   }
 

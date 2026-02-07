@@ -1,7 +1,7 @@
 {
-  "name": "phalanx-client",
+  "name": "phalanx-math",
   "version": "0.1.0",
-  "description": "Client library for Phalanx Engine - a game-agnostic deterministic lockstep multiplayer engine",
+  "description": "Deterministic fixed-point math library for Phalanx Engine - ensures identical calculations across all platforms",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "type": "module",
@@ -9,10 +9,6 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    },
-    "./auth": {
-      "types": "./dist/auth/index.d.ts",
-      "import": "./dist/auth/index.js"
     }
   },
   "scripts": {
@@ -24,14 +20,12 @@
     "prepublishOnly": "npm run build"
   },
   "keywords": [
-    "multiplayer",
-    "game-client",
-    "lockstep",
+    "fixed-point",
     "deterministic",
-    "netcode",
-    "socket.io-client",
-    "phalanx",
-    "game-engine"
+    "math",
+    "game-math",
+    "cross-platform",
+    "phalanx"
   ],
   "author": "",
   "license": "MIT",
@@ -43,15 +37,13 @@
     "README.md"
   ],
   "dependencies": {
-    "phalanx-math": "workspace:*",
-    "pure-rand": "^7.0.1",
-    "socket.io-client": "^4.7.0"
+    "@hastom/fixed-point": "^4.3.1"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
-    "phalanx-server": "workspace:*",
     "rimraf": "^5.0.0",
     "typescript": "^5.3.0",
     "vitest": "^1.0.0"
   }
 }
+
