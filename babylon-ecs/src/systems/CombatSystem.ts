@@ -69,7 +69,6 @@ const DEFAULT_COMBAT_CONFIG: CombatConfig = {
  * to ensure they're executed synchronously during simulation.
  */
 export class CombatSystem {
-  private engine: Engine;
   private entityManager: EntityManager;
   private eventBus: EventBus;
   private config: CombatConfig;
@@ -88,12 +87,11 @@ export class CombatSystem {
   private animationSystem: AnimationSystem | null = null;
 
   constructor(
-    engine: Engine,
+    _engine: Engine,
     entityManager: EntityManager,
     eventBus: EventBus,
     config?: Partial<CombatConfig>
   ) {
-    this.engine = engine;
     this.entityManager = entityManager;
     this.eventBus = eventBus;
     this.config = { ...DEFAULT_COMBAT_CONFIG, ...config };
