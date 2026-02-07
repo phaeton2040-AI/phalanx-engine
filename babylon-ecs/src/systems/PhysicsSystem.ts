@@ -2,10 +2,9 @@ import { EntityManager } from '../core/EntityManager';
 import { ComponentType, MovementComponent, TeamComponent } from '../components';
 import { networkConfig } from '../config/constants';
 import {
-  Fixed,
-  FixedMath,
+  FP,
   type FixedPoint,
-  type FPPosition,
+  type FPVector3 as FPVector3Type,
 } from 'phalanx-math';
 
 /**
@@ -22,19 +21,17 @@ export interface PhysicsConfig {
 }
 
 // Pre-computed fixed-point constants for physics calculations
-const FP_ARRIVAL_THRESHOLD_SQ = Fixed.from(0.25); // 0.5^2
-const FP_MIN_DIST_SQ_EPSILON = Fixed.from(0.0001);
-const FP_SEPARATION_HALF = Fixed.from(0.5);
-const FP_VELOCITY_EPSILON = Fixed.from(0.01);
-const FP_ZERO = Fixed.ZERO;
-const FP_ONE = Fixed.ONE;
+const FP_ARRIVAL_THRESHOLD_SQ = FP.FromFloat(0.25); // 0.5^2
+const FP_MIN_DIST_SQ_EPSILON = FP.FromFloat(0.0001);
+const FP_SEPARATION_HALF = FP.FromFloat(0.5);
+const FP_VELOCITY_EPSILON = FP.FromFloat(0.01);
 
 const DEFAULT_PHYSICS_CONFIG: PhysicsConfig = {
-  fixedTimestep: Fixed.from(networkConfig.tickTimestep / networkConfig.physicsSubsteps), // Physics substeps per tick
-  unitRadius: Fixed.from(1.0), // Units have radius of 1 (diameter 2 matches sphere mesh)
-  pushStrength: Fixed.from(15.0), // Push force multiplier
-  maxVelocity: Fixed.from(15.0), // Max speed
-  friction: Fixed.from(0.92), // Velocity damping per frame
+  fixedTimestep: FP.FromFloat(networkConfig.tickTimestep / networkConfig.physicsSubsteps), // Physics substeps per tick
+  unitRadius: FP.FromFloat(1.0), // Units have radius of 1 (diameter 2 matches sphere mesh)
+  pushStrength: FP.FromFloat(15.0), // Push force multiplier
+  maxVelocity: FP.FromFloat(15.0), // Max speed
+  friction: FP.FromFloat(0.92), // Velocity damping per frame
   cellSize: 8.0, // Should be >= 2 * max(unitRadius)
 };
 
@@ -44,7 +41,7 @@ const DEFAULT_PHYSICS_CONFIG: PhysicsConfig = {
  */
 export interface PhysicsBody {
   entityId: number;
-  velocity: FPPosition; // Fixed-point velocity for deterministic physics
+  velocity: FPVector3Type; // Fixed-point velocity for deterministic physics
   radius: FixedPoint; // Fixed-point radius
   mass: FixedPoint; // Fixed-point mass
   isStatic: boolean; // Static bodies don't move (towers, bases)
@@ -159,7 +156,7 @@ export class PhysicsSystem {
     this.config = { ...DEFAULT_PHYSICS_CONFIG, ...config };
     this.spatialGrid = new SpatialGrid(this.config.cellSize);
     // Cache number value for spatial grid operations
-    this.unitRadiusNum = Fixed.toNumber(this.config.unitRadius);
+    this.unitRadiusNum = FP.ToFloat(this.config.unitRadius);
   }
 
   /**
@@ -173,9 +170,9 @@ export class PhysicsSystem {
   ): void {
     this.bodies.set(entityId, {
       entityId,
-      velocity: { x: FP_ZERO, y: FP_ZERO, z: FP_ZERO },
-      radius: options.radius !== undefined ? Fixed.from(options.radius) : this.config.unitRadius,
-      mass: options.mass !== undefined ? Fixed.from(options.mass) : FP_ONE,
+      velocity: { x: FP._0, y: FP._0, z: FP._0 },
+      radius: options.radius !== undefined ? FP.FromFloat(options.radius) : this.config.unitRadius,
+      mass: options.mass !== undefined ? FP.FromFloat(options.mass) : FP._1,
       isStatic: options.isStatic ?? false,
       lastX: 0,
       lastZ: 0,
@@ -199,7 +196,7 @@ export class PhysicsSystem {
   /**
    * Set velocity for an entity (using fixed-point)
    */
-  public setVelocity(entityId: number, velocity: FPPosition): void {
+  public setVelocity(entityId: number, velocity: FPVector3Type): void {
     const body = this.bodies.get(entityId);
     if (body && !body.isStatic) {
       body.velocity.x = velocity.x;
@@ -212,12 +209,12 @@ export class PhysicsSystem {
   /**
    * Add velocity to an entity (using fixed-point)
    */
-  public addVelocity(entityId: number, velocity: FPPosition): void {
+  public addVelocity(entityId: number, velocity: FPVector3Type): void {
     const body = this.bodies.get(entityId);
     if (body && !body.isStatic) {
-      body.velocity.x = FixedMath.add(body.velocity.x, velocity.x);
-      body.velocity.y = FixedMath.add(body.velocity.y, velocity.y);
-      body.velocity.z = FixedMath.add(body.velocity.z, velocity.z);
+      body.velocity.x = FP.Add(body.velocity.x, velocity.x);
+      body.velocity.y = FP.Add(body.velocity.y, velocity.y);
+      body.velocity.z = FP.Add(body.velocity.z, velocity.z);
     }
   }
 
@@ -276,8 +273,8 @@ export class PhysicsSystem {
 
       // Skip entities that should be ignored by physics (e.g., dying units)
       if (entity.ignorePhysics) {
-        body.velocity.x = FP_ZERO;
-        body.velocity.z = FP_ZERO;
+        body.velocity.x = FP._0;
+        body.velocity.z = FP._0;
         continue;
       }
 
@@ -286,30 +283,30 @@ export class PhysicsSystem {
         const pos = entity.fpPosition;
 
         // Calculate direction using fixed-point math
-        const dx = FixedMath.sub(Fixed.from(target.x), pos.x);
-        const dz = FixedMath.sub(Fixed.from(target.z), pos.z);
-        const distSq = FixedMath.add(
-          FixedMath.mul(dx, dx),
-          FixedMath.mul(dz, dz)
+        const dx = FP.Sub(FP.FromFloat(target.x), pos.x);
+        const dz = FP.Sub(FP.FromFloat(target.z), pos.z);
+        const distSq = FP.Add(
+          FP.Mul(dx, dx),
+          FP.Mul(dz, dz)
         );
 
-        if (FixedMath.lt(distSq, FP_ARRIVAL_THRESHOLD_SQ)) {
+        if (FP.Lt(distSq, FP_ARRIVAL_THRESHOLD_SQ)) {
           // Arrived at destination
           movement.stop();
-          body.velocity.x = FP_ZERO;
-          body.velocity.z = FP_ZERO;
+          body.velocity.x = FP._0;
+          body.velocity.z = FP._0;
         } else {
           // Set velocity towards target using fixed-point
-          const dist = FixedMath.sqrt(distSq);
-          const speed = Fixed.from(movement.speed);
-          body.velocity.x = FixedMath.mul(FixedMath.div(dx, dist), speed);
-          body.velocity.z = FixedMath.mul(FixedMath.div(dz, dist), speed);
+          const dist = FP.Sqrt(distSq);
+          const speed = FP.FromFloat(movement.speed);
+          body.velocity.x = FP.Mul(FP.Div(dx, dist), speed);
+          body.velocity.z = FP.Mul(FP.Div(dz, dist), speed);
         }
       } else {
         // Unit is not moving - stop any residual velocity
         // This handles cases where combat system stopped the unit
-        body.velocity.x = FP_ZERO;
-        body.velocity.z = FP_ZERO;
+        body.velocity.x = FP._0;
+        body.velocity.z = FP._0;
       }
     }
   }
@@ -335,9 +332,9 @@ export class PhysicsSystem {
 
       // Convert fixed-point position to numbers for spatial grid indexing
       const fpPos = entity.fpPosition;
-      body.lastX = Fixed.toNumber(fpPos.x);
-      body.lastZ = Fixed.toNumber(fpPos.z);
-      const radiusNum = Fixed.toNumber(body.radius);
+      body.lastX = FP.ToFloat(fpPos.x);
+      body.lastZ = FP.ToFloat(fpPos.z);
+      const radiusNum = FP.ToFloat(body.radius);
       this.spatialGrid.insert(body.entityId, body.lastX, body.lastZ, radiusNum);
     }
   }
@@ -364,7 +361,7 @@ export class PhysicsSystem {
 
       const posAx = bodyA.lastX;
       const posAz = bodyA.lastZ;
-      const radiusANum = Fixed.toNumber(bodyA.radius);
+      const radiusANum = FP.ToFloat(bodyA.radius);
 
       // Get only nearby bodies from spatial grid
       // Search radius includes own radius plus max possible other radius
@@ -399,61 +396,61 @@ export class PhysicsSystem {
         const fpPosB = entityB.fpPosition;
 
         // Calculate distance in XZ plane using fixed-point
-        const dx = FixedMath.sub(fpPosB.x, fpPosA.x);
-        const dz = FixedMath.sub(fpPosB.z, fpPosA.z);
-        const distSq = FixedMath.add(
-          FixedMath.mul(dx, dx),
-          FixedMath.mul(dz, dz)
+        const dx = FP.Sub(fpPosB.x, fpPosA.x);
+        const dz = FP.Sub(fpPosB.z, fpPosA.z);
+        const distSq = FP.Add(
+          FP.Mul(dx, dx),
+          FP.Mul(dz, dz)
         );
-        const minDist = FixedMath.add(bodyA.radius, bodyB.radius);
-        const minDistSq = FixedMath.mul(minDist, minDist);
+        const minDist = FP.Add(bodyA.radius, bodyB.radius);
+        const minDistSq = FP.Mul(minDist, minDist);
 
-        if (FixedMath.lt(distSq, minDistSq) && FixedMath.gt(distSq, FP_MIN_DIST_SQ_EPSILON)) {
+        if (FP.Lt(distSq, minDistSq) && FP.Gt(distSq, FP_MIN_DIST_SQ_EPSILON)) {
           // Collision detected - use fixed-point math for resolution
-          const dist = FixedMath.sqrt(distSq);
-          const overlap = FixedMath.sub(minDist, dist);
+          const dist = FP.Sqrt(distSq);
+          const overlap = FP.Sub(minDist, dist);
 
           // Normalize direction (fixed-point)
-          const nx = FixedMath.div(dx, dist);
-          const nz = FixedMath.div(dz, dist);
+          const nx = FP.Div(dx, dist);
+          const nz = FP.Div(dz, dist);
 
           // Calculate push force based on overlap
-          const pushForce = FixedMath.mul(overlap, this.config.pushStrength);
+          const pushForce = FP.Mul(overlap, this.config.pushStrength);
 
           // Apply push based on mass ratio
-          const totalMass = FixedMath.add(bodyA.mass, bodyB.mass);
-          const ratioA = FixedMath.div(bodyB.mass, totalMass);
-          const ratioB = FixedMath.div(bodyA.mass, totalMass);
+          const totalMass = FP.Add(bodyA.mass, bodyB.mass);
+          const ratioA = FP.Div(bodyB.mass, totalMass);
+          const ratioB = FP.Div(bodyA.mass, totalMass);
 
           // Apply push velocities (fixed-point)
           if (!bodyA.isStatic) {
-            const pushA = FixedMath.mul(pushForce, ratioA);
-            bodyA.velocity.x = FixedMath.sub(bodyA.velocity.x, FixedMath.mul(nx, pushA));
-            bodyA.velocity.z = FixedMath.sub(bodyA.velocity.z, FixedMath.mul(nz, pushA));
+            const pushA = FP.Mul(pushForce, ratioA);
+            bodyA.velocity.x = FP.Sub(bodyA.velocity.x, FP.Mul(nx, pushA));
+            bodyA.velocity.z = FP.Sub(bodyA.velocity.z, FP.Mul(nz, pushA));
           }
 
           if (!bodyB.isStatic) {
-            const pushB = FixedMath.mul(pushForce, ratioB);
-            bodyB.velocity.x = FixedMath.add(bodyB.velocity.x, FixedMath.mul(nx, pushB));
-            bodyB.velocity.z = FixedMath.add(bodyB.velocity.z, FixedMath.mul(nz, pushB));
+            const pushB = FP.Mul(pushForce, ratioB);
+            bodyB.velocity.x = FP.Add(bodyB.velocity.x, FP.Mul(nx, pushB));
+            bodyB.velocity.z = FP.Add(bodyB.velocity.z, FP.Mul(nz, pushB));
           }
 
           // Separate positions to prevent overlap (fixed-point)
-          const separation = FixedMath.mul(overlap, FP_SEPARATION_HALF);
+          const separation = FP.Mul(overlap, FP_SEPARATION_HALF);
           if (!bodyA.isStatic) {
-            const sepA = FixedMath.mul(separation, ratioA);
+            const sepA = FP.Mul(separation, ratioA);
             entityA.fpPosition = {
-              x: FixedMath.sub(fpPosA.x, FixedMath.mul(nx, sepA)),
+              x: FP.Sub(fpPosA.x, FP.Mul(nx, sepA)),
               y: fpPosA.y,
-              z: FixedMath.sub(fpPosA.z, FixedMath.mul(nz, sepA)),
+              z: FP.Sub(fpPosA.z, FP.Mul(nz, sepA)),
             };
           }
           if (!bodyB.isStatic) {
-            const sepB = FixedMath.mul(separation, ratioB);
+            const sepB = FP.Mul(separation, ratioB);
             entityB.fpPosition = {
-              x: FixedMath.add(fpPosB.x, FixedMath.mul(nx, sepB)),
+              x: FP.Add(fpPosB.x, FP.Mul(nx, sepB)),
               y: fpPosB.y,
-              z: FixedMath.add(fpPosB.z, FixedMath.mul(nz, sepB)),
+              z: FP.Add(fpPosB.z, FP.Mul(nz, sepB)),
             };
           }
         }
@@ -469,7 +466,7 @@ export class PhysicsSystem {
    */
   private applyVelocities(dt: FixedPoint): void {
     // Pre-compute max velocity squared for clamping
-    const maxVelSq = FixedMath.mul(this.config.maxVelocity, this.config.maxVelocity);
+    const maxVelSq = FP.Mul(this.config.maxVelocity, this.config.maxVelocity);
 
     // Sort bodies by entity ID for deterministic iteration order
     const sortedBodies = Array.from(this.bodies.values()).sort(
@@ -483,23 +480,23 @@ export class PhysicsSystem {
       if (!entity) continue;
 
       // Clamp velocity to max (using squared magnitude to avoid sqrt when possible)
-      const velMagSq = FixedMath.add(
-        FixedMath.mul(body.velocity.x, body.velocity.x),
-        FixedMath.mul(body.velocity.z, body.velocity.z)
+      const velMagSq = FP.Add(
+        FP.Mul(body.velocity.x, body.velocity.x),
+        FP.Mul(body.velocity.z, body.velocity.z)
       );
 
-      if (FixedMath.gt(velMagSq, maxVelSq)) {
-        const scale = FixedMath.div(this.config.maxVelocity, FixedMath.sqrt(velMagSq));
-        body.velocity.x = FixedMath.mul(body.velocity.x, scale);
-        body.velocity.z = FixedMath.mul(body.velocity.z, scale);
+      if (FP.Gt(velMagSq, maxVelSq)) {
+        const scale = FP.Div(this.config.maxVelocity, FP.Sqrt(velMagSq));
+        body.velocity.x = FP.Mul(body.velocity.x, scale);
+        body.velocity.z = FP.Mul(body.velocity.z, scale);
       }
 
       // Apply velocity to position using fixed-point
       const fpPos = entity.fpPosition;
       entity.fpPosition = {
-        x: FixedMath.add(fpPos.x, FixedMath.mul(body.velocity.x, dt)),
+        x: FP.Add(fpPos.x, FP.Mul(body.velocity.x, dt)),
         y: fpPos.y, // Keep Y constant
-        z: FixedMath.add(fpPos.z, FixedMath.mul(body.velocity.z, dt)),
+        z: FP.Add(fpPos.z, FP.Mul(body.velocity.z, dt)),
       };
     }
   }
@@ -530,15 +527,15 @@ export class PhysicsSystem {
       // Only apply friction if not actively moving to a target
       // This allows pushing to have an effect while still allowing controlled movement
       if (!movement || !movement.isMoving) {
-        body.velocity.x = FixedMath.mul(body.velocity.x, this.config.friction);
-        body.velocity.z = FixedMath.mul(body.velocity.z, this.config.friction);
+        body.velocity.x = FP.Mul(body.velocity.x, this.config.friction);
+        body.velocity.z = FP.Mul(body.velocity.z, this.config.friction);
 
         // Stop very small velocities (using fixed-point comparison)
-        if (FixedMath.lt(FixedMath.abs(body.velocity.x), FP_VELOCITY_EPSILON)) {
-          body.velocity.x = FP_ZERO;
+        if (FP.Lt(FP.Abs(body.velocity.x), FP_VELOCITY_EPSILON)) {
+          body.velocity.x = FP._0;
         }
-        if (FixedMath.lt(FixedMath.abs(body.velocity.z), FP_VELOCITY_EPSILON)) {
-          body.velocity.z = FP_ZERO;
+        if (FP.Lt(FP.Abs(body.velocity.z), FP_VELOCITY_EPSILON)) {
+          body.velocity.z = FP._0;
         }
       }
     }

@@ -22,6 +22,11 @@ import type {
 import { createEvent, GameEvents } from '../events';
 import { networkConfig } from '../config/constants';
 import type { AnimationSystem } from './AnimationSystem';
+import {
+  FP,
+  FPVector3,
+  type FixedPoint,
+} from 'phalanx-math';
 
 /**
  * Combat system configuration for deterministic simulation
@@ -31,6 +36,11 @@ export interface CombatConfig {
   criticalHitChance: number; // Probability of critical hit (0-1)
   criticalHitMultiplier: number; // Damage multiplier on critical hit
 }
+
+// Pre-computed fixed-point constants for combat distance calculations
+// Using squared distances avoids expensive sqrt operations
+// Note: Using FromString for very small numbers to avoid BigInt conversion issues with scientific notation
+const FP_DISTANCE_EPSILON_SQ = FP.FromString('0.00000001'); // 0.0001^2 for tie-breaking comparison
 
 const DEFAULT_COMBAT_CONFIG: CombatConfig = {
   // Combat updates once per network tick for deterministic lockstep
@@ -248,11 +258,14 @@ export class CombatSystem {
 
       if (target) {
         // We have a target in detection range
-        const distanceToTarget = Vector3.Distance(
-          attacker.position,
-          target.position
+        // Use squared distances for deterministic comparison (avoids sqrt)
+        const distanceSqToTarget = FPVector3.SqrDistance(
+          attacker.fpPosition,
+          target.fpPosition
         );
-        const inAttackRange = distanceToTarget <= attack.range;
+        const attackRangeFP = FP.FromFloat(attack.range);
+        const attackRangeSq = FP.Mul(attackRangeFP, attackRangeFP);
+        const inAttackRange = FP.Lte(distanceSqToTarget, attackRangeSq);
 
         if (previousTargetId !== target.id) {
           // New target - store current movement target if moving
@@ -352,10 +365,13 @@ export class CombatSystem {
         }
       } else if (aggroTarget && movement) {
         // Aggro target exists but is out of range - move towards them
-        const distance = Vector3.Distance(
-          attacker.position,
-          aggroTarget.position
+        // Use squared distance for deterministic comparison
+        const distanceSq = FPVector3.SqrDistance(
+          attacker.fpPosition,
+          aggroTarget.fpPosition
         );
+        const attackRangeFP = FP.FromFloat(attack.range);
+        const attackRangeSq = FP.Mul(attackRangeFP, attackRangeFP);
 
         // Check if entity is currently attack-locked (via component)
         const attackLockAggro = attacker.getComponent<AttackLockComponent>(
@@ -363,7 +379,7 @@ export class CombatSystem {
         );
         const isAttackLockedAggro = attackLockAggro?.isLocked ?? false;
 
-        if (distance > attack.range && !isAttackLockedAggro) {
+        if (FP.Gt(distanceSq, attackRangeSq) && !isAttackLockedAggro) {
           // Store original target if not already stored
           if (!this.storedMoveTargets.has(attacker.id) && movement.isMoving) {
             this.storedMoveTargets.set(
@@ -473,6 +489,10 @@ export class CombatSystem {
 
     // Use detectionRange for finding targets (defaults to attack range if not set)
     const detectionRange = attack.detectionRange;
+    const detectionRangeFP = FP.FromFloat(detectionRange);
+    const detectionRangeSq = FP.Mul(detectionRangeFP, detectionRangeFP);
+    const attackRangeFP = FP.FromFloat(attack.range);
+    const attackRangeSq = FP.Mul(attackRangeFP, attackRangeFP);
 
     // If we have an aggro target in attack range, prioritize it (unless dying)
     if (aggroTarget) {
@@ -485,18 +505,20 @@ export class CombatSystem {
         ComponentType.Health
       );
       if (!aggroHealth?.isDestroyed && !isDying) {
-        const aggroDistance = Vector3.Distance(
-          attacker.position,
-          aggroTarget.position
+        // Use squared distance for deterministic comparison
+        const aggroDistanceSq = FPVector3.SqrDistance(
+          attacker.fpPosition,
+          aggroTarget.fpPosition
         );
-        if (aggroDistance <= attack.range) {
+        if (FP.Lte(aggroDistanceSq, attackRangeSq)) {
           return aggroTarget;
         }
       }
     }
 
     let closestTarget: Entity | null = null;
-    let closestDistance = Infinity;
+    // Use fixed-point squared distance for deterministic comparison
+    let closestDistanceSq: FixedPoint | null = null;
 
     for (const potential of allCombatants) {
       if (potential.id === attacker.id) continue;
@@ -517,21 +539,29 @@ export class CombatSystem {
       );
       if (!targetTeam || !attackerTeam.isHostileTo(targetTeam)) continue;
 
-      const distance = Vector3.Distance(attacker.position, potential.position);
+      // Use squared distance for deterministic comparison (avoids non-deterministic sqrt)
+      const distanceSq = FPVector3.SqrDistance(
+        attacker.fpPosition,
+        potential.fpPosition
+      );
 
-      // Use detectionRange for finding targets
-      if (distance <= detectionRange) {
+      // Use detectionRange (squared) for finding targets
+      if (FP.Lte(distanceSq, detectionRangeSq)) {
         // Deterministic tie-breaking: prefer lower entity ID when distances are equal
-        // Use a small epsilon for floating-point comparison
-        const epsilon = 0.0001;
-        const isCloser = distance < closestDistance - epsilon;
-        const isSameDistance = Math.abs(distance - closestDistance) <= epsilon;
+        // Use fixed-point comparison with small epsilon for tie-breaking
+        const isFirstTarget = closestDistanceSq === null;
+        const isCloser =
+          !isFirstTarget &&
+          FP.Lt(distanceSq, FP.Sub(closestDistanceSq!, FP_DISTANCE_EPSILON_SQ));
+        const isSameDistance =
+          !isFirstTarget &&
+          FP.Lte(FP.Abs(FP.Sub(distanceSq, closestDistanceSq!)), FP_DISTANCE_EPSILON_SQ);
         const hasLowerIdTieBreak =
           isSameDistance &&
           (closestTarget === null || potential.id < closestTarget.id);
 
-        if (isCloser || hasLowerIdTieBreak) {
-          closestDistance = distance;
+        if (isFirstTarget || isCloser || hasLowerIdTieBreak) {
+          closestDistanceSq = distanceSq;
           closestTarget = potential;
         }
       }

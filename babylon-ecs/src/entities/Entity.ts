@@ -1,6 +1,6 @@
 import { Scene, Vector3, Mesh } from '@babylonjs/core';
 import type { IComponent } from '../components';
-import { FixedVector3, type FPPosition } from 'phalanx-math';
+import { FPVector3, type FPVector3 as FPVector3Type } from 'phalanx-math';
 
 let entityIdCounter = 0;
 
@@ -30,7 +30,7 @@ export abstract class Entity {
   private _isDestroyed: boolean = false;
 
   // Fixed-point simulation position (authoritative, deterministic across all platforms)
-  private _fpPosition: FPPosition = FixedVector3.ZERO;
+  private _fpPosition: FPVector3Type = FPVector3.Zero;
 
   // Cached Vector3 simulation position (derived from _fpPosition for Babylon.js compatibility)
   private _simulationPosition: Vector3 = new Vector3();
@@ -99,19 +99,19 @@ export abstract class Entity {
    * Get the entity's fixed-point simulation position (authoritative, deterministic)
    * This is the true authoritative position used for all deterministic calculations.
    */
-  public get fpPosition(): FPPosition {
+  public get fpPosition(): FPVector3Type {
     return this._fpPosition;
   }
 
   /**
    * Set the entity's fixed-point simulation position (authoritative, deterministic)
-   * This updates both the FPPosition and the cached Vector3 simulation position.
+   * This updates both the FPVector3 and the cached Vector3 simulation position.
    * By default, also updates the visual (mesh) position.
    */
-  public set fpPosition(value: FPPosition) {
+  public set fpPosition(value: FPVector3Type) {
     this._fpPosition = value;
     // Update cached Vector3 for Babylon.js compatibility
-    const nums = FixedVector3.toNumbers(value);
+    const nums = FPVector3.ToFloat(value);
     this._simulationPosition.set(nums.x, nums.y, nums.z);
     // Also update mesh position (visual) by default
     if (this.mesh) {
@@ -131,13 +131,13 @@ export abstract class Entity {
 
   /**
    * Set the entity's simulation position from a Vector3
-   * Converts to FPPosition internally for deterministic storage.
+   * Converts to FPVector3 internally for deterministic storage.
    * By default, also updates the visual (mesh) position.
    * @deprecated Use fpPosition for deterministic calculations. This setter is for
    * backward compatibility.
    */
   public set position(value: Vector3) {
-    this._fpPosition = FixedVector3.fromNumbers(value.x, value.y, value.z);
+    this._fpPosition = FPVector3.FromFloat(value.x, value.y, value.z);
     this._simulationPosition.copyFrom(value);
     // Also update mesh position (visual) by default
     if (this.mesh) {
@@ -164,12 +164,12 @@ export abstract class Entity {
 
   /**
    * Sync simulation position from mesh (call after mesh is created)
-   * Used during entity initialization. Updates both Vector3 and FPPosition.
+   * Used during entity initialization. Updates both Vector3 and FPVector3.
    */
   public syncSimulationPosition(): void {
     if (this.mesh) {
       this._simulationPosition.copyFrom(this.mesh.position);
-      this._fpPosition = FixedVector3.fromNumbers(
+      this._fpPosition = FPVector3.FromFloat(
         this.mesh.position.x,
         this.mesh.position.y,
         this.mesh.position.z

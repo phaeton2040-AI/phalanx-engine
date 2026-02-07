@@ -10,20 +10,15 @@
 export {
   // Core types
   FixedPoint,
-  // Factory functions
-  Fixed,
-  // Arithmetic operations
-  FixedMath,
-  // 2D vector utilities
-  FixedVector2,
-  // 3D vector/position utilities
-  FixedVector3,
+  // Unified API (Unity/Quantum style)
+  FP,
+  FPVector2,
+  FPVector3,
 } from './FixedMath.js';
 
 export type {
-  // 2D vector interface
-  FPVector2,
-  // 3D position interface
-  FPPosition,
+  // 2D vector interface (type-only export to avoid conflict with const)
+  FPVector2 as FPVector2Interface,
+  // 3D vector interface (type-only export to avoid conflict with const)
+  FPVector3 as FPVector3Interface,
 } from './FixedMath.js';
-

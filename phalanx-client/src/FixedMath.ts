@@ -6,33 +6,26 @@
  *
  * @example
  * ```typescript
- * import { Fixed, FixedMath } from 'phalanx-client';
+ * import { FP, FPVector3 } from 'phalanx-client';
  *
- * const position = {
- *   x: Fixed.from(10.5),
- *   y: Fixed.from(20.3)
- * };
+ * const position = FPVector3.FromFloat(10.5, 0, 20.3);
+ * const target = FPVector3.FromFloat(5.0, 0, 10.0);
  *
- * const distSq = FixedMath.add(
- *   FixedMath.mul(position.x, position.x),
- *   FixedMath.mul(position.y, position.y)
- * );
- * const distance = FixedMath.sqrt(distSq);
+ * const distance = FPVector3.Distance(position, target);
  *
  * // Convert back to number for display
- * console.log(distance.toDecimal());
+ * console.log(FP.ToFloat(distance));
  * ```
  */
 
 // Re-export everything from phalanx-math
 export {
-  Fixed,
-  FixedMath,
-  FixedVector2,
-  FixedVector3,
+  // Core type
   FixedPoint,
+  // Unified API (Unity/Quantum style)
+  FP,
+  FPVector2,
+  FPVector3,
 } from 'phalanx-math';
 
-export type { FPVector2, FPPosition } from 'phalanx-math';
-
-
+export type { FPVector2 as FPVector2Interface, FPVector3 as FPVector3Interface } from 'phalanx-math';

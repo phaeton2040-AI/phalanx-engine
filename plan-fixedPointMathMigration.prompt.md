@@ -8,9 +8,9 @@
 
 2. ✅ **Add `FPPosition` to entities**: Add fixed-point position (`fpPosition`) property to [Entity.ts](babylon-ecs/src/entities/Entity.ts) using `FPPosition` from `phalanx-math`. Keep existing `Vector3` position for Babylon.js rendering compatibility. Both positions are synchronized - `fpPosition` is authoritative for deterministic simulation.
 
-3. **Refactor `PhysicsSystem` to use `FixedMath`**: Replace all `Math.sqrt`, division, and arithmetic in [PhysicsSystem.ts](babylon-ecs/src/systems/PhysicsSystem.ts) with `FixedMath` operations for velocity calculations, collision detection (`distSq`, `overlap`), and position updates.
+3. ✅ **Refactor `PhysicsSystem` to use `FixedMath`**: Replace all `Math.sqrt`, division, and arithmetic in [PhysicsSystem.ts](babylon-ecs/src/systems/PhysicsSystem.ts) with `FixedMath` operations for velocity calculations, collision detection (`distSq`, `overlap`), and position updates.
 
-4. **Refactor `CombatSystem` to use `FixedMath`**: Update distance calculations and range checks in [CombatSystem.ts](babylon-ecs/src/systems/CombatSystem.ts) to use `FixedMath.distance` and fixed-point comparisons instead of `Vector3.Distance`.
+4. ✅ **Refactor `CombatSystem` to use `FixedMath`**: Update distance calculations and range checks in [CombatSystem.ts](babylon-ecs/src/systems/CombatSystem.ts) to use `FPVector3.SqrDistance` and fixed-point comparisons (`FP.Lte`, `FP.Gt`) instead of `Vector3.Distance`. Uses squared distances to avoid non-deterministic sqrt operations.
 
 5. **Refactor `ProjectileSystem` and `RotationSystem`**: Update [ProjectileSystem.ts](babylon-ecs/src/systems/ProjectileSystem.ts) movement/hit detection and [RotationSystem.ts](babylon-ecs/src/systems/RotationSystem.ts) angle calculations to use `FixedMath.sin`, `FixedMath.cos`, `FixedMath.atan2`.
 

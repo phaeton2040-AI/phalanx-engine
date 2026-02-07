@@ -4,7 +4,7 @@ Deterministic fixed-point math library for Phalanx Engine. Ensures identical cal
 
 ## Overview
 
-This library wraps `@hastom/fixed-point` to provide a consistent, game-oriented API for deterministic arithmetic. All clients using the same operations will produce identical results, preventing desync in lockstep multiplayer games.
+This library wraps `@hastom/fixed-point` to provide a Unity/Quantum-style API for deterministic arithmetic. All clients using the same operations will produce identical results, preventing desync in lockstep multiplayer games.
 
 ## Installation
 
@@ -15,75 +15,98 @@ pnpm add phalanx-math
 ## Usage
 
 ```typescript
-import { Fixed, FixedMath, FixedVector2, FixedVector3 } from 'phalanx-math';
+import { FP, FPVector2, FPVector3 } from 'phalanx-math';
 
 // Create fixed-point numbers
-const speed = Fixed.from(5.5);
-const deltaTime = Fixed.from(0.016);
+const speed = FP.FromFloat(5.5);
+const deltaTime = FP.FromFloat(0.016);
 
 // Arithmetic operations
-const distance = FixedMath.mul(speed, deltaTime);
+const distance = FP.Mul(speed, deltaTime);
 
 // 2D vectors
-const velocity = FixedVector2.fromNumbers(3, 4);
-const length = FixedVector2.length(velocity); // 5
+const velocity = FPVector2.FromFloat(3, 4);
+const length = FPVector2.Magnitude(velocity); // 5
 
 // 3D positions (for game entities)
-const position = FixedVector3.fromNumbers(10, 0, 20);
-const target = FixedVector3.fromNumbers(15, 0, 25);
-const dist = FixedVector3.distance(position, target);
+const position = FPVector3.FromFloat(10, 0, 20);
+const target = FPVector3.FromFloat(15, 0, 25);
+const dist = FPVector3.Distance(position, target);
 
 // Convert back to numbers for rendering
-console.log(Fixed.toNumber(dist));
+console.log(FP.ToFloat(dist));
 ```
 
 ## API
 
-### Fixed
+### FP
 
-Factory functions for creating fixed-point numbers:
+Unified namespace for fixed-point operations (Unity/Quantum style):
 
-- `Fixed.from(value: number)` - Create from JavaScript number
-- `Fixed.fromString(value: string)` - Create from string representation
-- `Fixed.fromInt(value: number | bigint)` - Create from integer
-- `Fixed.toNumber(fp: FixedPoint)` - Convert back to JavaScript number
-- `Fixed.ZERO`, `Fixed.ONE`, `Fixed.PI`, `Fixed.TWO_PI`, `Fixed.HALF_PI` - Constants
+#### Creation
+- `FP.FromFloat(value: number)` - Create from JavaScript number
+- `FP.FromString(value: string)` - Create from string representation
+- `FP.FromInt(value: number | bigint)` - Create from integer
+- `FP.ToFloat(fp: FixedPoint)` - Convert back to JavaScript number
 
-### FixedMath
+#### Constants
+- `FP._0`, `FP._1` - Zero and One (Quantum naming)
+- `FP.Pi`, `FP.Pi2`, `FP.PiOver2` - Pi constants
 
-Arithmetic and mathematical operations:
+#### Arithmetic
+- `FP.Add`, `FP.Sub`, `FP.Mul`, `FP.Div`, `FP.Neg` - Basic arithmetic
 
-- `add`, `sub`, `mul`, `div` - Basic arithmetic
-- `sqrt`, `abs`, `neg` - Unary operations
-- `floor`, `ceil`, `round` - Rounding
-- `min`, `max`, `clamp` - Range operations
-- `eq`, `lt`, `lte`, `gt`, `gte` - Comparisons
-- `sin`, `cos`, `atan2` - Trigonometry (deterministic approximations)
-- `lerp` - Linear interpolation
-- `distance` - 2D distance between points
+#### Math Functions
+- `FP.Sqrt`, `FP.Abs` - Unary operations
+- `FP.Floor`, `FP.Ceil`, `FP.Round` - Rounding
+- `FP.Min`, `FP.Max`, `FP.Clamp` - Range operations
+- `FP.Lerp` - Linear interpolation
 
-### FixedVector2
+#### Comparison
+- `FP.Eq`, `FP.Lt`, `FP.Lte`, `FP.Gt`, `FP.Gte` - Comparisons
+
+#### Trigonometry
+- `FP.Sin`, `FP.Cos`, `FP.Atan2` - Deterministic approximations
+
+### FPVector2
 
 2D vector operations for game logic:
 
-- `create`, `fromNumbers` - Construction
-- `add`, `sub`, `scale` - Vector arithmetic
-- `length`, `lengthSquared` - Magnitude
-- `normalize`, `dot`, `distance` - Geometric operations
-- `lerp` - Interpolation
-- `toNumbers` - Convert for rendering
+#### Creation
+- `FPVector2.Create(x, y)` - Create from FixedPoint values
+- `FPVector2.FromFloat(x, y)` - Create from numbers
 
-### FixedVector3 / FPPosition
+#### Constants
+- `FPVector2.Zero`, `FPVector2.One` - Common vectors
+- `FPVector2.Up`, `FPVector2.Right` - Direction vectors
+
+#### Operations
+- `FPVector2.Add`, `FPVector2.Sub`, `FPVector2.Scale` - Vector arithmetic
+- `FPVector2.Magnitude`, `FPVector2.SqrMagnitude` - Length (Unity naming)
+- `FPVector2.Normalize`, `FPVector2.Dot` - Geometric operations
+- `FPVector2.Distance`, `FPVector2.SqrDistance` - Distance calculations
+- `FPVector2.Lerp` - Interpolation
+- `FPVector2.ToFloat` - Convert for rendering
+
+### FPVector3
 
 3D vector operations for entity positions:
 
-- `create`, `fromNumbers` - Construction
-- `add`, `sub`, `scale` - Vector arithmetic
-- `length`, `lengthSquared` - Magnitude
-- `normalize`, `dot` - Geometric operations
-- `distance`, `distanceSquared` - Distance calculations
-- `lerp` - Interpolation
-- `toNumbers` - Convert for rendering
+#### Creation
+- `FPVector3.Create(x, y, z)` - Create from FixedPoint values
+- `FPVector3.FromFloat(x, y, z)` - Create from numbers
+
+#### Constants
+- `FPVector3.Zero`, `FPVector3.One` - Common vectors
+- `FPVector3.Up`, `FPVector3.Right`, `FPVector3.Forward` - Direction vectors
+
+#### Operations
+- `FPVector3.Add`, `FPVector3.Sub`, `FPVector3.Scale` - Vector arithmetic
+- `FPVector3.Magnitude`, `FPVector3.SqrMagnitude` - Length (Unity naming)
+- `FPVector3.Normalize`, `FPVector3.Dot`, `FPVector3.Cross` - Geometric operations
+- `FPVector3.Distance`, `FPVector3.SqrDistance` - Distance calculations
+- `FPVector3.Lerp` - Interpolation
+- `FPVector3.ToFloat` - Convert for rendering
 
 ## Why Fixed-Point?
 
