@@ -190,15 +190,34 @@ Interpolation: Blends between tick positions based on alpha (0-1)
 
 **Entity Position Architecture:**
 
-- `entity.position` - Authoritative simulation position (deterministic)
-- `entity.mesh.position` - Visual position (interpolated for smooth rendering)
+The entity position system uses three layers for deterministic simulation with smooth rendering:
+
+- `entity.fpPosition` - Authoritative fixed-point position (FPVector3, deterministic across all platforms)
+- `entity.position` - Cached Vector3 derived from fpPosition (for Babylon.js compatibility, deprecated)
+- `entity.mesh.position` - Visual position for rendering (can be interpolated for smooth visuals)
 
 ```typescript
-// Entity.ts
-public set position(value: Vector3) {
-    this._simulationPosition.copyFrom(value);
+// Entity.ts - Fixed-point based position system
+import { FPVector3, type FPVector3 as FPVector3Type } from 'phalanx-math';
+
+// Fixed-point simulation position (authoritative, deterministic)
+private _fpPosition: FPVector3Type = FPVector3.Zero;
+
+// Cached Vector3 (derived from _fpPosition for Babylon.js compatibility)
+private _simulationPosition: Vector3 = new Vector3();
+
+public get fpPosition(): FPVector3Type {
+    return this._fpPosition;
+}
+
+public set fpPosition(value: FPVector3Type) {
+    this._fpPosition = value;
+    // Update cached Vector3 for Babylon.js compatibility
+    const nums = FPVector3.ToFloat(value);
+    this._simulationPosition.set(nums.x, nums.y, nums.z);
+    // Also update mesh position (visual) by default
     if (this.mesh) {
-        this.mesh.position.copyFrom(value);  // Default: sync visual
+        this.mesh.position.copyFrom(this._simulationPosition);
     }
 }
 
@@ -208,6 +227,10 @@ public setVisualPosition(value: Vector3): void {
     }
 }
 ```
+
+**Why Fixed-Point?**
+
+JavaScript's `Number` type uses IEEE 754 floating-point, which can produce slightly different results on different platforms (Chrome vs Safari, Windows vs Mac, x86 vs ARM). Fixed-point math uses integer arithmetic with a fixed decimal scale, guaranteeing identical results everywhere - critical for lockstep synchronization.
 
 ### Command Flow
 
@@ -354,6 +377,7 @@ this.lockstepManager.queueCommand({
 | `src/core/Game.ts`                   | Network command handling and entity ownership  |
 | `src/core/LockstepManager.ts`        | Lockstep synchronization and command execution |
 | `src/core/NetworkCommands.ts`        | Network command type definitions               |
+| `src/core/MathConversions.ts`        | Fixed-point ↔ Babylon.js vector conversions    |
 | `src/systems/InterpolationSystem.ts` | Smooth visual interpolation                    |
 
 ### Desync Detection
@@ -483,13 +507,16 @@ this.client.onTick((tick, commands) => {
 
 1. **Always sort entities** by a stable ID before hashing
 2. **Include only deterministic state** - no timestamps, no random values
-3. **Hash positions with fixed precision** - `addFloat()` converts to fixed-point
+3. **Use `entity.fpPosition`** for hashing positions (fixed-point for determinism)
 4. **Include relevant game state** - health, targets, cooldowns, etc.
 5. **Exclude visual-only state** - interpolated positions, particle effects
 
 ```typescript
 // Good: Deterministic state
-hasher.addFloat(entity.position.x);      // Simulation position
+const fpPos = entity.fpPosition;
+hasher.addFloat(FP.ToFloat(fpPos.x)); // Fixed-point position (deterministic)
+hasher.addFloat(FP.ToFloat(fpPos.y));
+hasher.addFloat(FP.ToFloat(fpPos.z));
 hasher.addInt(entity.health);            // Game state
 hasher.addInt(entity.targetId ?? -1);    // Nullable with default
 
@@ -497,6 +524,7 @@ hasher.addInt(entity.targetId ?? -1);    // Nullable with default
 hasher.addFloat(Date.now());             // ❌ Time varies
 hasher.addFloat(Math.random());          // ❌ Random
 hasher.addFloat(entity.mesh.position.x); // ❌ Visual position (interpolated)
+hasher.addFloat(entity.position.x);      // ❌ Cached float (may have precision issues)
 ```
 
 #### Handling Desync Events
@@ -618,6 +646,43 @@ The following tasks need to be completed to fully integrate desync detection int
   - Add debug flag to intentionally cause desync
   - Verify desync is detected and reported
   - Verify match ends correctly (in production mode)
+
+### Math Conversions
+
+The `MathConversions.ts` utility provides functions to convert between `phalanx-math` fixed-point types and Babylon.js vectors. This is essential for bridging deterministic simulation with visual rendering.
+
+#### Available Functions
+
+```typescript
+import {
+  fpToVector3,        // FPVector3 → Vector3 (allocates new)
+  fpToVector3Ref,     // FPVector3 → Vector3 (writes to existing, no allocation)
+  vector3ToFp,        // Vector3 → FPVector3 (for user input, initialization)
+  lerpVector3FromFp,  // Interpolate FPVector3 → Vector3 (allocates new)
+  lerpVector3FromFpRef, // Interpolate FPVector3 → Vector3 (no allocation)
+  fpToVector2,        // FPVector2 → Vector2
+  vector2ToFp,        // Vector2 → FPVector2
+} from './core/MathConversions';
+```
+
+#### Usage Examples
+
+```typescript
+// Convert fixed-point position to Babylon Vector3 for rendering
+const renderPos = fpToVector3(entity.fpPosition);
+
+// Interpolate between two fixed-point positions for smooth visuals (no allocation)
+lerpVector3FromFpRef(prevFpPos, currFpPos, alpha, visualPosition);
+
+// Convert user input (Vector3) to fixed-point for simulation
+const fpTarget = vector3ToFp(clickPosition);
+```
+
+#### Performance Tips
+
+- Use `*Ref` variants in hot paths (like render loops) to avoid GC pressure
+- Pre-allocate Vector3 objects and reuse them
+- Only convert to float at the last moment before rendering
 
 ### Configuration
 
@@ -1059,20 +1124,23 @@ this.eventBus.on<ResourceCollectedEvent>(
 - ✅ Send commands through `LockstepManager.queueCommand()`
 - ✅ Execute commands only in `onSimulationTick()` callback
 - ✅ Sort entity queries by ID for deterministic iteration order
-- ✅ Use fixed-point math or careful floating-point handling
+- ✅ Use `entity.fpPosition` (fixed-point) for all simulation calculations
+- ✅ Use `phalanx-math` FP functions for arithmetic (distances, lerp, etc.)
 - ❌ Never use `Math.random()` - use seeded PRNG if needed
 - ❌ Never use `Date.now()` or real time in simulation logic
 - ❌ Never execute commands immediately on input - queue them
+- ❌ Never use `entity.position` (float) for deterministic calculations
 
 ### Interpolation Design
 
-- ✅ Separate `simulationPosition` (authoritative) from `visualPosition` (interpolated)
+- ✅ Separate `fpPosition` (authoritative fixed-point) from `visualPosition` (interpolated)
+- ✅ Use `MathConversions` utilities for FPVector3 ↔ Vector3 conversion
 - ✅ Call `snapshotPositions()` BEFORE simulation tick
 - ✅ Call `captureCurrentPositions()` AFTER simulation tick
 - ✅ Use `getInterpolationAlpha()` each render frame
 - ✅ Register entities with `InterpolationSystem` on creation
 - ✅ Unregister entities on destruction
-- ❌ Never modify `entity.position` outside simulation tick
+- ❌ Never modify `entity.fpPosition` outside simulation tick
 
 ### Component Design
 

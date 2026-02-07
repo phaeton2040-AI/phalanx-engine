@@ -21,16 +21,18 @@ npm install
 
 # Packages
 
-This repository contains two packages:
+This repository contains the following packages:
 
-| Package                            | Description                                      |
-| ---------------------------------- | ------------------------------------------------ |
-| [phalanx-server](./phalanx-server) | Server library for hosting multiplayer games     |
-| [phalanx-client](./phalanx-client) | Client library for connecting to Phalanx servers |
+| Package                            | Description                                                |
+| ---------------------------------- | ---------------------------------------------------------- |
+| [phalanx-server](./phalanx-server) | Server library for hosting multiplayer games               |
+| [phalanx-client](./phalanx-client) | Client library for connecting to Phalanx servers           |
+| [phalanx-math](./phalanx-math)     | Deterministic fixed-point math library for lockstep games  |
 
 ## Features
 
 - **Deterministic Lockstep**: Synchronizes only player commands, game logic runs deterministically on each client
+- **Fixed-Point Math**: Platform-independent fixed-point arithmetic via `phalanx-math` ensures identical calculations across all clients
 - **Matchmaking**: Built-in support for various game modes (1v1, 2v2, 3v3, 4v4, FFA)
 - **Tick System**: Configurable tick rate with command batching
 - **Reconnection Support**: Players can rejoin matches after disconnection

@@ -12,6 +12,7 @@ A real-time strategy (RTS) game demo built with [Babylon.js](https://www.babylon
 - **Health System**: Entities take damage and can be destroyed
 - **Multiplayer**: 1v1 deterministic lockstep via Phalanx Engine
 - **Desync Detection**: State hash verification to ensure synchronized gameplay
+- **Fixed-Point Math**: All simulation uses deterministic fixed-point arithmetic via `phalanx-math` for cross-platform consistency
 
 ## Getting Started
 
@@ -149,6 +150,7 @@ pnpm preview
 - **[Babylon.js](https://www.babylonjs.com/)** (v8.45) - 3D rendering engine
 - **[TypeScript](https://www.typescriptlang.org/)** (v5.9) - Type-safe JavaScript
 - **[Vite](https://vitejs.dev/)** (v7.2) - Fast build tool and dev server
+- **[phalanx-math](../phalanx-math)** - Deterministic fixed-point math for lockstep synchronization
 
 ## Project Structure
 
@@ -159,6 +161,7 @@ src/
 │   ├── Game.ts          # Main game class, orchestrates systems
 │   ├── EntityManager.ts # Central entity registry with component queries
 │   ├── EventBus.ts      # Decoupled event communication
+│   ├── MathConversions.ts # Fixed-point ↔ Babylon.js vector conversions
 │   └── SceneManager.ts  # Babylon.js scene setup and management
 ├── entities/            # Game entities (Units, Towers, Projectiles)
 ├── components/          # ECS components (Health, Attack, Movement, Team)
